@@ -68,13 +68,40 @@ def show_dashboard():
         df.loc[df['Hour'] == current_hour, 'Temperature'] = live_temp
 
     actual_df = df[df['Hour'] <= current_hour].copy()
+    forecast_df = df[df['Hour'] >= current_hour].copy()
+    
     hi_actual = actual_df['Temperature'].max()
     lo_actual = actual_df['Temperature'].min()
     
+    # --- INFERENCE LOGIC ---
+    inference_msg = ""
+    if live_temp is not None:
+        if "Winter" in mode:
+            if live_temp >= threshold:
+                inference_msg = f"✅ Above target ({threshold}°F). No warming needed."
+            else:
+                # Find first hour in forecast where temp >= threshold
+                target_hit = forecast_df[forecast_df['Temperature'] >= threshold]
+                if not target_hit.empty:
+                    hit_time = target_hit.iloc[0]['Hour']
+                    inference_msg = f"⏳ Below target. Expected to reach {threshold}°F at {hit_time:02}:00."
+                else:
+                    inference_msg = f"❄️ Remaining below {threshold}°F for the rest of today."
+        else: # Summer Mode (Cooling)
+            if live_temp <= threshold:
+                inference_msg = f"✅ Below target ({threshold}°F). Open those windows!"
+            else:
+                target_hit = forecast_df[forecast_df['Temperature'] <= threshold]
+                if not target_hit.empty:
+                    hit_time = target_hit.iloc[0]['Hour']
+                    inference_msg = f"🌡️ Too warm. Expected to cool to {threshold}°F at {hit_time:02}:00."
+                else:
+                    inference_msg = f"🔥 Staying above {threshold}°F for the rest of today."
+
+    # Label Logic (High/Low/Now)
     first_hi_hour = actual_df[actual_df['Temperature'] == hi_actual]['Hour'].iloc[0]
     first_lo_hour = actual_df[actual_df['Temperature'] == lo_actual]['Hour'].iloc[0]
     
-    # Logic to classify label position
     def get_pos(row):
         if row['Hour'] == current_hour: return "Top"
         if row['Hour'] == first_hi_hour: return "Top"
@@ -91,33 +118,6 @@ def show_dashboard():
     target_data = pd.DataFrame({'Hour': range(24), 'Temperature': [threshold] * 24, 'Status': ['Target'] * 24})
     plot_df = pd.concat([df, now_row, target_data]).sort_values('Hour')
 
-    # --- ALTAIR CHART ---
-    x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]), axis=alt.Axis(labelExpr="datum.value + ':00'", grid=True))
-    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False, padding=35), title='Apparent Temp (°F)')
-    color_scale = alt.Scale(domain=['Actual', 'Forecast', 'Target'], range=['#00f2ff', '#ffffff', '#FFA500'])
-
-    base = alt.Chart(plot_df).encode(x=x_axis, y=y_axis)
-
-    lines = base.mark_line().encode(
-        color=alt.Color('Status:N', scale=color_scale, legend=alt.Legend(title="Type")),
-        strokeDash=alt.condition(alt.datum.Status == 'Actual', alt.value([0]), alt.value([5, 5])),
-        strokeWidth=alt.condition(alt.datum.Status == 'Target', alt.value(2), alt.value(4))
-    )
-
-    ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=250, color='#00f2ff').encode(x=x_axis, y=y_axis)
-
-    # Label Layer: TOP (Hi and Now)
-    labels_top = alt.Chart(df[df['Label_Pos'] == "Top"]).mark_text(
-        align='center', baseline='bottom', dy=-15, fontSize=15, fontWeight='bold', color='white'
-    ).encode(x=x_axis, y=y_axis, text='Label_Text')
-
-    # Label Layer: BOTTOM (Low)
-    labels_bottom = alt.Chart(df[df['Label_Pos'] == "Bottom"]).mark_text(
-        align='center', baseline='top', dy=15, fontSize=15, fontWeight='bold', color='white'
-    ).encode(x=x_axis, y=y_axis, text='Label_Text')
-
-    final_chart = (lines + ball + labels_top + labels_bottom).properties(height=500)
-
     # --- UI ---
     st.title("The Farm: Apparent Temperature")
     st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
@@ -130,8 +130,25 @@ def show_dashboard():
     m2.metric("Actual High", f"{hi_actual}°F")
     m3.metric("Actual Low", f"{lo_actual}°F")
 
-    st.write("---")
-    st.altair_chart(final_chart, use_container_width=True)
+    # Display Inference
+    st.info(inference_msg)
+
+    # --- ALTAIR CHART ---
+    x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]), axis=alt.Axis(labelExpr="datum.value + ':00'", grid=True))
+    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False, padding=35), title='Apparent Temp (°F)')
+    color_scale = alt.Scale(domain=['Actual', 'Forecast', 'Target'], range=['#00f2ff', '#ffffff', '#FFA500'])
+
+    base = alt.Chart(plot_df).encode(x=x_axis, y=y_axis)
+    lines = base.mark_line().encode(
+        color=alt.Color('Status:N', scale=color_scale, legend=alt.Legend(title="Type")),
+        strokeDash=alt.condition(alt.datum.Status == 'Actual', alt.value([0]), alt.value([5, 5])),
+        strokeWidth=alt.condition(alt.datum.Status == 'Target', alt.value(2), alt.value(4))
+    )
+    ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=250, color='#00f2ff').encode(x=x_axis, y=y_axis)
+    labels_top = alt.Chart(df[df['Label_Pos'] == "Top"]).mark_text(align='center', baseline='bottom', dy=-15, fontSize=15, fontWeight='bold', color='white').encode(x=x_axis, y=y_axis, text='Label_Text')
+    labels_bottom = alt.Chart(df[df['Label_Pos'] == "Bottom"]).mark_text(align='center', baseline='top', dy=15, fontSize=15, fontWeight='bold', color='white').encode(x=x_axis, y=y_axis, text='Label_Text')
+
+    st.altair_chart(lines + ball + labels_top + labels_bottom, use_container_width=True)
 
     # Road Map
     st.write("---")
