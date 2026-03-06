@@ -67,7 +67,6 @@ def show_dashboard():
         if not st.session_state.daily_history.empty and st.session_state.daily_history['Date'].iloc[0] != now_mtn.date():
             st.session_state.daily_history = get_historical_data()
 
-        prev_temp = st.session_state.daily_history['Temperature'].iloc[-1] if not st.session_state.daily_history.empty else live_temp
         new_entry = pd.DataFrame({'Hour': [current_hour], 'Temperature': [live_temp], 'Date': [now_mtn.date()]})
         st.session_state.daily_history = pd.concat([st.session_state.daily_history, new_entry], ignore_index=True).drop_duplicates('Hour', keep='last')
 
@@ -79,10 +78,10 @@ def show_dashboard():
         chart_df.loc[chart_df['Hour'] > current_hour, 'Temperature'] = None 
         chart_df['Target'] = threshold
         
-        # THE FIX: Create a column that "hugs" the current temperature
-        # By making it +1 and -1 around the live temp, it creates a visible "dot" or marker
-        chart_df['Current Time'] = None
-        chart_df.loc[chart_df['Hour'] == current_hour, 'Current Time'] = live_temp
+        # THE VERTICAL LINE FIX:
+        # We use a very high value (100) so it looks like a full-height bar
+        chart_df['Now'] = 0.0
+        chart_df.loc[chart_df['Hour'] == current_hour, 'Now'] = 100.0
 
         chart_df['24h'] = chart_df['Hour'].apply(lambda x: f"{x:02}:00")
         chart_df = chart_df.set_index('24h')
@@ -93,10 +92,9 @@ def show_dashboard():
         
         d_high = st.session_state.daily_history['Temperature'].max()
         d_low = st.session_state.daily_history['Temperature'].min()
-        delta = round(live_temp - prev_temp, 1)
 
         m1, m2, m3 = st.columns(3)
-        m1.metric("Live", f"{live_temp}°F", delta=f"{delta}°F" if delta != 0 else None)
+        m1.metric("Live", f"{live_temp}°F")
         m2.metric("High Today", f"{d_high}°F")
         m3.metric("Low Today", f"{d_low}°F")
 
@@ -105,20 +103,16 @@ def show_dashboard():
         col_left, col_right = st.columns([1, 2])
         with col_left:
             if "Winter" in mode:
-                if live_temp >= threshold: st.success(f"☀️ Warming up! Currently {live_temp}°F.")
+                if live_temp >= threshold: st.success(f"☀️ Warming up! {live_temp}°F.")
                 else: st.info(f"❄️ Waiting for {threshold}°F.")
             else:
-                if live_temp <= threshold: st.success("### 🌬️ Cool breeze has arrived!")
+                if live_temp <= threshold: st.success("🌬️ Cool breeze has arrived!")
                 else: st.warning(f"🔥 Waiting for {threshold}°F")
 
         with col_right:
-            # Using st.bar_chart for the 'Current Time' column would work, 
-            # but let's stick to st.line_chart and use a trick: 
-            # We plot the Temperature and Target as lines, and "Current Time" will show as a dot
+            # We use st.bar_chart for the "Now" marker to force visibility
+            # Then we use st.line_chart for the actual temperature
+            # For the cleanest look, we use a single combined chart:
             st.line_chart(
-                chart_df[['Temperature', 'Target', 'Current Time']], 
-                color=["#00f2ff", "#ff4b4b", "#ffffff"],
-                y_label="Degrees (°F)"
-            )
-
-show_dashboard()
+                chart_df[['Temperature', 'Target', 'Now']], 
+                color=["#00f2ff", "#ff4b4b
