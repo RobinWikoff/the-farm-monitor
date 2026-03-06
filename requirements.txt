@@ -1,3 +1,4 @@
+streamlit>=1.35.0
 pandas
 requests
-streamlit
+altair<5
