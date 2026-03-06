@@ -65,69 +65,7 @@ def show_dashboard():
     current_hour = now_mtn.hour
     
     df = st.session_state.daily_data.copy()
-    if live_temp is not None:
-        df.loc[df['Hour'] == current_hour, 'Temperature'] = live_temp
     
-    # 1. Create the Actual & Forecast segments
-    df['Status'] = df['Hour'].apply(lambda x: 'Actual' if x <= current_hour else 'Forecast')
-    
-    # Bridge the gap between Actual and Forecast lines
-    now_row = df[df['Hour'] == current_hour].copy()
-    now_row['Status'] = 'Forecast'
-    
-    # 2. Create the Target segment (Horizontal line data)
-    target_data = pd.DataFrame({
-        'Hour': range(24),
-        'Temperature': [threshold] * 24,
-        'Status': ['Target'] * 24
-    })
-    
-    # Combine everything into one "Plotting DF"
-    plot_df = pd.concat([df, now_row, target_data]).sort_values('Hour')
-
-    # --- ALTAIR CHARTING ---
-    x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]),
-                   axis=alt.Axis(labelExpr="datum.value + ':00'", grid=True))
-    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False), title='Temperature (°F)')
-
-    # Unified Legend and Color Mapping
-    color_scale = alt.Scale(
-        domain=['Actual', 'Forecast', 'Target'], 
-        range=['#00f2ff', '#ffffff', '#FFA500']
-    )
-
-    # Main chart
-    chart = alt.Chart(plot_df).mark_line().encode(
-        x=x_axis,
-        y=y_axis,
-        color=alt.Color('Status:N', scale=color_scale, legend=alt.Legend(title="Legend")),
-        strokeDash=alt.condition(
-            alt.datum.Status == 'Actual',
-            alt.value([0]),  # Solid
-            alt.value([5, 5]) # Dashed (for both Forecast and Target)
-        ),
-        strokeWidth=alt.condition(
-            alt.datum.Status == 'Target',
-            alt.value(2),
-            alt.value(4)
-        )
-    )
-
-    # 3. THE BALL (14pt Marker) - Drawn on top
-    ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=250, color='#00f2ff').encode(x=x_axis, y=y_axis)
-
-    final_chart = (chart + ball).properties(height=450)
-
-    # --- UI ---
-    st.title("The Farm")
-    st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
-    
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Live", f"{live_temp}°F")
-    m2.metric("High Today", f"{df['Temperature'].max()}°F")
-    m3.metric("Low Today", f"{df['Temperature'].min()}°F")
-
-    st.write("---")
-    st.altair_chart(final_chart, use_container_width=True)
-
-show_dashboard()
+    # Calculate Delta (Trend) before updating with live temp
+    # We compare live_temp to the most recent historical hour (current_hour or current_hour-1)
+    prev_hour_val = df.loc[df['Hour'] == (current_hour - 1 if current_hour > 0 else 0), 'Temperature
