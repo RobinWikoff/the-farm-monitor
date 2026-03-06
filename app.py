@@ -27,14 +27,25 @@ def get_midnight_history():
     try:
         response = requests.get(FORECAST_URL, timeout=10).json()
         now_mtn = datetime.now(LOCAL_TZ)
-        midnight = LOCAL_TZ.localize(datetime.combine(now_mtn.date(), time(0, 0)))
+        today_date = now_mtn.date()
+        
         past_data = []
-        for entry in response['list']:
-            dt_mtn = datetime.fromtimestamp(entry['dt'], tz=pytz.UTC).astimezone(LOCAL_TZ)
-            if midnight <= dt_mtn <= now_mtn:
-                past_data.append({'Hour': dt_mtn.hour, 'Temp': round(entry['main']['temp'], 1), 'Date': dt_mtn.date()})
-        return pd.DataFrame(past_data)
-    except:
+        if "list" in response:
+            for entry in response['list']:
+                dt_mtn = datetime.fromtimestamp(entry['dt'], tz=pytz.UTC).astimezone(LOCAL_TZ)
+                
+                # GRAB EVERYTHING FROM TODAY (Midnight to Now)
+                if dt_mtn.date() == today_date and dt_mtn <= now_mtn:
+                    past_data.append({
+                        'Hour': dt_mtn.hour,
+                        'Temp': round(entry['main']['temp'], 1),
+                        'Date': dt_mtn.date()
+                    })
+        
+        df = pd.DataFrame(past_data)
+        return df
+    except Exception as e:
+        print(f"Error fetching history: {e}")
         return pd.DataFrame(columns=['Hour', 'Temp', 'Date'])
 
 def get_live_temp():
@@ -62,11 +73,12 @@ def show_dashboard():
     current_hour = now_mtn.hour
     
     if new_temp is not None:
-        # Reset Logic
-        if not st.session_state.daily_history.empty and st.session_state.daily_history['Date'].iloc[0] != now_mtn.date():
-            st.session_state.daily_history = get_midnight_history()
+        # Reset Logic if date changed
+        if not st.session_state.daily_history.empty:
+            if st.session_state.daily_history['Date'].iloc[0] != now_mtn.date():
+                st.session_state.daily_history = get_midnight_history()
 
-        # Update History
+        # Update Session History with Live Data
         new_entry = pd.DataFrame({'Hour': [current_hour], 'Temp': [new_temp], 'Date': [now_mtn.date()]})
         st.session_state.daily_history = pd.concat([st.session_state.daily_history, new_entry], ignore_index=True).drop_duplicates('Hour', keep='last')
 
@@ -74,16 +86,16 @@ def show_dashboard():
         chart_df = pd.DataFrame({'Hour': range(24)})
         chart_df = pd.merge(chart_df, st.session_state.daily_history[['Hour', 'Temp']], on='Hour', how='left')
         
-        # Line Stability
-        if pd.isna(chart_df.loc[0, 'Temp']) and not st.session_state.daily_history.empty:
-            chart_df.loc[0, 'Temp'] = st.session_state.daily_history['Temp'].iloc[0]
+        # Ensure the line starts at the earliest available data point
+        first_temp_idx = chart_df['Temp'].first_valid_index()
+        if first_temp_idx is not None:
+             chart_df.loc[0, 'Temp'] = chart_df.loc[first_temp_idx, 'Temp']
         
+        # Fill the line up to right now
         chart_df['Temp'] = chart_df['Temp'].interpolate(method='linear')
         chart_df.loc[chart_df['Hour'] > current_hour, 'Temp'] = None 
-        chart_df['Target'] = threshold
         
-        # NEW: Format Hour as 24h String (00:00, 01:00, etc.)
-        # The leading zero in "00:00" ensures alphabetical and chronological order match perfectly
+        chart_df['Target'] = threshold
         chart_df['24h'] = chart_df['Hour'].apply(lambda x: f"{x:02}:00")
         chart_df = chart_df.set_index('24h')
 
@@ -91,10 +103,14 @@ def show_dashboard():
         st.title("The Farm")
         st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
         
+        # CALCULATE HIGH/LOW FROM ALL DATA COLLECTED TODAY
+        d_high = st.session_state.daily_history['Temp'].max()
+        d_low = st.session_state.daily_history['Temp'].min()
+
         m1, m2, m3 = st.columns(3)
         m1.metric("Live", f"{new_temp}°F")
-        m2.metric("High Today", f"{st.session_state.daily_history['Temp'].max()}°F")
-        m3.metric("Low Today", f"{st.session_state.daily_history['Temp'].min()}°F")
+        m2.metric("High Today", f"{d_high}°F")
+        m3.metric("Low Today", f"{d_low}°F")
 
         st.write("---")
 
@@ -108,7 +124,6 @@ def show_dashboard():
                 else: st.warning(f"🔥 Waiting for {threshold}°F")
 
         with col_right:
-            # Displaying the 24-hour formatted axis
             st.line_chart(chart_df[['Temp', 'Target']], color=["#00f2ff", "#ff4b4b"])
 
 show_dashboard()
