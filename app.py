@@ -67,27 +67,22 @@ def show_dashboard():
     if live_temp is not None:
         df.loc[df['Hour'] == current_hour, 'Temperature'] = live_temp
 
-    # Split Actual vs Forecast
     actual_df = df[df['Hour'] <= current_hour].copy()
     hi_actual = actual_df['Temperature'].max()
     lo_actual = actual_df['Temperature'].min()
     
-    # --- LOGIC FOR SINGLE LABEL TIE-BREAKER ---
-    # We find the Hour (index) of the FIRST occurrence of the High and Low
     first_hi_hour = actual_df[actual_df['Temperature'] == hi_actual]['Hour'].iloc[0]
     first_lo_hour = actual_df[actual_df['Temperature'] == lo_actual]['Hour'].iloc[0]
     
-    def get_clean_label(row):
-        # Always label current (Now)
-        if row['Hour'] == current_hour: 
-            return f"{row['Temperature']}°"
-        # Label Hi/Lo only for the FIRST occurrence in 'Actual' history
-        if row['Hour'] < current_hour:
-            if row['Hour'] == first_hi_hour: return f"{row['Temperature']}°"
-            if row['Hour'] == first_lo_hour: return f"{row['Temperature']}°"
-        return ""
+    # Logic to classify label position
+    def get_pos(row):
+        if row['Hour'] == current_hour: return "Top"
+        if row['Hour'] == first_hi_hour: return "Top"
+        if row['Hour'] == first_lo_hour: return "Bottom"
+        return "None"
     
-    df['Label'] = df.apply(get_clean_label, axis=1)
+    df['Label_Pos'] = df.apply(get_pos, axis=1)
+    df['Label_Text'] = df['Temperature'].apply(lambda x: f"{x}°")
     df['Status'] = df['Hour'].apply(lambda x: 'Actual' if x <= current_hour else 'Forecast')
 
     # Chart Prep
@@ -111,19 +106,23 @@ def show_dashboard():
 
     ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=250, color='#00f2ff').encode(x=x_axis, y=y_axis)
 
-    # Clean Labels
-    labels = alt.Chart(df[df['Label'] != ""]).mark_text(
+    # Label Layer: TOP (Hi and Now)
+    labels_top = alt.Chart(df[df['Label_Pos'] == "Top"]).mark_text(
         align='center', baseline='bottom', dy=-15, fontSize=15, fontWeight='bold', color='white'
-    ).encode(x=x_axis, y=y_axis, text='Label')
+    ).encode(x=x_axis, y=y_axis, text='Label_Text')
 
-    final_chart = (lines + ball + labels).properties(height=500)
+    # Label Layer: BOTTOM (Low)
+    labels_bottom = alt.Chart(df[df['Label_Pos'] == "Bottom"]).mark_text(
+        align='center', baseline='top', dy=15, fontSize=15, fontWeight='bold', color='white'
+    ).encode(x=x_axis, y=y_axis, text='Label_Text')
+
+    final_chart = (lines + ball + labels_top + labels_bottom).properties(height=500)
 
     # --- UI ---
     st.title("The Farm: Apparent Temperature")
     st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
     
     m1, m2, m3 = st.columns(3)
-    # Simple trend calculation for the metric
     prev_temp = actual_df.iloc[-2]['Temperature'] if len(actual_df) > 1 else live_temp
     trend = round(live_temp - prev_temp, 1)
     
