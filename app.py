@@ -1,8 +1,9 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
+from PIL import Image
 
 # --- CONFIGURATION & SECURITY ---
 try:
@@ -10,95 +11,89 @@ try:
 except:
     API_KEY = "6893fccbe935414644a37268660065a8"
 
-# Loveland, CO Coordinates
 LAT, LON = "40.3720", "-105.0579"
-URL = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=imperial"
+# Switching to the Forecast API to get "history" for the current day
+URL = f"https://api.openweathermap.org/data/2.5/forecast?lat={LAT}&lon={LON}&appid={API_KEY}&units=imperial"
 LOCAL_TZ = pytz.timezone("US/Mountain")
 
-st.set_page_config(page_title="The Farm Monitor", page_icon="🚜", layout="wide")
+st.set_page_config(page_title="The Farm Monitor", page_icon="🏔️", layout="wide")
 
-# Initialize Session Data
-if 'history' not in st.session_state:
-    st.session_state.history = pd.DataFrame(columns=['Time', 'Temperature', 'Threshold'])
-if 'max_temp' not in st.session_state:
-    st.session_state.max_temp = -999.0
+# Load Custom Icon
+try:
+    farm_icon = Image.open('farm-icon.png')
+    st.set_page_config(page_title="The Farm Monitor", page_icon=farm_icon, layout="wide")
+except:
+    pass
 
-def get_live_temp():
+# --- DATA FETCHING (CACHED) ---
+@st.cache_data(ttl=600) # Only fetch from the web once every 10 minutes
+def get_day_data():
     try:
-        response = requests.get(URL, timeout=10)
-        return round(response.json()['main']['temp'], 1)
-    except:
-        return None
+        response = requests.get(URL, timeout=10).json()
+        list_of_temps = response['list']
+        
+        # We filter the list to only include readings from TODAY in Mountain Time
+        today = datetime.now(LOCAL_TZ).date()
+        daily_history = []
+        
+        for entry in list_of_temps:
+            # Convert UTC timestamp to Mountain Time
+            dt_utc = datetime.fromtimestamp(entry['dt'], tz=pytz.UTC)
+            dt_mountain = dt_utc.astimezone(LOCAL_TZ)
+            
+            if dt_mountain.date() == today:
+                daily_history.append({
+                    'Time': dt_mountain.strftime("%I:%M %p"),
+                    'Temperature': round(entry['main']['temp'], 1),
+                    'Timestamp': dt_mountain # Keep for sorting
+                })
+        
+        df = pd.DataFrame(daily_history).sort_values('Timestamp')
+        return df
+    except Exception as e:
+        st.error(f"Error fetching data: {e}")
+        return pd.DataFrame()
 
 # --- SIDEBAR SETTINGS ---
 st.sidebar.title("🚜 The Farm Settings")
-month = datetime.now(LOCAL_TZ).month
-default_mode = "Summer (Cooling Focus)" if 6 <= month <= 9 else "Winter (Warming Focus)"
-mode = st.sidebar.selectbox("Monitoring Mode", 
-                            ["Winter (Warming Focus)", "Summer (Cooling Focus)"], 
-                            index=0 if "Winter" in default_mode else 1)
-
-threshold = 65.0 if "Winter" in mode else 70.0
+threshold = st.sidebar.slider("Temperature Threshold", 60, 80, 70)
 
 # --- DASHBOARD FRAGMENT ---
 @st.fragment(run_every=60)
-def update_dashboard():
-    new_temp = get_live_temp()
+def render_dashboard():
+    df = get_day_data()
     
-    if new_temp is not None:
-        # Get Time in Loveland
-        now_mountain = datetime.now(LOCAL_TZ)
-        last_updated = now_mountain.strftime("%I:%M:%S %p")
-        now_short = now_mountain.strftime("%H:%M:%S")
+    if not df.empty:
+        # 1. Calculate Real Daily Stats
+        current_temp = df['Temperature'].iloc[-1]
+        daily_high = df['Temperature'].max()
+        last_updated = datetime.now(LOCAL_TZ).strftime("%I:%M:%S %p")
         
-        # Max Temp Tracking
-        if new_temp > st.session_state.max_temp:
-            st.session_state.max_temp = new_temp
-            
-        # Update History
-        new_row = pd.DataFrame({'Time': [now_short], 'Temperature': [new_temp], 'Threshold': [threshold]})
-        st.session_state.history = pd.concat([st.session_state.history, new_row], ignore_index=True)
-        
-        # Trend Calculation
-        delta = round(new_temp - st.session_state.history['Temperature'].iloc[-2], 2) if len(st.session_state.history) > 1 else None
-
-        # --- HEADER ---
+        # 2. Header
         st.title("🚜 The Farm - Environmental Watchdog")
-        st.markdown(f"**Current Time in Loveland:** `{last_updated}`")
+        st.markdown(f"**Loveland, CO** | Last Checked: `{last_updated}`")
         
-        # --- METRICS ---
+        # 3. Metrics
         col1, col2, col3 = st.columns([1, 1, 2])
         with col1:
-            st.metric(label="Live Temp", value=f"{new_temp}°F", delta=f"{delta}°F" if delta is not None else None)
+            st.metric(label="Current Temp", value=f"{current_temp}°F")
         with col2:
-            st.metric(label="Today's High", value=f"{st.session_state.max_temp}°F")
-
-        # --- ALERTS ---
-        if "Winter" in mode:
-            if new_temp >= threshold:
-                st.balloons()
-                st.success(f"☀️ Warming up! Currently {new_temp}°F.")
-            else:
-                st.info(f"❄️ Brisk at the Farm. Waiting for {threshold}°F.")
+            st.metric(label="Today's True High", value=f"{daily_high}°F")
+        
+        # 4. Alerts
+        if current_temp <= threshold:
+            st.markdown("### 🌬️ A cool breeze has arrived!")
+            st.toast('Cooling detected!', icon='🌬️')
         else:
-            if new_temp <= threshold:
-                st.markdown("### 🌬️ A cool breeze has arrived!")
-                st.toast('Cooler air detected!', icon='🌬️')
-            else:
-                st.warning(f"🔥 Waiting for the evening cool-down (Target: {threshold}°F)")
+            st.warning(f"🔥 Waiting for {threshold}°F (Current: {current_temp}°F)")
 
-        # --- CHART ---
+        # 5. The Graph (Entire Day)
         with col3:
-            if len(st.session_state.history) > 1:
-                # Optimized for Dark Mode
-                st.line_chart(st.session_state.history.set_index('Time')[['Temperature', 'Threshold']], 
-                              color=["#00f2ff", "#ff4b4b"])
+            # Add threshold line to the chart data
+            df['Target'] = threshold
+            st.line_chart(df.set_index('Time')[['Temperature', 'Target']], 
+                          color=["#00f2ff", "#ff4b4b"])
+    else:
+        st.info("Gathering today's data... check back in a moment.")
 
-update_dashboard()
-
-with st.sidebar:
-    st.write("---")
-    if st.button("Reset Session Logs"):
-        st.session_state.history = pd.DataFrame(columns=['Time', 'Temperature', 'Threshold'])
-        st.session_state.max_temp = -999.0
-        st.rerun()
+render_dashboard()
