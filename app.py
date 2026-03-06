@@ -61,21 +61,34 @@ threshold = 65.0 if "Winter" in mode else 70.0
 def show_dashboard():
     now_mtn = datetime.now(LOCAL_TZ)
     live_temp = get_live_temp()
+    current_hour = now_mtn.hour
     
     if live_temp is not None:
         if not st.session_state.daily_history.empty and st.session_state.daily_history['Date'].iloc[0] != now_mtn.date():
             st.session_state.daily_history = get_historical_data()
 
+        # Track trend
         prev_temp = st.session_state.daily_history['Temperature'].iloc[-1] if not st.session_state.daily_history.empty else live_temp
-        new_entry = pd.DataFrame({'Hour': [now_mtn.hour], 'Temperature': [live_temp], 'Date': [now_mtn.date()]})
+        new_entry = pd.DataFrame({'Hour': [current_hour], 'Temperature': [live_temp], 'Date': [now_mtn.date()]})
         st.session_state.daily_history = pd.concat([st.session_state.daily_history, new_entry], ignore_index=True).drop_duplicates('Hour', keep='last')
 
         # --- GRAPH ENGINE ---
         chart_df = pd.DataFrame({'Hour': range(24)})
         chart_df = pd.merge(chart_df, st.session_state.daily_history[['Hour', 'Temperature']], on='Hour', how='left')
+        
+        # 1. Temperature Line
         chart_df['Temperature'] = chart_df['Temperature'].interpolate(method='linear')
-        chart_df.loc[chart_df['Hour'] > now_mtn.hour, 'Temperature'] = None 
+        chart_df.loc[chart_df['Hour'] > current_hour, 'Temperature'] = None 
+        
+        # 2. Threshold Line
         chart_df['Target'] = threshold
+        
+        # 3. VERTICAL LINE TRICK
+        # We create a column that is null everywhere except the current hour
+        # We set it to 100 so it stretches from bottom to top of the chart
+        chart_df['Now'] = None
+        chart_df.loc[chart_df['Hour'] == current_hour, 'Now'] = 100 
+
         chart_df['24h'] = chart_df['Hour'].apply(lambda x: f"{x:02}:00")
         chart_df = chart_df.set_index('24h')
 
@@ -104,7 +117,11 @@ def show_dashboard():
                 else: st.warning(f"🔥 Waiting for {threshold}°F")
 
         with col_right:
-            # Customizing the chart labels and units
-            st.line_chart(chart_df[['Temperature', 'Target']], color=["#00f2ff", "#ff4b4b"], y_label="Degrees (°F)")
+            # We add 'Now' to the list of plotted columns
+            st.line_chart(
+                chart_df[['Temperature', 'Target', 'Now']], 
+                color=["#00f2ff", "#ff4b4b", "#ffffff"], # White for the 'Now' line
+                y_label="Degrees (°F)"
+            )
 
 show_dashboard()
