@@ -67,19 +67,24 @@ def show_dashboard():
     if live_temp is not None:
         df.loc[df['Hour'] == current_hour, 'Temperature'] = live_temp
 
-    # Split Actual vs Forecast for Label Logic
+    # Split Actual vs Forecast
     actual_df = df[df['Hour'] <= current_hour].copy()
     hi_actual = actual_df['Temperature'].max()
     lo_actual = actual_df['Temperature'].min()
     
-    # Create clean label column (Numeric only)
+    # --- LOGIC FOR SINGLE LABEL TIE-BREAKER ---
+    # We find the Hour (index) of the FIRST occurrence of the High and Low
+    first_hi_hour = actual_df[actual_df['Temperature'] == hi_actual]['Hour'].iloc[0]
+    first_lo_hour = actual_df[actual_df['Temperature'] == lo_actual]['Hour'].iloc[0]
+    
     def get_clean_label(row):
-        # Always label current
-        if row['Hour'] == current_hour: return f"{row['Temperature']}°"
-        # Label Hi/Lo only if they are in the 'Actual' period
+        # Always label current (Now)
+        if row['Hour'] == current_hour: 
+            return f"{row['Temperature']}°"
+        # Label Hi/Lo only for the FIRST occurrence in 'Actual' history
         if row['Hour'] < current_hour:
-            if row['Temperature'] == hi_actual: return f"{row['Temperature']}°"
-            if row['Temperature'] == lo_actual: return f"{row['Temperature']}°"
+            if row['Hour'] == first_hi_hour: return f"{row['Temperature']}°"
+            if row['Hour'] == first_lo_hour: return f"{row['Temperature']}°"
         return ""
     
     df['Label'] = df.apply(get_clean_label, axis=1)
@@ -93,7 +98,7 @@ def show_dashboard():
 
     # --- ALTAIR CHART ---
     x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]), axis=alt.Axis(labelExpr="datum.value + ':00'", grid=True))
-    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False, padding=30), title='Apparent Temp (°F)')
+    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False, padding=35), title='Apparent Temp (°F)')
     color_scale = alt.Scale(domain=['Actual', 'Forecast', 'Target'], range=['#00f2ff', '#ffffff', '#FFA500'])
 
     base = alt.Chart(plot_df).encode(x=x_axis, y=y_axis)
@@ -106,7 +111,7 @@ def show_dashboard():
 
     ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=250, color='#00f2ff').encode(x=x_axis, y=y_axis)
 
-    # Clean Labels (Centered above/beside points)
+    # Clean Labels
     labels = alt.Chart(df[df['Label'] != ""]).mark_text(
         align='center', baseline='bottom', dy=-15, fontSize=15, fontWeight='bold', color='white'
     ).encode(x=x_axis, y=y_axis, text='Label')
@@ -118,7 +123,11 @@ def show_dashboard():
     st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
     
     m1, m2, m3 = st.columns(3)
-    m1.metric("Current (Feels Like)", f"{live_temp}°F", delta=f"{round(live_temp - actual_df.iloc[-2]['Temperature'], 1) if len(actual_df)>1 else 0.0}°F", delta_description=f"since {current_hour-1:02}:00")
+    # Simple trend calculation for the metric
+    prev_temp = actual_df.iloc[-2]['Temperature'] if len(actual_df) > 1 else live_temp
+    trend = round(live_temp - prev_temp, 1)
+    
+    m1.metric("Current (Feels Like)", f"{live_temp}°F", delta=f"{trend}°F", delta_description=f"since {current_hour-1:02}:00")
     m2.metric("Actual High", f"{hi_actual}°F")
     m3.metric("Actual Low", f"{lo_actual}°F")
 
