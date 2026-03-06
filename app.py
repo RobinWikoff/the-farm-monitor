@@ -15,6 +15,7 @@ except:
 LAT, LON = "40.3720", "-105.0579"
 LOCAL_TZ = pytz.timezone("US/Mountain")
 
+# Pulls current and forecast data
 METEO_URL = f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}&hourly=temperature_2m&temperature_unit=fahrenheit&timezone=auto"
 OWM_URL = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=imperial"
 
@@ -35,6 +36,7 @@ def get_all_day_data():
         data_points = []
         for t, temp in zip(times, temps):
             dt = datetime.fromisoformat(t).replace(tzinfo=pytz.UTC).astimezone(LOCAL_TZ)
+            # Filter for exactly today's date
             if dt.date() == now_mtn.date():
                 data_points.append({
                     'Hour': dt.hour,
@@ -52,8 +54,8 @@ def get_live_temp():
         return None
 
 # --- INITIAL DATA ---
-if 'daily_history' not in st.session_state:
-    st.session_state.daily_history = get_all_day_data()
+if 'daily_data' not in st.session_state:
+    st.session_state.daily_data = get_all_day_data()
 
 # --- SIDEBAR ---
 st.sidebar.title("Settings")
@@ -68,39 +70,52 @@ def show_dashboard():
     live_temp = get_live_temp()
     current_hour = now_mtn.hour
     
-    # Refresh data at midnight
-    if not st.session_state.daily_history.empty:
-        # Simple check: if the first hour in history isn't today, refresh
+    # Refresh logic at start of day
+    if not st.session_state.daily_data.empty:
+        # If we have data from yesterday, refresh for today
         pass 
 
-    df = st.session_state.daily_history.copy()
+    df = st.session_state.daily_data.copy()
     if live_temp is not None:
         df.loc[df['Hour'] == current_hour, 'Temperature'] = live_temp
     
-    # Split data
-    actual_df = df[df['Hour'] <= current_hour].copy()
-    forecast_df = df[df['Hour'] >= current_hour].copy()
-    current_point_df = df[df['Hour'] == current_hour].copy()
+    # Prepare combined dataframe for Altair
+    # 'Actual' = Midnight to Now | 'Forecast' = Now to Midnight
+    df['Status'] = df['Hour'].apply(lambda x: 'Actual' if x <= current_hour else 'Forecast')
+    
+    # To connect the lines, we need the "Now" point to exist in both sets
+    now_row = df[df['Hour'] == current_hour].copy()
+    now_row['Status'] = 'Forecast'
+    plot_df = pd.concat([df, now_row]).sort_values('Hour')
 
     # --- ALTAIR CHARTING ---
-    # We use 'Hour:Q' (Quantitative) to avoid the "undefined" error
     x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]),
-                   axis=alt.Axis(labelExpr="datum.value + ':00'"))
+                   axis=alt.Axis(labelExpr="datum.value + ':00'", grid=True))
     y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False), title='Degrees (°F)')
 
-    # 1. Past Line (Solid)
-    line_past = alt.Chart(actual_df).mark_line(color='#00f2ff', strokeWidth=4).encode(x=x_axis, y=y_axis)
+    # 1. Combined Line (Color/Dash based on Status)
+    main_line = alt.Chart(plot_df).mark_line(strokeWidth=4).encode(
+        x=x_axis,
+        y=y_axis,
+        color=alt.Color('Status:N', 
+                        scale=alt.Scale(domain=['Actual', 'Forecast'], range=['#00f2ff', '#00f2ff']),
+                        legend=alt.Legend(title="Data Type")),
+        strokeDash=alt.condition(
+            alt.datum.Status == 'Forecast',
+            alt.value([5, 5]),  # Dashed for forecast
+            alt.value([0])      # Solid for actual
+        )
+    )
 
-    # 2. Future Line (Dashed)
-    line_future = alt.Chart(forecast_df).mark_line(color='#00f2ff', strokeWidth=2, strokeDash=[4,4], opacity=0.4).encode(x=x_axis, y=y_axis)
+    # 2. Threshold (Red Dashed)
+    rule = alt.Chart(pd.DataFrame({'y': [threshold]})).mark_rule(
+        color='#ff4b4b', strokeDash=[2,2], size=2
+    ).encode(y='y:Q')
 
-    # 3. Threshold (Red)
-    rule = alt.Chart(pd.DataFrame({'y': [threshold]})).mark_rule(color='#ff4b4b', strokeDash=[2,2]).encode(y='y:Q')
+    # 3. THE BALL (14pt Marker)
+    ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=250, color='#00f2ff').encode(x=x_axis, y=y_axis)
 
-    # 4. THE BALL (14pt Marker)
-    ball = alt.Chart(current_point_df).mark_circle(size=250, color='#00f2ff').encode(x=x_axis, y=y_axis)
-
-    final_chart = (line_past + line_future + rule + ball).properties(height=400)
+    final_chart = (main_line + rule + ball).properties(height=450)
 
     # --- UI ---
     st.title("The Farm")
