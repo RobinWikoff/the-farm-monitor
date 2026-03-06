@@ -64,30 +64,28 @@ def show_dashboard():
     current_hour = now_mtn.hour
     
     df = st.session_state.daily_data.copy()
-    
-    # Trend Calculation
-    comp_hour = current_hour - 1 if current_hour > 0 else 0
-    prev_hour_val = df.loc[df['Hour'] == comp_hour, 'Temperature'].values
-    delta = round(live_temp - prev_hour_val[0], 1) if (live_temp is not None and len(prev_hour_val) > 0) else 0.0
-
     if live_temp is not None:
         df.loc[df['Hour'] == current_hour, 'Temperature'] = live_temp
+
+    # Split Actual vs Forecast for Label Logic
+    actual_df = df[df['Hour'] <= current_hour].copy()
+    hi_actual = actual_df['Temperature'].max()
+    lo_actual = actual_df['Temperature'].min()
     
-    # Define interesting points for labels
-    hi_temp = df['Temperature'].max()
-    lo_temp = df['Temperature'].min()
-    
-    # Create label column
-    def get_label(row):
-        if row['Hour'] == current_hour: return f"Now: {row['Temperature']}°"
-        if row['Temperature'] == hi_temp: return f"High: {row['Temperature']}°"
-        if row['Temperature'] == lo_temp: return f"Low: {row['Temperature']}°"
+    # Create clean label column (Numeric only)
+    def get_clean_label(row):
+        # Always label current
+        if row['Hour'] == current_hour: return f"{row['Temperature']}°"
+        # Label Hi/Lo only if they are in the 'Actual' period
+        if row['Hour'] < current_hour:
+            if row['Temperature'] == hi_actual: return f"{row['Temperature']}°"
+            if row['Temperature'] == lo_actual: return f"{row['Temperature']}°"
         return ""
     
-    df['Label'] = df.apply(get_label, axis=1)
+    df['Label'] = df.apply(get_clean_label, axis=1)
+    df['Status'] = df['Hour'].apply(lambda x: 'Actual' if x <= current_hour else 'Forecast')
 
     # Chart Prep
-    df['Status'] = df['Hour'].apply(lambda x: 'Actual' if x <= current_hour else 'Forecast')
     now_row = df[df['Hour'] == current_hour].copy()
     now_row['Status'] = 'Forecast'
     target_data = pd.DataFrame({'Hour': range(24), 'Temperature': [threshold] * 24, 'Status': ['Target'] * 24})
@@ -95,24 +93,22 @@ def show_dashboard():
 
     # --- ALTAIR CHART ---
     x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]), axis=alt.Axis(labelExpr="datum.value + ':00'", grid=True))
-    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False, padding=20), title='Apparent Temp (°F)')
+    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False, padding=30), title='Apparent Temp (°F)')
     color_scale = alt.Scale(domain=['Actual', 'Forecast', 'Target'], range=['#00f2ff', '#ffffff', '#FFA500'])
 
     base = alt.Chart(plot_df).encode(x=x_axis, y=y_axis)
 
-    # Line Chart
     lines = base.mark_line().encode(
         color=alt.Color('Status:N', scale=color_scale, legend=alt.Legend(title="Type")),
         strokeDash=alt.condition(alt.datum.Status == 'Actual', alt.value([0]), alt.value([5, 5])),
         strokeWidth=alt.condition(alt.datum.Status == 'Target', alt.value(2), alt.value(4))
     )
 
-    # THE BALL
     ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=250, color='#00f2ff').encode(x=x_axis, y=y_axis)
 
-    # THE LABELS (Callouts)
+    # Clean Labels (Centered above/beside points)
     labels = alt.Chart(df[df['Label'] != ""]).mark_text(
-        align='left', baseline='middle', dx=12, fontSize=14, fontWeight='bold', color='white'
+        align='center', baseline='bottom', dy=-15, fontSize=15, fontWeight='bold', color='white'
     ).encode(x=x_axis, y=y_axis, text='Label')
 
     final_chart = (lines + ball + labels).properties(height=500)
@@ -122,20 +118,20 @@ def show_dashboard():
     st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
     
     m1, m2, m3 = st.columns(3)
-    m1.metric("Current (Feels Like)", f"{live_temp}°F", delta=f"{delta}°F", delta_description=f"since {comp_hour:02}:00")
-    m2.metric("High Today", f"{hi_temp}°F")
-    m3.metric("Low Today", f"{lo_temp}°F")
+    m1.metric("Current (Feels Like)", f"{live_temp}°F", delta=f"{round(live_temp - actual_df.iloc[-2]['Temperature'], 1) if len(actual_df)>1 else 0.0}°F", delta_description=f"since {current_hour-1:02}:00")
+    m2.metric("Actual High", f"{hi_actual}°F")
+    m3.metric("Actual Low", f"{lo_actual}°F")
 
     st.write("---")
     st.altair_chart(final_chart, use_container_width=True)
 
-    # Road Map Section
+    # Road Map
     st.write("---")
     st.subheader("🚀 Features Coming Soon")
     c1, c2 = st.columns(2)
     with c1:
-        st.markdown("* **Precipitation:** Real-time and forecasted Rain/Snow tracking.\n* **Historical Context:** Temperature compared to historical averages.")
+        st.markdown("* **Precipitation:** Real-time Rain/Snow tracking.\n* **Historical Context:** Temperature vs. Historical averages.")
     with c2:
-        st.markdown("* **Summer Optimization:** AM (Close windows) vs PM (Open at 70°F) alerts.")
+        st.markdown("* **Summer Optimization:** Window AM/PM alert system.")
 
 show_dashboard()
