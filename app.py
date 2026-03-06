@@ -66,10 +66,10 @@ def show_dashboard():
     
     df = st.session_state.daily_data.copy()
     
-    # --- FIXED SYNTAX LINE ---
-    prev_hour_val = df.loc[df['Hour'] == (current_hour - 1 if current_hour > 0 else 0), 'Temperature'].values
+    # Calculate Trend and identify the comparison hour
+    comp_hour = current_hour - 1 if current_hour > 0 else 0
+    prev_hour_val = df.loc[df['Hour'] == comp_hour, 'Temperature'].values
     
-    # Calculate Trend
     delta = 0.0
     if live_temp is not None and len(prev_hour_val) > 0:
         delta = round(live_temp - prev_hour_val[0], 1)
@@ -79,12 +79,9 @@ def show_dashboard():
     
     # --- CHART DATA PREP ---
     df['Status'] = df['Hour'].apply(lambda x: 'Actual' if x <= current_hour else 'Forecast')
-    
-    # Bridge the gap
     now_row = df[df['Hour'] == current_hour].copy()
     now_row['Status'] = 'Forecast'
     
-    # Target Line Data
     target_data = pd.DataFrame({
         'Hour': range(24),
         'Temperature': [threshold] * 24,
@@ -119,9 +116,7 @@ def show_dashboard():
         )
     )
 
-    # 14pt Pulse Ball
     ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=250, color='#00f2ff').encode(x=x_axis, y=y_axis)
-
     final_chart = (chart + ball).properties(height=450)
 
     # --- UI ---
@@ -129,7 +124,8 @@ def show_dashboard():
     st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
     
     m1, m2, m3 = st.columns(3)
-    m1.metric("Current", f"{live_temp}°F", delta=f"{delta}°F" if delta != 0 else None)
+    # Added "since HH:00" to the metric label
+    m1.metric(f"Current (since {comp_hour:02}:00)", f"{live_temp}°F", delta=f"{delta}°F" if delta != 0 else None)
     m2.metric("High Today", f"{df['Temperature'].max()}°F")
     m3.metric("Low Today", f"{df['Temperature'].min()}°F")
 
