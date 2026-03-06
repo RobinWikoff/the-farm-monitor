@@ -9,7 +9,6 @@ import pytz
 try:
     API_KEY = st.secrets["WEATHER_API_KEY"]
 except:
-    # Fallback for local testing
     API_KEY = "6893fccbe935414644a37268660065a8"
 
 LAT, LON = "40.3720", "-105.0579"
@@ -71,58 +70,64 @@ def show_dashboard():
 
     normals_df = get_historical_normals()
     actual_df = df[df['Hour'] <= current_hour].copy()
+    forecast_df = df[df['Hour'] >= current_hour].copy()
     
-    st.title("The Farm: Historical Deviations")
+    # 1. NEW HEADING
+    st.title("How's the Weather?")
+    st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
+    
     m1, m2, m3 = st.columns(3)
     trend = round(live_temp - actual_df.iloc[-2]['Temperature'], 1) if live_temp and len(actual_df) > 1 else 0.0
     m1.metric("Current (Feels Like)", f"{live_temp}°F", delta=f"{trend}°F")
     m2.metric("Actual High", f"{actual_df['Temperature'].max()}°F")
     m3.metric("Actual Low", f"{actual_df['Temperature'].min()}°F")
 
-    # --- CHART CONFIG ---
-    x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]), 
-                   axis=alt.Axis(labelExpr="datum.value + ':00'", labelFontSize=12, titleFontSize=14))
-    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False, padding=40), title='Apparent Temp (°F)',
-                   axis=alt.Axis(labelFontSize=12, titleFontSize=14))
+    # 2. FORECAST ASSISTANT (INFERENCE)
+    inference_msg = ""
+    if live_temp is not None:
+        if "Winter" in mode:
+            if live_temp >= threshold:
+                inference_msg = f"✅ Success: Currently above {threshold}°F. Enjoy the warmth!"
+            else:
+                target_hit = forecast_df[forecast_df['Temperature'] >= threshold]
+                if not target_hit.empty:
+                    hit_time = target_hit.iloc[0]['Hour']
+                    inference_msg = f"⏳ Warming up: Expected to reach {threshold}°F at {hit_time:02}:00."
+                else:
+                    inference_msg = f"❄️ Alert: Forecast remains below {threshold}°F for the rest of today."
+        else: # Summer
+            if live_temp <= threshold:
+                inference_msg = f"✅ Success: Currently below {threshold}°F. Good time for windows!"
+            else:
+                target_hit = forecast_df[forecast_df['Temperature'] <= threshold]
+                if not target_hit.empty:
+                    hit_time = target_hit.iloc[0]['Hour']
+                    inference_msg = f"🌡️ Cooling down: Expected to drop to {threshold}°F at {hit_time:02}:00."
+                else:
+                    inference_msg = f"🔥 Alert: Forecast stays above {threshold}°F for the rest of today."
+    
+    st.info(inference_msg)
 
-    # 1. Historical Corridor
+    # 3. CHART CONFIG (Axis labels +30% to 16pt)
+    x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]), 
+                   axis=alt.Axis(labelExpr="datum.value + ':00'", labelFontSize=16, titleFontSize=18))
+    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False, padding=40), title='Apparent Temp (°F)',
+                   axis=alt.Axis(labelFontSize=16, titleFontSize=18))
+
     band = alt.Chart(normals_df).mark_area(opacity=0.2, color='#FFA500').encode(x=x_axis, y='Normal_Low:Q', y2='Normal_High:Q')
     avg_line = alt.Chart(normals_df).mark_line(strokeDash=[5,5], color='#FFA500', opacity=0.3).encode(x=x_axis, y='Normal_Avg:Q')
 
-    # 2. DATA PREP
     target_df = pd.DataFrame({'Hour': list(range(24)), 'Temperature': [threshold]*24, 'Status': ['Target']*24})
     df['Status'] = df['Hour'].apply(lambda x: 'Actual' if x <= current_hour else 'Forecast')
     bridge = df[df['Hour'] == current_hour].copy().assign(Status='Forecast')
     plot_df = pd.concat([df, bridge, target_df]).sort_values('Hour')
 
-    # 3. MAPPING SCALES (Fixes the nesting error)
-    color_scale = alt.Scale(
-        domain=['Actual', 'Forecast', 'Target'],
-        range=['#00f2ff', '#ffffff', '#32CD32']
-    )
-    
-    # Define dash patterns for each status
-    dash_scale = alt.Scale(
-        domain=['Actual', 'Forecast', 'Target'],
-        range=[[0], [5, 5], [8, 4]]  # [Solid, Dotted, Dashed]
-    )
+    color_scale = alt.Scale(domain=['Actual', 'Forecast', 'Target'], range=['#00f2ff', '#ffffff', '#32CD32'])
+    dash_scale = alt.Scale(domain=['Actual', 'Forecast', 'Target'], range=[[0], [5, 5], [8, 4]])
 
     main_chart = alt.Chart(plot_df).mark_line(strokeWidth=4).encode(
         x=x_axis,
         y=y_axis,
-        color=alt.Color('Status:N', scale=color_scale, legend=alt.Legend(orient='bottom-left', labelFontSize=12, title=None)),
-        strokeDash=alt.StrokeDash('Status:N', scale=dash_scale, legend=None) # Map dash pattern to status
+        color=alt.Color('Status:N', scale=color_scale, legend=alt.Legend(orient='bottom-left', labelFontSize=14, title=None)),
+        strokeDash=alt.StrokeDash('Status:N', scale=dash_scale)
     )
-
-    ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=300, color='#00f2ff').encode(x=x_axis, y=y_axis)
-
-    # 4. FINAL RENDER
-    st.altair_chart((band + avg_line + main_chart + ball).properties(height=450).configure_legend(
-        fillColor='#1e1e1e', padding=10, cornerRadius=5, strokeColor='gray'
-    ), use_container_width=True)
-
-    st.write("---")
-    st.subheader("🚀 Features Coming Soon")
-    st.markdown("* **Precipitation:** Real-time Rain/Snow tracking.\n* **Summer AM/PM:** Window optimization alerts.")
-
-show_dashboard()
