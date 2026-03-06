@@ -5,7 +5,7 @@ from datetime import datetime, time
 import pytz
 from PIL import Image
 
-# --- CONFIGURATION ---
+# --- CONFIG ---
 try:
     API_KEY = st.secrets["WEATHER_API_KEY"]
 except:
@@ -16,13 +16,11 @@ CURRENT_URL = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={L
 FORECAST_URL = f"https://api.openweathermap.org/data/2.5/forecast?lat={LAT}&lon={LON}&appid={API_KEY}&units=imperial"
 LOCAL_TZ = pytz.timezone("US/Mountain")
 
-# --- CLEAN BROWSER TAB SETUP ---
+# Tab Setup
 try:
-    # Attempt to load your custom fractal farmhouse logo
     farm_icon = Image.open('farm-icon.png')
     st.set_page_config(page_title="The Farm", page_icon=farm_icon, layout="wide")
 except:
-    # Fallback to a mountain icon if the image file is missing
     st.set_page_config(page_title="The Farm", page_icon="🏔️", layout="wide")
 
 # --- DATA FUNCTIONS ---
@@ -31,16 +29,11 @@ def get_midnight_history():
         response = requests.get(FORECAST_URL, timeout=10).json()
         now_mtn = datetime.now(LOCAL_TZ)
         midnight = LOCAL_TZ.localize(datetime.combine(now_mtn.date(), time(0, 0)))
-        
         past_data = []
         for entry in response['list']:
             dt_mtn = datetime.fromtimestamp(entry['dt'], tz=pytz.UTC).astimezone(LOCAL_TZ)
             if midnight <= dt_mtn <= now_mtn:
-                past_data.append({
-                    'Hour': dt_mtn.hour,
-                    'Temp': round(entry['main']['temp'], 1),
-                    'Date': dt_mtn.date()
-                })
+                past_data.append({'Hour': dt_mtn.hour, 'Temp': round(entry['main']['temp'], 1), 'Date': dt_mtn.date()})
         return pd.DataFrame(past_data)
     except:
         return pd.DataFrame(columns=['Hour', 'Temp', 'Date'])
@@ -52,17 +45,17 @@ def get_live_temp():
     except:
         return None
 
-# --- INITIALIZE HISTORY ---
+# --- SESSION STATE ---
 if 'daily_history' not in st.session_state or st.session_state.daily_history.empty:
     st.session_state.daily_history = get_midnight_history()
 
 # --- SIDEBAR ---
 st.sidebar.title("Settings")
 now_mtn = datetime.now(LOCAL_TZ)
-mode = st.sidebar.selectbox("Monitoring Mode", ["Winter (Warming Focus)", "Summer (Cooling Focus)"], index=0 if now_mtn.month not in [6,7,8,9] else 1)
-threshold = 65.0 if "Winter" in mode else 70.0
+mode = st.sidebar.selectbox("Mode", ["Winter", "Summer"], index=0 if now_mtn.month not in [6,7,8,9] else 1)
+threshold = 65.0 if mode == "Winter" else 70.0
 
-# --- DASHBOARD FRAGMENT ---
+# --- DASHBOARD ---
 @st.fragment(run_every=60)
 def show_dashboard():
     new_temp = get_live_temp()
@@ -70,44 +63,53 @@ def show_dashboard():
     current_hour = now_mtn.hour
     
     if new_temp is not None:
-        # Midnight Reset
+        # Reset at Midnight
         if not st.session_state.daily_history.empty and st.session_state.daily_history['Date'].iloc[0] != now_mtn.date():
             st.session_state.daily_history = get_midnight_history()
 
-        # Update Session History
+        # Save Live Reading
         new_entry = pd.DataFrame({'Hour': [current_hour], 'Temp': [new_temp], 'Date': [now_mtn.date()]})
         st.session_state.daily_history = pd.concat([st.session_state.daily_history, new_entry], ignore_index=True).drop_duplicates('Hour', keep='last')
 
-        # Create 24-Hour Skeleton for the Chart
+        # --- GRAPH ENGINE ---
         chart_df = pd.DataFrame({'Hour': range(24)})
         chart_df = pd.merge(chart_df, st.session_state.daily_history[['Hour', 'Temp']], on='Hour', how='left')
         
-        # Forward fill to ensure the line connects
-        chart_df.loc[chart_df['Hour'] <= current_hour, 'Temp'] = chart_df.loc[chart_df['Hour'] <= current_hour, 'Temp'].ffill()
+        # 1. Ensure there is a start value at Hour 0 (Midnight) so the line doesn't float
+        if pd.isna(chart_df.loc[0, 'Temp']) and not st.session_state.daily_history.empty:
+            chart_df.loc[0, 'Temp'] = st.session_state.daily_history['Temp'].iloc[0]
+        
+        # 2. INTERPOLATE: This draws a line between the known points
+        chart_df['Temp'] = chart_df['Temp'].interpolate(method='linear')
+        
+        # 3. MASK: Don't show the line for the future hours
+        chart_df.loc[chart_df['Hour'] > current_hour, 'Temp'] = None
+        
         chart_df['Target'] = threshold
         chart_df['Time Label'] = chart_df['Hour'].apply(lambda x: datetime.strptime(str(x), "%H").strftime("%I %p"))
 
-        # --- UI DISPLAY ---
+        # --- UI ---
         st.title("The Farm")
         st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%I:%M %p')}`")
         
         m1, m2, m3 = st.columns(3)
-        m1.metric("Live Temp", f"{new_temp}°F")
-        m2.metric("High Today", f"{st.session_state.daily_history['Temp'].max()}°F")
-        m3.metric("Low Today", f"{st.session_state.daily_history['Temp'].min()}°F")
+        m1.metric("Live", f"{new_temp}°F")
+        m2.metric("High", f"{st.session_state.daily_history['Temp'].max()}°F")
+        m3.metric("Low", f"{st.session_state.daily_history['Temp'].min()}°F")
 
         st.write("---")
 
         col_left, col_right = st.columns([1, 2])
         with col_left:
-            if "Winter" in mode:
-                if new_temp >= threshold: st.success(f"☀️ Warming up! Currently {new_temp}°F.")
-                else: st.info(f"❄️ Waiting for {threshold}°F...")
+            if mode == "Winter":
+                if new_temp >= threshold: st.success(f"☀️ Warming! {new_temp}°F")
+                else: st.info(f"❄️ Waiting for {threshold}°F")
             else:
-                if new_temp <= threshold: st.success("### 🌬️ Cool breeze has arrived!")
+                if new_temp <= threshold: st.success("🌬️ Cool breeze!")
                 else: st.warning(f"🔥 Waiting for {threshold}°F")
 
         with col_right:
+            # We force the line chart to show by ensuring the data is clean
             st.line_chart(chart_df.set_index('Time Label')[['Temp', 'Target']], color=["#00f2ff", "#ff4b4b"])
 
 show_dashboard()
