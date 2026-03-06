@@ -103,4 +103,12 @@ def show_dashboard():
             chart_df = st.session_state.daily_history.copy()
             chart_df['Target'] = threshold
             # The chart now builds point-by-point starting from your first check after midnight
-            st.line_chart(chart_df.set_index('Time')[['Temp', 'Target']], color=["#00f2
+            st.line_chart(chart_df.set_index('Time')[['Temp', 'Target']], color=["#00f2ff", "#ff4b4b"])
+
+show_dashboard()
+
+with st.sidebar:
+    st.write("---")
+    if st.button("Reset Daily History"):
+        st.session_state.daily_history = pd.DataFrame(columns=['Time', 'Temp', 'Date'])
+        st.rerun()
