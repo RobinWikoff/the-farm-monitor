@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
 import pytz
 from PIL import Image
 
@@ -33,15 +33,16 @@ def get_midnight_history():
         past_data = []
         for entry in response['list']:
             dt_mtn = datetime.fromtimestamp(entry['dt'], tz=pytz.UTC).astimezone(LOCAL_TZ)
+            # Pull data from 00:00 today up to right now
             if midnight <= dt_mtn <= now_mtn:
                 past_data.append({
-                    'Time': dt_mtn.strftime("%H:%M"),
+                    'TimeKey': dt_mtn.strftime("%H:00"), # Normalize to the hour for the skeleton
                     'Temp': round(entry['main']['temp'], 1),
                     'Date': dt_mtn.date()
                 })
         return pd.DataFrame(past_data)
     except:
-        return pd.DataFrame(columns=['Time', 'Temp', 'Date'])
+        return pd.DataFrame(columns=['TimeKey', 'Temp', 'Date'])
 
 def get_live_temp():
     try:
@@ -65,27 +66,27 @@ threshold = 65.0 if "Winter" in mode else 70.0
 def show_dashboard():
     new_temp = get_live_temp()
     now_mtn = datetime.now(LOCAL_TZ)
+    current_hour_key = now_mtn.strftime("%H:00")
     
     if new_temp is not None:
         # Midnight Reset
         if not st.session_state.daily_history.empty and st.session_state.daily_history['Date'].iloc[0] != now_mtn.date():
             st.session_state.daily_history = get_midnight_history()
 
-        # Add current point
-        new_entry = pd.DataFrame({'Time': [now_mtn.strftime("%H:%M")], 'Temp': [new_temp], 'Date': [now_mtn.date()]})
-        st.session_state.daily_history = pd.concat([st.session_state.daily_history, new_entry], ignore_index=True).drop_duplicates('Time')
+        # Update or Add the current hour's live reading
+        new_entry = pd.DataFrame({'TimeKey': [current_hour_key], 'Temp': [new_temp], 'Date': [now_mtn.date()]})
+        st.session_state.daily_history = pd.concat([st.session_state.daily_history, new_entry], ignore_index=True).drop_duplicates('TimeKey', keep='last')
 
         # --- PREPARE 24-HOUR CHART ---
-        # Create a full range of times from 00:00 to 23:00 (every hour) to anchor the axis
-        full_day_times = [f"{h:02d}:00" for h in range(24)]
-        full_day_df = pd.DataFrame({'Time': full_day_times})
+        # Create the skeleton
+        full_day_keys = [f"{h:02d}:00" for h in range(24)]
+        chart_df = pd.DataFrame({'TimeKey': full_day_keys})
         
-        # Merge real data into the 24-hour structure
-        chart_df = pd.merge(full_day_df, st.session_state.daily_history, on='Time', how='left')
+        # Merge history into skeleton
+        chart_df = pd.merge(chart_df, st.session_state.daily_history[['TimeKey', 'Temp']], on='TimeKey', how='left')
         chart_df['Target'] = threshold
-        chart_df = chart_df.set_index('Time')
-
-        # Metrics
+        
+        # Display Logic
         st.title("The Farm")
         st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%I:%M %p')}`")
         
@@ -96,7 +97,6 @@ def show_dashboard():
 
         st.write("---")
 
-        # Layout
         col_left, col_right = st.columns([1, 2])
         with col_left:
             if "Winter" in mode:
@@ -107,7 +107,8 @@ def show_dashboard():
                 else: st.warning(f"🔥 Waiting for {threshold}°F")
 
         with col_right:
-            # Displaying the 24-hour chart
-            st.line_chart(chart_df[['Temp', 'Target']], color=["#00f2ff", "#ff4b4b"])
+            # Re-label the TimeKey for the user's eyes (convert 13:00 to 1 PM)
+            chart_df['DisplayTime'] = pd.to_datetime(chart_df['TimeKey'], format='%H:%M').dt.strftime('%I %p')
+            st.line_chart(chart_df.set_index('DisplayTime')[['Temp', 'Target']], color=["#00f2ff", "#ff4b4b"])
 
 show_dashboard()
