@@ -19,10 +19,8 @@ st.set_page_config(page_title="The Farm", page_icon="🏔️", layout="wide")
 @st.cache_data(ttl=3600)
 def get_weather_data():
     try:
-        # Get Forecast
         f_resp = requests.get(METEO_URL, timeout=10).json()
-        times = f_resp['hourly']['time']
-        temps = f_resp['hourly']['apparent_temperature']
+        times, temps = f_resp['hourly']['time'], f_resp['hourly']['apparent_temperature']
         now_date = datetime.now(LOCAL_TZ).date()
         
         forecast_list = []
@@ -31,13 +29,10 @@ def get_weather_data():
             if dt.date() == now_date:
                 forecast_list.append({'Hour': dt.hour, 'Temperature': round(temp, 1)})
         
-        # Get Live
         l_resp = requests.get(OWM_URL, timeout=10).json()
         live = round(l_resp['main']['feels_like'], 1)
-        
         return pd.DataFrame(forecast_list), live
-    except Exception as e:
-        st.error(f"Connection Error: {e}")
+    except:
         return pd.DataFrame(), None
 
 # --- UI SETUP ---
@@ -46,63 +41,74 @@ mode = st.sidebar.selectbox("Monitoring Mode", ["Winter (Warming Focus)", "Summe
 threshold = 65.0 if "Winter" in mode else 70.0
 
 # --- MAIN DASHBOARD ---
-st.title("How's the Weather?")
+st.title("The Farm: How's the Weather?")
 now_mtn = datetime.now(LOCAL_TZ)
 st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
 
 df, live_temp = get_weather_data()
 
-if not df.empty:
+if not df.empty and live_temp is not None:
     current_hour = now_mtn.hour
+    df.loc[df['Hour'] == current_hour, 'Temperature'] = live_temp
     
-    # 1. Metrics
+    # Metrics
     m1, m2, m3 = st.columns(3)
-    actuals = df[df['Hour'] <= current_hour]
+    actuals = df[df['Hour'] <= current_hour].copy()
+    hi, lo = actuals['Temperature'].max(), actuals['Temperature'].min()
     m1.metric("Current (Feels)", f"{live_temp}°F")
-    m2.metric("Today's High", f"{df['Temperature'].max()}°F")
-    m3.metric("Today's Low", f"{df['Temperature'].min()}°F")
+    m2.metric("Today's High", f"{hi}°F")
+    m3.metric("Today's Low", f"{lo}°F")
 
-    # 2. Assistant Logic (Safe Check)
+    # Assistant Logic
     forecast_future = df[df['Hour'] >= current_hour]
     if "Winter" in mode:
-        if live_temp >= threshold:
-            st.success(f"✅ Above target ({threshold}°F). House should be warming up!")
+        if live_temp >= threshold: st.success(f"✅ Above target ({threshold}°F).")
         else:
             hits = forecast_future[forecast_future['Temperature'] >= threshold]
-            if not hits.empty:
-                st.info(f"⏳ Warming: Reaching {threshold}°F at {hits.iloc[0]['Hour']}:00")
-            else:
-                st.warning(f"❄️ Stay bundled: Staying below {threshold}°F today.")
+            if not hits.empty: st.info(f"⏳ Reaching {threshold}°F at {hits.iloc[0]['Hour']}:00")
+            else: st.warning(f"❄️ Staying below {threshold}°F today.")
     else:
-        if live_temp <= threshold:
-            st.success(f"✅ Below target ({threshold}°F). Open those windows!")
+        if live_temp <= threshold: st.success(f"✅ Below target ({threshold}°F).")
         else:
             hits = forecast_future[forecast_future['Temperature'] <= threshold]
-            if not hits.empty:
-                st.info(f"🌡️ Cooling: Dropping to {threshold}°F at {hits.iloc[0]['Hour']}:00")
-            else:
-                st.warning(f"🔥 Heads up: Staying above {threshold}°F today.")
+            if not hits.empty: st.info(f"🌡️ Dropping to {threshold}°F at {hits.iloc[0]['Hour']}:00")
+            else: st.warning(f"🔥 Staying above {threshold}°F today.")
 
-    # 3. Chart with Large Text
-    x_axis = alt.X('Hour:Q', axis=alt.Axis(labelFontSize=16, titleFontSize=18, labelExpr="datum.value + ':00'"))
-    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False, padding=40), axis=alt.Axis(labelFontSize=16, titleFontSize=18))
+    # --- CHART LOGIC ---
+    # Label Logic (Bi-directional)
+    first_hi_h = actuals[actuals['Temperature'] == hi]['Hour'].iloc[0]
+    first_lo_h = actuals[actuals['Temperature'] == lo]['Hour'].iloc[0]
+    
+    def get_label_cfg(row):
+        if row['Hour'] == current_hour: return ("Top", f"{row['Temperature']}°")
+        if row['Hour'] == first_hi_h: return ("Top", f"{row['Temperature']}°")
+        if row['Hour'] == first_lo_h: return ("Bottom", f"{row['Temperature']}°")
+        return ("None", "")
 
-    # Prep Plotting Data
-    target_df = pd.DataFrame({'Hour': range(24), 'Temperature': [threshold]*24, 'Status': ['Target']*24})
+    df[['Lab_Pos', 'Lab_Txt']] = df.apply(lambda r: pd.Series(get_label_cfg(r)), axis=1)
     df['Status'] = df['Hour'].apply(lambda x: 'Actual' if x <= current_hour else 'Forecast')
+    
+    target_df = pd.DataFrame({'Hour': range(24), 'Temperature': [threshold]*24, 'Status': ['Target']*24})
     plot_df = pd.concat([df, target_df])
 
-    color_scale = alt.Scale(domain=['Actual', 'Forecast', 'Target'], range=['#00f2ff', '#ffffff', '#32CD32'])
-    dash_scale = alt.Scale(domain=['Actual', 'Forecast', 'Target'], range=[[0], [5, 5], [8, 4]])
+    # Scales
+    x_ax = alt.X('Hour:Q', axis=alt.Axis(labelFontSize=16, titleFontSize=18, labelExpr="datum.value + ':00'"))
+    y_ax = alt.Y('Temperature:Q', scale=alt.Scale(zero=False, padding=50), axis=alt.Axis(labelFontSize=16, titleFontSize=18))
+    c_scale = alt.Scale(domain=['Actual', 'Forecast', 'Target'], range=['#00f2ff', '#ffffff', '#32CD32'])
+    d_scale = alt.Scale(domain=['Actual', 'Forecast', 'Target'], range=[[0], [5, 5], [8, 4]])
 
-    chart = alt.Chart(plot_df).mark_line(strokeWidth=4).encode(
-        x=x_axis, y=y_axis,
-        color=alt.Color('Status:N', scale=color_scale, legend=alt.Legend(orient='bottom-left', labelFontSize=14)),
-        strokeDash=alt.StrokeDash('Status:N', scale=dash_scale)
-    ).properties(height=450)
+    # Layers
+    base = alt.Chart(plot_df).encode(x=x_ax, y=y_ax)
+    lines = base.mark_line(strokeWidth=4).encode(
+        color=alt.Color('Status:N', scale=c_scale, legend=alt.Legend(orient='bottom-left', labelFontSize=14, title=None)),
+        strokeDash=alt.StrokeDash('Status:N', scale=d_scale)
+    )
+    
+    ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=400, color='#00f2ff').encode(x=x_ax, y=y_ax)
+    
+    txt_top = alt.Chart(df[df['Lab_Pos'] == "Top"]).mark_text(dy=-20, fontSize=16, fontWeight='bold', color='white').encode(x=x_ax, y=y_ax, text='Lab_Txt')
+    txt_bot = alt.Chart(df[df['Lab_Pos'] == "Bottom"]).mark_text(dy=20, fontSize=16, fontWeight='bold', color='white', baseline='top').encode(x=x_ax, y=y_ax, text='Lab_Txt')
 
-    ball = alt.Chart(pd.DataFrame({'Hour': [current_hour], 'Temperature': [live_temp]})).mark_circle(size=400, color='#00f2ff').encode(x=x_axis, y=y_axis)
-
-    st.altair_chart((chart + ball).configure_legend(fillColor='#1e1e1e', padding=10), use_container_width=True)
+    st.altair_chart((lines + ball + txt_top + txt_bot).properties(height=500).configure_legend(fillColor='#1e1e1e', padding=10), use_container_width=True)
 else:
-    st.warning("Waiting for weather data to refresh...")
+    st.warning("Fetching fresh weather data...")
