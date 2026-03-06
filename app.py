@@ -149,12 +149,12 @@ def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_ho
     )
 
     color_scale = alt.Scale(
-        domain=["Actual", "Forecast", "Target"],
-        range=["#00f2ff", "#ffffff", "#32CD32"],
+        domain=["Actual", "Forecast", "Target", "Hist Avg (5yr)"],
+        range=["#00f2ff", "#ffffff", "#32CD32", "#a0c4ff"],
     )
     dash_scale = alt.Scale(
-        domain=["Actual", "Forecast", "Target"],
-        range=[[0], [5, 5], [8, 4]],
+        domain=["Actual", "Forecast", "Target", "Hist Avg (5yr)"],
+        range=[[0], [5, 5], [8, 4], [3, 3]],
     )
 
     lines = (
@@ -228,9 +228,21 @@ def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_ho
             )
         )
         hist_mean = (
-            alt.Chart(hist_band)
-            .mark_line(strokeWidth=2, strokeDash=[3, 3], color="#a0c4ff", opacity=0.55)
-            .encode(x=band_x, y=alt.Y("HistMean:Q"))
+            alt.Chart(hist_band.assign(Status="Hist Avg (5yr)"))
+            .mark_line(strokeWidth=2, opacity=0.65)
+            .encode(
+                x=band_x,
+                y=alt.Y("HistMean:Q"),
+                color=alt.Color(
+                    "Status:N",
+                    scale=color_scale,
+                    legend=alt.Legend(orient="bottom-left", labelFontSize=14, title=None),
+                ),
+                strokeDash=alt.StrokeDash(
+                    "Status:N",
+                    scale=dash_scale,
+                ),
+            )
         )
         hist_layers = hist_area + hist_mean
 
