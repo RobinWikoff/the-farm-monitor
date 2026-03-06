@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
+import altair as alt
 from datetime import datetime
 import pytz
 from PIL import Image
@@ -67,24 +68,37 @@ def show_dashboard():
         if not st.session_state.daily_history.empty and st.session_state.daily_history['Date'].iloc[0] != now_mtn.date():
             st.session_state.daily_history = get_historical_data()
 
+        # Update History
         new_entry = pd.DataFrame({'Hour': [current_hour], 'Temperature': [live_temp], 'Date': [now_mtn.date()]})
         st.session_state.daily_history = pd.concat([st.session_state.daily_history, new_entry], ignore_index=True).drop_duplicates('Hour', keep='last')
 
-        # --- GRAPH ENGINE ---
+        # --- GRAPH PREP ---
         chart_df = pd.DataFrame({'Hour': range(24)})
         chart_df = pd.merge(chart_df, st.session_state.daily_history[['Hour', 'Temperature']], on='Hour', how='left')
-        
         chart_df['Temperature'] = chart_df['Temperature'].interpolate(method='linear')
         chart_df.loc[chart_df['Hour'] > current_hour, 'Temperature'] = None 
         chart_df['Target'] = threshold
-        
-        # THE VERTICAL LINE FIX:
-        # We use a very high value (100) so it looks like a full-height bar
-        chart_df['Now'] = 0.0
-        chart_df.loc[chart_df['Hour'] == current_hour, 'Now'] = 100.0
+        chart_df['Time Label'] = chart_df['Hour'].apply(lambda x: f"{x:02}:00")
 
-        chart_df['24h'] = chart_df['Hour'].apply(lambda x: f"{x:02}:00")
-        chart_df = chart_df.set_index('24h')
+        # Create a separate dataframe just for the "Ball" (Current Point)
+        current_point_df = chart_df[chart_df['Hour'] == current_hour].copy()
+
+        # --- ALTAIR CHARTING ---
+        # 1. The Main Temperature Line
+        base = alt.Chart(chart_df).encode(x=alt.X('Time Label:O', sort=None, title='Time (24h)'))
+        
+        temp_line = base.mark_line(color='#00f2ff', strokeWidth=3).encode(y=alt.Y('Temperature:Q', scale=alt.Scale(zero=False), title='Degrees (°F)'))
+        
+        # 2. The Threshold Line
+        target_line = base.mark_line(color='#ff4b4b', strokeDash=[5,5]).encode(y='Target:Q')
+        
+        # 3. THE BALL (The Large 14pt point at current hour)
+        current_ball = alt.Chart(current_point_df).mark_circle(size=200, color='#00f2ff', opacity=1).encode(
+            x='Time Label:O',
+            y='Temperature:Q'
+        )
+
+        final_chart = (temp_line + target_line + current_ball).properties(height=400)
 
         # --- UI ---
         st.title("The Farm")
@@ -103,20 +117,13 @@ def show_dashboard():
         col_left, col_right = st.columns([1, 2])
         with col_left:
             if "Winter" in mode:
-                if live_temp >= threshold: st.success(f"☀️ Warming up! {live_temp}°F.")
-                else: st.info(f"❄️ Waiting for {threshold}°F.")
+                if live_temp >= threshold: st.success(f"☀️ Warming up! {live_temp}°F")
+                else: st.info(f"❄️ Waiting for {threshold}°F")
             else:
                 if live_temp <= threshold: st.success("🌬️ Cool breeze has arrived!")
                 else: st.warning(f"🔥 Waiting for {threshold}°F")
 
         with col_right:
-            # We use st.bar_chart for the "Now" marker to force visibility
-            # Then we use st.line_chart for the actual temperature
-            # For the cleanest look, we use a single combined chart:
-            st.line_chart(
-                chart_df[['Temperature', 'Target', 'Now']], 
-                color=["#00f2ff", "#ff4b4b", "#ffffff"],
-                y_label="Degrees (°F)"
-            )
+            st.altair_chart(final_chart, use_container_width=True)
 
 show_dashboard()
