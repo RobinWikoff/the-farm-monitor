@@ -70,7 +70,7 @@ def show_dashboard():
         new_entry = pd.DataFrame({'Hour': [current_hour], 'Temp': [new_temp], 'Date': [now_mtn.date()]})
         st.session_state.daily_history = pd.concat([st.session_state.daily_history, new_entry], ignore_index=True).drop_duplicates('Hour', keep='last')
 
-        # --- GRAPH ENGINE (NUMERIC SORTING) ---
+        # --- GRAPH ENGINE ---
         chart_df = pd.DataFrame({'Hour': range(24)})
         chart_df = pd.merge(chart_df, st.session_state.daily_history[['Hour', 'Temp']], on='Hour', how='left')
         
@@ -82,18 +82,19 @@ def show_dashboard():
         chart_df.loc[chart_df['Hour'] > current_hour, 'Temp'] = None 
         chart_df['Target'] = threshold
         
-        # Create a helper for sorting: We keep 'Hour' as the index so 0 comes before 1, which comes before 13
-        # We will use st.area_chart or st.line_chart and just let the X-axis be the hour number for perfect order
-        chart_df = chart_df.set_index('Hour')
+        # NEW: Format Hour as 24h String (00:00, 01:00, etc.)
+        # The leading zero in "00:00" ensures alphabetical and chronological order match perfectly
+        chart_df['24h'] = chart_df['Hour'].apply(lambda x: f"{x:02}:00")
+        chart_df = chart_df.set_index('24h')
 
         # --- UI ---
         st.title("The Farm")
-        st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%I:%M %p')}`")
+        st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
         
         m1, m2, m3 = st.columns(3)
         m1.metric("Live", f"{new_temp}°F")
-        m2.metric("High", f"{st.session_state.daily_history['Temp'].max()}°F")
-        m3.metric("Low", f"{st.session_state.daily_history['Temp'].min()}°F")
+        m2.metric("High Today", f"{st.session_state.daily_history['Temp'].max()}°F")
+        m3.metric("Low Today", f"{st.session_state.daily_history['Temp'].min()}°F")
 
         st.write("---")
 
@@ -107,8 +108,7 @@ def show_dashboard():
                 else: st.warning(f"🔥 Waiting for {threshold}°F")
 
         with col_right:
-            # By using the integer 'Hour' (0-23) as the index, the order is guaranteed
+            # Displaying the 24-hour formatted axis
             st.line_chart(chart_df[['Temp', 'Target']], color=["#00f2ff", "#ff4b4b"])
-            st.caption("X-Axis: Hour of the Day (0 = Midnight, 12 = Noon, 23 = 11 PM)")
 
 show_dashboard()
