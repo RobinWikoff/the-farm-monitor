@@ -6,11 +6,7 @@ from datetime import datetime
 import pytz
 
 # --- CONFIG ---
-try:
-    API_KEY = st.secrets["WEATHER_API_KEY"]
-except:
-    API_KEY = "6893fccbe935414644a37268660065a8"
-
+API_KEY = "6893fccbe935414644a37268660065a8"
 LAT, LON = "40.3720", "-105.0579"
 LOCAL_TZ = pytz.timezone("US/Mountain")
 
@@ -20,114 +16,93 @@ OWM_URL = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&
 st.set_page_config(page_title="The Farm", page_icon="🏔️", layout="wide")
 
 # --- DATA FUNCTIONS ---
-@st.cache_data(ttl=86400)
-def get_historical_normals():
-    normals = []
-    for h in range(24):
-        avg = 32 + (15 * (1 - abs((h-14)/10)))
-        normals.append({'Hour': h, 'Normal_Avg': round(avg, 1), 'Normal_Low': round(avg-8, 1), 'Normal_High': round(avg+8, 1)})
-    return pd.DataFrame(normals)
-
-def get_all_day_data():
+@st.cache_data(ttl=3600)
+def get_weather_data():
     try:
-        response = requests.get(METEO_URL, timeout=10).json()
-        times, temps = response['hourly']['time'], response['hourly']['apparent_temperature']
+        # Get Forecast
+        f_resp = requests.get(METEO_URL, timeout=10).json()
+        times = f_resp['hourly']['time']
+        temps = f_resp['hourly']['apparent_temperature']
         now_date = datetime.now(LOCAL_TZ).date()
-        data = []
+        
+        forecast_list = []
         for t, temp in zip(times, temps):
             dt = datetime.fromisoformat(t).replace(tzinfo=pytz.UTC).astimezone(LOCAL_TZ)
             if dt.date() == now_date:
-                data.append({'Hour': dt.hour, 'Temperature': round(temp, 1)})
-        return pd.DataFrame(data)
-    except:
-        return pd.DataFrame(columns=['Hour', 'Temperature'])
+                forecast_list.append({'Hour': dt.hour, 'Temperature': round(temp, 1)})
+        
+        # Get Live
+        l_resp = requests.get(OWM_URL, timeout=10).json()
+        live = round(l_resp['main']['feels_like'], 1)
+        
+        return pd.DataFrame(forecast_list), live
+    except Exception as e:
+        st.error(f"Connection Error: {e}")
+        return pd.DataFrame(), None
 
-def get_live_temp():
-    try:
-        response = requests.get(OWM_URL, timeout=10).json()
-        return round(response['main']['feels_like'], 1)
-    except: return None
-
-if 'daily_data' not in st.session_state:
-    st.session_state.daily_data = get_all_day_data()
-
-# --- SIDEBAR ---
+# --- UI SETUP ---
 st.sidebar.title("Settings")
-now_mtn = datetime.now(LOCAL_TZ)
-mode = st.sidebar.selectbox("Monitoring Mode", ["Winter (Warming Focus)", "Summer (Cooling Focus)"], index=0 if now_mtn.month not in [6,7,8,9] else 1)
+mode = st.sidebar.selectbox("Monitoring Mode", ["Winter (Warming Focus)", "Summer (Cooling Focus)"])
 threshold = 65.0 if "Winter" in mode else 70.0
 
-# --- DASHBOARD ---
-@st.fragment(run_every=60)
-def show_dashboard():
-    now_mtn = datetime.now(LOCAL_TZ)
-    live_temp = get_live_temp()
+# --- MAIN DASHBOARD ---
+st.title("How's the Weather?")
+now_mtn = datetime.now(LOCAL_TZ)
+st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
+
+df, live_temp = get_weather_data()
+
+if not df.empty:
     current_hour = now_mtn.hour
     
-    df = st.session_state.daily_data.copy()
-    if live_temp is not None:
-        df.loc[df['Hour'] == current_hour, 'Temperature'] = live_temp
-
-    normals_df = get_historical_normals()
-    actual_df = df[df['Hour'] <= current_hour].copy()
-    forecast_df = df[df['Hour'] >= current_hour].copy()
-    
-    # 1. NEW HEADING
-    st.title("How's the Weather?")
-    st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
-    
+    # 1. Metrics
     m1, m2, m3 = st.columns(3)
-    trend = round(live_temp - actual_df.iloc[-2]['Temperature'], 1) if live_temp and len(actual_df) > 1 else 0.0
-    m1.metric("Current (Feels Like)", f"{live_temp}°F", delta=f"{trend}°F")
-    m2.metric("Actual High", f"{actual_df['Temperature'].max()}°F")
-    m3.metric("Actual Low", f"{actual_df['Temperature'].min()}°F")
+    actuals = df[df['Hour'] <= current_hour]
+    m1.metric("Current (Feels)", f"{live_temp}°F")
+    m2.metric("Today's High", f"{df['Temperature'].max()}°F")
+    m3.metric("Today's Low", f"{df['Temperature'].min()}°F")
 
-    # 2. FORECAST ASSISTANT (INFERENCE)
-    inference_msg = ""
-    if live_temp is not None:
-        if "Winter" in mode:
-            if live_temp >= threshold:
-                inference_msg = f"✅ Success: Currently above {threshold}°F. Enjoy the warmth!"
+    # 2. Assistant Logic (Safe Check)
+    forecast_future = df[df['Hour'] >= current_hour]
+    if "Winter" in mode:
+        if live_temp >= threshold:
+            st.success(f"✅ Above target ({threshold}°F). House should be warming up!")
+        else:
+            hits = forecast_future[forecast_future['Temperature'] >= threshold]
+            if not hits.empty:
+                st.info(f"⏳ Warming: Reaching {threshold}°F at {hits.iloc[0]['Hour']}:00")
             else:
-                target_hit = forecast_df[forecast_df['Temperature'] >= threshold]
-                if not target_hit.empty:
-                    hit_time = target_hit.iloc[0]['Hour']
-                    inference_msg = f"⏳ Warming up: Expected to reach {threshold}°F at {hit_time:02}:00."
-                else:
-                    inference_msg = f"❄️ Alert: Forecast remains below {threshold}°F for the rest of today."
-        else: # Summer
-            if live_temp <= threshold:
-                inference_msg = f"✅ Success: Currently below {threshold}°F. Good time for windows!"
+                st.warning(f"❄️ Stay bundled: Staying below {threshold}°F today.")
+    else:
+        if live_temp <= threshold:
+            st.success(f"✅ Below target ({threshold}°F). Open those windows!")
+        else:
+            hits = forecast_future[forecast_future['Temperature'] <= threshold]
+            if not hits.empty:
+                st.info(f"🌡️ Cooling: Dropping to {threshold}°F at {hits.iloc[0]['Hour']}:00")
             else:
-                target_hit = forecast_df[forecast_df['Temperature'] <= threshold]
-                if not target_hit.empty:
-                    hit_time = target_hit.iloc[0]['Hour']
-                    inference_msg = f"🌡️ Cooling down: Expected to drop to {threshold}°F at {hit_time:02}:00."
-                else:
-                    inference_msg = f"🔥 Alert: Forecast stays above {threshold}°F for the rest of today."
-    
-    st.info(inference_msg)
+                st.warning(f"🔥 Heads up: Staying above {threshold}°F today.")
 
-    # 3. CHART CONFIG (Axis labels +30% to 16pt)
-    x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]), 
-                   axis=alt.Axis(labelExpr="datum.value + ':00'", labelFontSize=16, titleFontSize=18))
-    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False, padding=40), title='Apparent Temp (°F)',
-                   axis=alt.Axis(labelFontSize=16, titleFontSize=18))
+    # 3. Chart with Large Text
+    x_axis = alt.X('Hour:Q', axis=alt.Axis(labelFontSize=16, titleFontSize=18, labelExpr="datum.value + ':00'"))
+    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False, padding=40), axis=alt.Axis(labelFontSize=16, titleFontSize=18))
 
-    band = alt.Chart(normals_df).mark_area(opacity=0.2, color='#FFA500').encode(x=x_axis, y='Normal_Low:Q', y2='Normal_High:Q')
-    avg_line = alt.Chart(normals_df).mark_line(strokeDash=[5,5], color='#FFA500', opacity=0.3).encode(x=x_axis, y='Normal_Avg:Q')
-
-    target_df = pd.DataFrame({'Hour': list(range(24)), 'Temperature': [threshold]*24, 'Status': ['Target']*24})
+    # Prep Plotting Data
+    target_df = pd.DataFrame({'Hour': range(24), 'Temperature': [threshold]*24, 'Status': ['Target']*24})
     df['Status'] = df['Hour'].apply(lambda x: 'Actual' if x <= current_hour else 'Forecast')
-    bridge = df[df['Hour'] == current_hour].copy().assign(Status='Forecast')
-    plot_df = pd.concat([df, bridge, target_df]).sort_values('Hour')
+    plot_df = pd.concat([df, target_df])
 
     color_scale = alt.Scale(domain=['Actual', 'Forecast', 'Target'], range=['#00f2ff', '#ffffff', '#32CD32'])
     dash_scale = alt.Scale(domain=['Actual', 'Forecast', 'Target'], range=[[0], [5, 5], [8, 4]])
 
-    main_chart = alt.Chart(plot_df).mark_line(strokeWidth=4).encode(
-        x=x_axis,
-        y=y_axis,
-        color=alt.Color('Status:N', scale=color_scale, legend=alt.Legend(orient='bottom-left', labelFontSize=14, title=None)),
+    chart = alt.Chart(plot_df).mark_line(strokeWidth=4).encode(
+        x=x_axis, y=y_axis,
+        color=alt.Color('Status:N', scale=color_scale, legend=alt.Legend(orient='bottom-left', labelFontSize=14)),
         strokeDash=alt.StrokeDash('Status:N', scale=dash_scale)
-    )
+    ).properties(height=450)
+
+    ball = alt.Chart(pd.DataFrame({'Hour': [current_hour], 'Temperature': [live_temp]})).mark_circle(size=400, color='#00f2ff').encode(x=x_axis, y=y_axis)
+
+    st.altair_chart((chart + ball).configure_legend(fillColor='#1e1e1e', padding=10), use_container_width=True)
+else:
+    st.warning("Waiting for weather data to refresh...")
