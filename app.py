@@ -115,4 +115,8 @@ def show_dashboard():
             # For the cleanest look, we use a single combined chart:
             st.line_chart(
                 chart_df[['Temperature', 'Target', 'Now']], 
-                color=["#00f2ff", "#ff4b4b
+                color=["#00f2ff", "#ff4b4b", "#ffffff"],
+                y_label="Degrees (°F)"
+            )
+
+show_dashboard()
