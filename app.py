@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
+import alt as alt
 import altair as alt
 from datetime import datetime
 import pytz
@@ -15,7 +16,7 @@ except:
 LAT, LON = "40.3720", "-105.0579"
 LOCAL_TZ = pytz.timezone("US/Mountain")
 
-METEO_URL = f"https://api.open-meteo.com/v1/forecast?latitude={LAT}_longitude={LON}&hourly=apparent_temperature&temperature_unit=fahrenheit&timezone=auto"
+METEO_URL = f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}&hourly=apparent_temperature&temperature_unit=fahrenheit&timezone=auto"
 OWM_URL = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=imperial"
 
 try:
@@ -74,7 +75,6 @@ def show_dashboard():
     actual_df = df[df['Hour'] <= current_hour].copy()
     hi_actual, lo_actual = actual_df['Temperature'].max(), actual_df['Temperature'].min()
 
-    # --- UI ---
     st.title("The Farm: Historical Deviations")
     m1, m2, m3 = st.columns(3)
     trend = round(live_temp - actual_df.iloc[-2]['Temperature'], 1) if live_temp and len(actual_df) > 1 else 0.0
@@ -82,37 +82,28 @@ def show_dashboard():
     m2.metric("Actual High", f"{hi_actual}°F")
     m3.metric("Actual Low", f"{lo_actual}°F")
 
-    # --- ALTAIR CHART ---
-    x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]), axis=alt.Axis(labelExpr="datum.value + ':00'"))
-    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False, padding=40), title='Apparent Temp (°F)')
+    # --- ALTAIR CHART RECONSTRUCTION ---
+    # Global Axis Formatting
+    x_axis = alt.X('Hour:Q', title='Time (24h)', 
+                   scale=alt.Scale(domain=[0, 23]), 
+                   axis=alt.Axis(labelExpr="datum.value + ':00'", labelFontSize=12, titleFontSize=14, labelAngle=0))
+    y_axis = alt.Y('Temperature:Q', 
+                   scale=alt.Scale(zero=False, padding=40), 
+                   title='Apparent Temp (°F)',
+                   axis=alt.Axis(labelFontSize=12, titleFontSize=14))
 
-    # 1. Historical Corridor (Muted Orange)
+    # 1. Historical Corridor
     climate_band = alt.Chart(normals_df).mark_area(opacity=0.2, color='#FFA500').encode(x=x_axis, y='Normal_Low:Q', y2='Normal_High:Q')
-    climate_avg = alt.Chart(normals_df).mark_line(strokeDash=[5,5], color='#FFA500', opacity=0.3).encode(x=x_axis, y='Normal_Avg:Q')
-
-    # 2. Target Line (New Lime Green)
-    target_line = alt.Chart(pd.DataFrame({'Hour': range(24), 'T': [threshold]*24})).mark_line(
-        color='#32CD32', strokeDash=[8,4], strokeWidth=2).encode(x=x_axis, y='T:Q')
-
-    # 3. Actual & Forecast
-    df['Status'] = df['Hour'].apply(lambda x: 'Actual' if x <= current_hour else 'Forecast')
-    plot_df = pd.concat([df, df[df['Hour'] == current_hour].assign(Status='Forecast')]).sort_values('Hour')
     
-    main_line = alt.Chart(plot_df).mark_line(strokeWidth=4).encode(
-        x=x_axis, y=y_axis,
-        color=alt.Color('Status:N', scale=alt.Scale(domain=['Actual', 'Forecast'], range=['#00f2ff', '#ffffff']), legend=None),
-        strokeDash=alt.condition(alt.datum.Status == 'Actual', alt.value([0]), alt.value([5, 5]))
+    # 2. Target Line Data
+    target_df = pd.DataFrame({'Hour': range(24), 'T': [threshold]*24, 'Type': ['Target Threshold']})
+    target_line = alt.Chart(target_df).mark_line(strokeDash=[8,4], strokeWidth=3).encode(
+        x=x_axis, y='T:Q', color=alt.Color('Type:N', scale=alt.Scale(range=['#32CD32']), legend=alt.Legend(orient='bottom-left', title=None, labelFontSize=12))
     )
 
-    ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=250, color='#00f2ff').encode(x=x_axis, y=y_axis)
-
-    st.altair_chart(climate_band + climate_avg + target_line + main_line + ball, use_container_width=True)
-
-    # Features Section
-    st.write("---")
-    st.subheader("🚀 Features Coming Soon")
-    c1, c2 = st.columns(2)
-    with c1: st.markdown("* **Precipitation:** Real-time Rain/Snow tracking.")
-    with c2: st.markdown("* **Summer AM/PM:** Window optimization alerts.")
-
-show_dashboard()
+    # 3. Main Temperature Line (Actual & Forecast)
+    df['Status'] = df['Hour'].apply(lambda x: 'Actual' if x <= current_hour else 'Forecast')
+    # Connect the gap
+    bridge = df[df['Hour'] == current_hour].copy()
+    bridge['Status'] = 'Forecast'
+    plot_df = pd.concat([df, bridge]).sort_values('
