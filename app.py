@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
-import altair as alt  # Fixed the double/incorrect import here
+import altair as alt
 from datetime import datetime
 import pytz
 from PIL import Image
@@ -30,7 +30,12 @@ def get_historical_normals():
     normals = []
     for h in range(24):
         avg = 32 + (15 * (1 - abs((h-14)/10)))
-        normals.append({'Hour': h, 'Normal_Avg': round(avg, 1), 'Normal_Low': round(avg-8, 1), 'Normal_High': round(avg+8, 1)})
+        normals.append({
+            'Hour': h, 
+            'Normal_Avg': round(avg, 1), 
+            'Normal_Low': round(avg-8, 1), 
+            'Normal_High': round(avg+8, 1)
+        })
     return pd.DataFrame(normals)
 
 def get_all_day_data():
@@ -77,7 +82,8 @@ def show_dashboard():
 
     normals_df = get_historical_normals()
     actual_df = df[df['Hour'] <= current_hour].copy()
-    hi_actual, lo_actual = actual_df['Temperature'].max(), actual_df['Temperature'].min()
+    hi_actual = actual_df['Temperature'].max()
+    lo_actual = actual_df['Temperature'].min()
 
     st.title("The Farm: Historical Deviations")
     st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
@@ -88,7 +94,7 @@ def show_dashboard():
     m2.metric("Actual High", f"{hi_actual}°F")
     m3.metric("Actual Low", f"{lo_actual}°F")
 
-    # --- AXIS CONFIG ---
+    # --- CHART CONFIG ---
     x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]), 
                    axis=alt.Axis(labelExpr="datum.value + ':00'", labelFontSize=12, titleFontSize=14))
     y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False, padding=40), title='Apparent Temp (°F)',
@@ -98,13 +104,16 @@ def show_dashboard():
     band = alt.Chart(normals_df).mark_area(opacity=0.2, color='#FFA500').encode(x=x_axis, y='Normal_Low:Q', y2='Normal_High:Q')
     avg_line = alt.Chart(normals_df).mark_line(strokeDash=[5,5], color='#FFA500', opacity=0.3).encode(x=x_axis, y='Normal_Avg:Q')
 
-    # 2. Target Line
-    target_df = pd.DataFrame({'Hour': range(24), 'T': [threshold]*24, 'Type': ['Target']})
+    # 2. Target Line - FIXED LENGTH ERROR HERE
+    target_df = pd.DataFrame({
+        'Hour': list(range(24)), 
+        'T': [threshold] * 24, 
+        'Type': ['Target'] * 24  # Now exactly 24 items long
+    })
     target_l = alt.Chart(target_df).mark_line(strokeDash=[8,4], strokeWidth=3, color='#32CD32').encode(x=x_axis, y='T:Q')
 
     # 3. Main Data
     df['Status'] = df['Hour'].apply(lambda x: 'Actual' if x <= current_hour else 'Forecast')
-    # Link the forecast to the last actual point
     bridge = df[df['Hour'] == current_hour].copy()
     bridge['Status'] = 'Forecast'
     plot_df = pd.concat([df, bridge]).sort_values('Hour')
@@ -118,7 +127,7 @@ def show_dashboard():
 
     ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=300, color='#00f2ff').encode(x=x_axis, y=y_axis)
 
-    # 4. Final Construction
+    # 4. Assembly & Layout Config
     chart = (band + avg_line + target_l + main_line + ball).properties(height=450).configure_legend(
         fillColor='#1e1e1e', padding=10, cornerRadius=5, strokeColor='gray'
     )
