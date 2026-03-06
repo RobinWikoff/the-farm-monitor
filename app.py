@@ -15,7 +15,6 @@ except:
 LAT, LON = "40.3720", "-105.0579"
 LOCAL_TZ = pytz.timezone("US/Mountain")
 
-# Updated Open-Meteo to 'apparent_temperature'
 METEO_URL = f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}&hourly=apparent_temperature&temperature_unit=fahrenheit&timezone=auto"
 OWM_URL = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=imperial"
 
@@ -31,7 +30,6 @@ def get_all_day_data():
         response = requests.get(METEO_URL, timeout=10).json()
         now_mtn = datetime.now(LOCAL_TZ)
         times = response['hourly']['time']
-        # Pulling the apparent_temperature key specifically
         temps = response['hourly']['apparent_temperature']
         
         data_points = []
@@ -46,7 +44,6 @@ def get_all_day_data():
 def get_live_temp():
     try:
         response = requests.get(OWM_URL, timeout=10).json()
-        # Using 'feels_like' instead of 'temp'
         return round(response['main']['feels_like'], 1)
     except:
         return None
@@ -69,7 +66,7 @@ def show_dashboard():
     
     df = st.session_state.daily_data.copy()
     
-    # Calculate Trend
+    # Trend Logic
     comp_hour = current_hour - 1 if current_hour > 0 else 0
     prev_hour_val = df.loc[df['Hour'] == comp_hour, 'Temperature'].values
     delta = round(live_temp - prev_hour_val[0], 1) if (live_temp is not None and len(prev_hour_val) > 0) else 0.0
@@ -77,36 +74,24 @@ def show_dashboard():
     if live_temp is not None:
         df.loc[df['Hour'] == current_hour, 'Temperature'] = live_temp
     
-    # --- CHART DATA PREP ---
+    # Chart Data
     df['Status'] = df['Hour'].apply(lambda x: 'Actual' if x <= current_hour else 'Forecast')
     now_row = df[df['Hour'] == current_hour].copy()
     now_row['Status'] = 'Forecast'
-    
-    target_data = pd.DataFrame({
-        'Hour': range(24),
-        'Temperature': [threshold] * 24,
-        'Status': ['Target'] * 24
-    })
+    target_data = pd.DataFrame({'Hour': range(24), 'Temperature': [threshold] * 24, 'Status': ['Target'] * 24})
     plot_df = pd.concat([df, now_row, target_data]).sort_values('Hour')
 
-    # --- ALTAIR CHART ---
-    x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]),
-                   axis=alt.Axis(labelExpr="datum.value + ':00'", grid=True))
+    # Altair
+    x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]), axis=alt.Axis(labelExpr="datum.value + ':00'", grid=True))
     y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False), title='Apparent Temp (°F)')
-
-    color_scale = alt.Scale(
-        domain=['Actual', 'Forecast', 'Target'], 
-        range=['#00f2ff', '#ffffff', '#FFA500']
-    )
+    color_scale = alt.Scale(domain=['Actual', 'Forecast', 'Target'], range=['#00f2ff', '#ffffff', '#FFA500'])
 
     chart = alt.Chart(plot_df).mark_line().encode(
-        x=x_axis,
-        y=y_axis,
+        x=x_axis, y=y_axis,
         color=alt.Color('Status:N', scale=color_scale, legend=alt.Legend(title="Type")),
         strokeDash=alt.condition(alt.datum.Status == 'Actual', alt.value([0]), alt.value([5, 5])),
         strokeWidth=alt.condition(alt.datum.Status == 'Target', alt.value(2), alt.value(4))
     )
-
     ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=250, color='#00f2ff').encode(x=x_axis, y=y_axis)
 
     # --- UI ---
@@ -114,16 +99,27 @@ def show_dashboard():
     st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
     
     m1, m2, m3 = st.columns(3)
-    m1.metric(
-        label="Current (Feels Like)", 
-        value=f"{live_temp}°F", 
-        delta=f"{delta}°F", 
-        delta_description=f"since {comp_hour:02}:00"
-    )
+    m1.metric("Current (Feels Like)", f"{live_temp}°F", delta=f"{delta}°F", delta_description=f"since {comp_hour:02}:00")
     m2.metric("High Today", f"{df['Temperature'].max()}°F")
     m3.metric("Low Today", f"{df['Temperature'].min()}°F")
 
     st.write("---")
     st.altair_chart(chart + ball, use_container_width=True)
+
+    # --- NEW SECTION: FEATURES COMING SOON ---
+    st.write("---")
+    with st.container():
+        st.subheader("🚀 Features Coming Soon")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("""
+            * **Precipitation:** Real-time and forecasted Rain/Snow tracking.
+            * **Historical Context:** Temperature compared to historical averages for early March.
+            """)
+        with col2:
+            st.markdown("""
+            * **Summer Optimization (AM/PM Thresholds):** * **AM:** Alert when it gets too warm to close windows.
+                * **PM:** Alert when it cools to **70°F** to open windows.
+            """)
 
 show_dashboard()
