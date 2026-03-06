@@ -1,8 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
-import alt as alt
-import altair as alt
+import altair as alt  # Fixed the double/incorrect import here
 from datetime import datetime
 import pytz
 from PIL import Image
@@ -39,8 +38,12 @@ def get_all_day_data():
         response = requests.get(METEO_URL, timeout=10).json()
         times = response['hourly']['time']
         temps = response['hourly']['apparent_temperature']
-        data_points = [{'Hour': datetime.fromisoformat(t).replace(tzinfo=pytz.UTC).astimezone(LOCAL_TZ).hour, 'Temperature': round(temp, 1)} 
-                       for t, temp in zip(times, temps) if datetime.fromisoformat(t).replace(tzinfo=pytz.UTC).astimezone(LOCAL_TZ).date() == datetime.now(LOCAL_TZ).date()]
+        now_date = datetime.now(LOCAL_TZ).date()
+        data_points = []
+        for t, temp in zip(times, temps):
+            dt = datetime.fromisoformat(t).replace(tzinfo=pytz.UTC).astimezone(LOCAL_TZ)
+            if dt.date() == now_date:
+                data_points.append({'Hour': dt.hour, 'Temperature': round(temp, 1)})
         return pd.DataFrame(data_points)
     except:
         return pd.DataFrame(columns=['Hour', 'Temperature'])
@@ -67,6 +70,7 @@ def show_dashboard():
     now_mtn = datetime.now(LOCAL_TZ)
     live_temp = get_live_temp()
     current_hour = now_mtn.hour
+    
     df = st.session_state.daily_data.copy()
     if live_temp is not None:
         df.loc[df['Hour'] == current_hour, 'Temperature'] = live_temp
@@ -76,63 +80,50 @@ def show_dashboard():
     hi_actual, lo_actual = actual_df['Temperature'].max(), actual_df['Temperature'].min()
 
     st.title("The Farm: Historical Deviations")
+    st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
+    
     m1, m2, m3 = st.columns(3)
     trend = round(live_temp - actual_df.iloc[-2]['Temperature'], 1) if live_temp and len(actual_df) > 1 else 0.0
     m1.metric("Current (Feels Like)", f"{live_temp}°F", delta=f"{trend}°F", delta_description=f"since {current_hour-1:02}:00")
     m2.metric("Actual High", f"{hi_actual}°F")
     m3.metric("Actual Low", f"{lo_actual}°F")
 
-    # --- ALTAIR CHART RECONSTRUCTION ---
-    # Global Axis Formatting
-    x_axis = alt.X('Hour:Q', title='Time (24h)', 
-                   scale=alt.Scale(domain=[0, 23]), 
-                   axis=alt.Axis(labelExpr="datum.value + ':00'", labelFontSize=12, titleFontSize=14, labelAngle=0))
-    y_axis = alt.Y('Temperature:Q', 
-                   scale=alt.Scale(zero=False, padding=40), 
-                   title='Apparent Temp (°F)',
+    # --- AXIS CONFIG ---
+    x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]), 
+                   axis=alt.Axis(labelExpr="datum.value + ':00'", labelFontSize=12, titleFontSize=14))
+    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False, padding=40), title='Apparent Temp (°F)',
                    axis=alt.Axis(labelFontSize=12, titleFontSize=14))
 
     # 1. Historical Corridor
-    climate_band = alt.Chart(normals_df).mark_area(opacity=0.2, color='#FFA500').encode(x=x_axis, y='Normal_Low:Q', y2='Normal_High:Q')
-    
-    # 2. Target Line Data
-    target_df = pd.DataFrame({'Hour': range(24), 'T': [threshold]*24, 'Type': ['Target Threshold']})
-    target_line = alt.Chart(target_df).mark_line(strokeDash=[8,4], strokeWidth=3).encode(
-        x=x_axis, y='T:Q', color=alt.Color('Type:N', scale=alt.Scale(range=['#32CD32']), legend=alt.Legend(orient='bottom-left', title=None, labelFontSize=12))
-    )
+    band = alt.Chart(normals_df).mark_area(opacity=0.2, color='#FFA500').encode(x=x_axis, y='Normal_Low:Q', y2='Normal_High:Q')
+    avg_line = alt.Chart(normals_df).mark_line(strokeDash=[5,5], color='#FFA500', opacity=0.3).encode(x=x_axis, y='Normal_Avg:Q')
 
-    # 3. Main Temperature Line (Actual & Forecast)
+    # 2. Target Line
+    target_df = pd.DataFrame({'Hour': range(24), 'T': [threshold]*24, 'Type': ['Target']})
+    target_l = alt.Chart(target_df).mark_line(strokeDash=[8,4], strokeWidth=3, color='#32CD32').encode(x=x_axis, y='T:Q')
+
+    # 3. Main Data
     df['Status'] = df['Hour'].apply(lambda x: 'Actual' if x <= current_hour else 'Forecast')
-    # Connect the gap
+    # Link the forecast to the last actual point
     bridge = df[df['Hour'] == current_hour].copy()
     bridge['Status'] = 'Forecast'
     plot_df = pd.concat([df, bridge]).sort_values('Hour')
     
     main_line = alt.Chart(plot_df).mark_line(strokeWidth=4).encode(
         x=x_axis, y=y_axis,
-        color=alt.Color('Status:N', 
-                        scale=alt.Scale(domain=['Actual', 'Forecast'], range=['#00f2ff', '#ffffff']),
-                        legend=alt.Legend(orient='bottom-left', title=None, labelFontSize=12)),
+        color=alt.Color('Status:N', scale=alt.Scale(domain=['Actual', 'Forecast'], range=['#00f2ff', '#ffffff']),
+                        legend=alt.Legend(orient='bottom-left', labelFontSize=12, title=None)),
         strokeDash=alt.condition(alt.datum.Status == 'Actual', alt.value([0]), alt.value([5, 5]))
     )
 
-    # 4. Current Point Ball
     ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=300, color='#00f2ff').encode(x=x_axis, y=y_axis)
 
-    # Assemble and Resize
-    # Height of 400 with use_container_width=True creates a nice panoramic view
-    final_chart = (climate_band + target_line + main_line + ball).properties(
-        height=450, 
-        title=alt.TitleParams(text="Apparent Temperature vs. Historical Normal", fontSize=16, anchor='start')
-    ).configure_legend(
-        fillColor='#1e1e1e', 
-        padding=10, 
-        cornerRadius=5, 
-        borderWidth=1, 
-        strokeColor='gray'
+    # 4. Final Construction
+    chart = (band + avg_line + target_l + main_line + ball).properties(height=450).configure_legend(
+        fillColor='#1e1e1e', padding=10, cornerRadius=5, strokeColor='gray'
     )
 
-    st.altair_chart(final_chart, use_container_width=True)
+    st.altair_chart(chart, use_container_width=True)
 
     st.write("---")
     st.subheader("🚀 Features Coming Soon")
