@@ -16,7 +16,6 @@ CURRENT_URL = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={L
 FORECAST_URL = f"https://api.openweathermap.org/data/2.5/forecast?lat={LAT}&lon={LON}&appid={API_KEY}&units=imperial"
 LOCAL_TZ = pytz.timezone("US/Mountain")
 
-# Tab Setup
 try:
     farm_icon = Image.open('farm-icon.png')
     st.set_page_config(page_title="The Farm", page_icon=farm_icon, layout="wide")
@@ -63,29 +62,27 @@ def show_dashboard():
     current_hour = now_mtn.hour
     
     if new_temp is not None:
-        # Reset at Midnight
+        # Reset Logic
         if not st.session_state.daily_history.empty and st.session_state.daily_history['Date'].iloc[0] != now_mtn.date():
             st.session_state.daily_history = get_midnight_history()
 
-        # Save Live Reading
+        # Update History
         new_entry = pd.DataFrame({'Hour': [current_hour], 'Temp': [new_temp], 'Date': [now_mtn.date()]})
         st.session_state.daily_history = pd.concat([st.session_state.daily_history, new_entry], ignore_index=True).drop_duplicates('Hour', keep='last')
 
-        # --- GRAPH ENGINE ---
+        # --- GRAPH ENGINE (FIXED X-AXIS) ---
         chart_df = pd.DataFrame({'Hour': range(24)})
         chart_df = pd.merge(chart_df, st.session_state.daily_history[['Hour', 'Temp']], on='Hour', how='left')
         
-        # 1. Ensure there is a start value at Hour 0 (Midnight) so the line doesn't float
+        # Ensure Midnight start for the line
         if pd.isna(chart_df.loc[0, 'Temp']) and not st.session_state.daily_history.empty:
             chart_df.loc[0, 'Temp'] = st.session_state.daily_history['Temp'].iloc[0]
         
-        # 2. INTERPOLATE: This draws a line between the known points
         chart_df['Temp'] = chart_df['Temp'].interpolate(method='linear')
-        
-        # 3. MASK: Don't show the line for the future hours
-        chart_df.loc[chart_df['Hour'] > current_hour, 'Temp'] = None
-        
+        chart_df.loc[chart_df['Hour'] > current_hour, 'Temp'] = None # Mask future
         chart_df['Target'] = threshold
+        
+        # Create clear string labels: "12 AM", "01 AM" etc.
         chart_df['Time Label'] = chart_df['Hour'].apply(lambda x: datetime.strptime(str(x), "%H").strftime("%I %p"))
 
         # --- UI ---
@@ -109,7 +106,9 @@ def show_dashboard():
                 else: st.warning(f"🔥 Waiting for {threshold}°F")
 
         with col_right:
-            # We force the line chart to show by ensuring the data is clean
-            st.line_chart(chart_df.set_index('Time Label')[['Temp', 'Target']], color=["#00f2ff", "#ff4b4b"])
+            # We explicitly drop any data that isn't the 24 hours we want
+            # and use 'Time Label' as the categorical index to prevent auto-scaling
+            final_chart = chart_df.set_index('Time Label')[['Temp', 'Target']]
+            st.line_chart(final_chart, color=["#00f2ff", "#ff4b4b"])
 
 show_dashboard()
