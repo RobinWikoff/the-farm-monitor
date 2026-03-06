@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 import altair as alt
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import logging
 
@@ -12,6 +12,7 @@ import logging
 LAT = "40.3720"
 LON = "-105.0579"
 LOCAL_TZ = pytz.timezone("US/Mountain")
+HISTORY_YEARS = 5
 
 THRESHOLDS = {"Winter (Warming Focus)": 65.0, "Summer (Cooling Focus)": 70.0}
 
@@ -22,6 +23,7 @@ METEO_URL = (
     f"&temperature_unit=fahrenheit"
     f"&timezone=auto"
 )
+METEO_ARCHIVE_BASE = "https://archive-api.open-meteo.com/v1/archive"
 OWM_BASE = "https://api.openweathermap.org/data/2.5/weather"
 
 logger = logging.getLogger(__name__)
@@ -69,8 +71,57 @@ def fetch_live_temp(api_key: str) -> float:
     return round(resp.json()["main"]["feels_like"], 1)
 
 
-def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_hour: int) -> alt.LayerChart:
-    """Assemble the Altair line chart with actual/forecast/target layers."""
+@st.cache_data(ttl=86400)  # historical data changes daily at most
+def fetch_historical_band(today: datetime) -> pd.DataFrame:
+    """
+    Fetch the same calendar day (month/day) across the past HISTORY_YEARS years
+    from Open-Meteo Archive API. Returns a DataFrame with columns:
+      Hour (int), HistHigh (float), HistLow (float), HistMean (float)
+    
+    We fetch each past year's matching date as a single-day window, collect
+    all hourly apparent_temperature readings, then compute per-hour min/max/mean.
+    """
+    all_rows = []
+    for years_back in range(1, HISTORY_YEARS + 1):
+        past_date = today.replace(year=today.year - years_back)
+        date_str = past_date.strftime("%Y-%m-%d")
+        params = {
+            "latitude": LAT,
+            "longitude": LON,
+            "start_date": date_str,
+            "end_date": date_str,
+            "hourly": "apparent_temperature",
+            "temperature_unit": "fahrenheit",
+            "timezone": "America/Denver",
+        }
+        try:
+            resp = requests.get(METEO_ARCHIVE_BASE, params=params, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+            for t, temp in zip(data["hourly"]["time"], data["hourly"]["apparent_temperature"]):
+                if temp is not None:
+                    all_rows.append({"Hour": datetime.fromisoformat(t).hour, "Temperature": temp})
+        except requests.RequestException as e:
+            logger.warning("Historical fetch failed for %s: %s", date_str, e)
+            continue
+
+    if not all_rows:
+        return pd.DataFrame(columns=["Hour", "HistHigh", "HistLow", "HistMean"])
+
+    hist_df = pd.DataFrame(all_rows)
+    band = (
+        hist_df.groupby("Hour")["Temperature"]
+        .agg(HistHigh="max", HistLow="min", HistMean="mean")
+        .reset_index()
+    )
+    band["HistHigh"] = band["HistHigh"].round(1)
+    band["HistLow"] = band["HistLow"].round(1)
+    band["HistMean"] = band["HistMean"].round(1)
+    return band
+
+
+def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_hour: int, hist_band: pd.DataFrame) -> alt.LayerChart:
+    """Assemble the Altair line chart with actual/forecast/target layers plus historical band."""
     # Inject live temp for current hour AFTER caching, so cache stays clean
     plot = df.copy()
     plot.loc[plot["Hour"] == current_hour, "Temperature"] = live_temp
@@ -157,8 +208,36 @@ def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_ho
         .encode(x=x, y=y, text="Lab_Txt")
     )
 
-    return (lines + dot + lbl_top + lbl_bot).properties(height=500).configure_legend(
-        fillColor="#1e1e1e", padding=10
+    # Historical band layers (rendered first so they sit behind everything)
+    hist_layers = alt.layer()
+    if not hist_band.empty:
+        band_x = alt.X("Hour:Q")
+        hist_area = (
+            alt.Chart(hist_band)
+            .mark_area(opacity=0.18, color="#a0c4ff")
+            .encode(
+                x=band_x,
+                y=alt.Y("HistLow:Q", title=""),
+                y2=alt.Y2("HistHigh:Q"),
+                tooltip=[
+                    alt.Tooltip("Hour:Q", title="Hour"),
+                    alt.Tooltip("HistHigh:Q", title="Hist High °F"),
+                    alt.Tooltip("HistLow:Q", title="Hist Low °F"),
+                    alt.Tooltip("HistMean:Q", title="Hist Mean °F"),
+                ],
+            )
+        )
+        hist_mean = (
+            alt.Chart(hist_band)
+            .mark_line(strokeWidth=2, strokeDash=[3, 3], color="#a0c4ff", opacity=0.55)
+            .encode(x=band_x, y=alt.Y("HistMean:Q"))
+        )
+        hist_layers = hist_area + hist_mean
+
+    return (
+        (hist_layers + lines + dot + lbl_top + lbl_bot)
+        .properties(height=500)
+        .configure_legend(fillColor="#1e1e1e", padding=10)
     )
 
 
@@ -204,6 +283,7 @@ with st.spinner("Fetching latest weather data…"):
     try:
         df = fetch_forecast()
         live_temp = fetch_live_temp(api_key)
+        hist_band = fetch_historical_band(now_mtn)
     except requests.RequestException as e:
         logger.error("Weather fetch failed: %s", e)
         st.error(f"Could not reach weather API: {e}")
@@ -232,7 +312,7 @@ forecast_future.loc[forecast_future["Hour"] == current_hour, "Temperature"] = li
 render_status_banner(live_temp, threshold, forecast_future, mode)
 
 # Chart
-st.altair_chart(build_chart(df, live_temp, threshold, current_hour), use_container_width=True)
+st.altair_chart(build_chart(df, live_temp, threshold, current_hour, hist_band), use_container_width=True)
 
 # Roadmap
 st.write("---")
