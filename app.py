@@ -15,7 +15,8 @@ except:
 LAT, LON = "40.3720", "-105.0579"
 LOCAL_TZ = pytz.timezone("US/Mountain")
 
-METEO_URL = f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}&hourly=temperature_2m&temperature_unit=fahrenheit&timezone=auto"
+# Updated Open-Meteo to 'apparent_temperature'
+METEO_URL = f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}&hourly=apparent_temperature&temperature_unit=fahrenheit&timezone=auto"
 OWM_URL = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=imperial"
 
 try:
@@ -30,7 +31,8 @@ def get_all_day_data():
         response = requests.get(METEO_URL, timeout=10).json()
         now_mtn = datetime.now(LOCAL_TZ)
         times = response['hourly']['time']
-        temps = response['hourly']['temperature_2m']
+        # Pulling the apparent_temperature key specifically
+        temps = response['hourly']['apparent_temperature']
         
         data_points = []
         for t, temp in zip(times, temps):
@@ -44,7 +46,8 @@ def get_all_day_data():
 def get_live_temp():
     try:
         response = requests.get(OWM_URL, timeout=10).json()
-        return round(response['main']['temp'], 1)
+        # Using 'feels_like' instead of 'temp'
+        return round(response['main']['feels_like'], 1)
     except:
         return None
 
@@ -69,10 +72,7 @@ def show_dashboard():
     # Calculate Trend
     comp_hour = current_hour - 1 if current_hour > 0 else 0
     prev_hour_val = df.loc[df['Hour'] == comp_hour, 'Temperature'].values
-    
-    delta = 0.0
-    if live_temp is not None and len(prev_hour_val) > 0:
-        delta = round(live_temp - prev_hour_val[0], 1)
+    delta = round(live_temp - prev_hour_val[0], 1) if (live_temp is not None and len(prev_hour_val) > 0) else 0.0
 
     if live_temp is not None:
         df.loc[df['Hour'] == current_hour, 'Temperature'] = live_temp
@@ -82,7 +82,6 @@ def show_dashboard():
     now_row = df[df['Hour'] == current_hour].copy()
     now_row['Status'] = 'Forecast'
     
-    # Unified Plotting DataFrame
     target_data = pd.DataFrame({
         'Hour': range(24),
         'Temperature': [threshold] * 24,
@@ -93,7 +92,7 @@ def show_dashboard():
     # --- ALTAIR CHART ---
     x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]),
                    axis=alt.Axis(labelExpr="datum.value + ':00'", grid=True))
-    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False), title='Temperature (°F)')
+    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False), title='Apparent Temp (°F)')
 
     color_scale = alt.Scale(
         domain=['Actual', 'Forecast', 'Target'], 
@@ -104,24 +103,19 @@ def show_dashboard():
         x=x_axis,
         y=y_axis,
         color=alt.Color('Status:N', scale=color_scale, legend=alt.Legend(title="Type")),
-        strokeDash=alt.condition(
-            alt.datum.Status == 'Actual',
-            alt.value([0]), 
-            alt.value([5, 5]) 
-        ),
+        strokeDash=alt.condition(alt.datum.Status == 'Actual', alt.value([0]), alt.value([5, 5])),
         strokeWidth=alt.condition(alt.datum.Status == 'Target', alt.value(2), alt.value(4))
     )
 
     ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=250, color='#00f2ff').encode(x=x_axis, y=y_axis)
 
     # --- UI ---
-    st.title("The Farm")
+    st.title("The Farm: Apparent Temperature")
     st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
     
     m1, m2, m3 = st.columns(3)
-    # Using 'delta_description' for the timestamp to keep the label clean
     m1.metric(
-        label="Current", 
+        label="Current (Feels Like)", 
         value=f"{live_temp}°F", 
         delta=f"{delta}°F", 
         delta_description=f"since {comp_hour:02}:00"
