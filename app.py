@@ -15,7 +15,8 @@ except:
 LAT, LON = "40.3720", "-105.0579"
 LOCAL_TZ = pytz.timezone("US/Mountain")
 
-METEO_URL = f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}&hourly=temperature_2m&temperature_unit=fahrenheit&timezone=auto&past_days=1"
+# METEO_URL already pulls 24h of "today" and "tomorrow" forecasts
+METEO_URL = f"https://api.open-meteo.com/v1/forecast?latitude={LAT}&longitude={LON}&hourly=temperature_2m&temperature_unit=fahrenheit&timezone=auto"
 OWM_URL = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=imperial"
 
 try:
@@ -25,20 +26,31 @@ except:
     st.set_page_config(page_title="The Farm", page_icon="🏔️", layout="wide")
 
 # --- DATA FUNCTIONS ---
-def get_historical_data():
+def get_all_day_data():
+    """Fetches History + Forecast for the full 24h of Today."""
     try:
         response = requests.get(METEO_URL, timeout=10).json()
         now_mtn = datetime.now(LOCAL_TZ)
+        
         times = response['hourly']['time']
         temps = response['hourly']['temperature_2m']
+        
         data_points = []
         for t, temp in zip(times, temps):
             dt = datetime.fromisoformat(t).replace(tzinfo=pytz.UTC).astimezone(LOCAL_TZ)
-            if dt.date() == now_mtn.date() and dt <= now_mtn:
-                data_points.append({'Hour': dt.hour, 'Temperature': round(temp, 1), 'Date': dt.date()})
+            # Take only data belonging to the current calendar day
+            if dt.date() == now_mtn.date():
+                # Label data as 'Actual' or 'Forecast' based on current hour
+                status = 'Actual' if dt.hour <= now_mtn.hour else 'Forecast'
+                data_points.append({
+                    'Hour': dt.hour,
+                    'Temperature': round(temp, 1),
+                    'Time Label': f"{dt.hour:02}:00",
+                    'Status': status
+                })
         return pd.DataFrame(data_points)
     except:
-        return pd.DataFrame(columns=['Hour', 'Temperature', 'Date'])
+        return pd.DataFrame(columns=['Hour', 'Temperature', 'Time Label', 'Status'])
 
 def get_live_temp():
     try:
@@ -47,15 +59,19 @@ def get_live_temp():
     except:
         return None
 
-# --- SESSION STATE ---
-if 'daily_history' not in st.session_state or st.session_state.daily_history.empty:
-    st.session_state.daily_history = get_historical_data()
+# --- INITIAL DATA ---
+if 'daily_history' not in st.session_state:
+    st.session_state.daily_history = get_all_day_data()
 
 # --- SIDEBAR ---
 st.sidebar.title("Settings")
 now_mtn = datetime.now(LOCAL_TZ)
 mode = st.sidebar.selectbox("Monitoring Mode", ["Winter (Warming Focus)", "Summer (Cooling Focus)"], index=0 if now_mtn.month not in [6,7,8,9] else 1)
 threshold = 65.0 if "Winter" in mode else 70.0
+
+if st.sidebar.button("Update All Data"):
+    st.session_state.daily_history = get_all_day_data()
+    st.rerun()
 
 # --- DASHBOARD ---
 @st.fragment(run_every=60)
@@ -64,66 +80,61 @@ def show_dashboard():
     live_temp = get_live_temp()
     current_hour = now_mtn.hour
     
+    # 1. Update Live Data in the Dataframe
+    df = st.session_state.daily_history.copy()
     if live_temp is not None:
-        if not st.session_state.daily_history.empty and st.session_state.daily_history['Date'].iloc[0] != now_mtn.date():
-            st.session_state.daily_history = get_historical_data()
+        df.loc[df['Hour'] == current_hour, 'Temperature'] = live_temp
+    
+    # 2. Split data for specialized charting
+    actual_df = df[df['Hour'] <= current_hour].copy()
+    forecast_df = df[df['Hour'] >= current_hour].copy() # Overlap at current hour to connect lines
+    current_point_df = df[df['Hour'] == current_hour].copy()
 
-        # Update History
-        new_entry = pd.DataFrame({'Hour': [current_hour], 'Temperature': [live_temp], 'Date': [now_mtn.date()]})
-        st.session_state.daily_history = pd.concat([st.session_state.daily_history, new_entry], ignore_index=True).drop_duplicates('Hour', keep='last')
+    # --- ALTAIR CHARTING ---
+    # Common X-axis
+    x_axis = alt.X('Time Label:O', sort=None, title='Time (24h)')
+    y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False), title='Degrees (°F)')
 
-        # --- GRAPH PREP ---
-        chart_df = pd.DataFrame({'Hour': range(24)})
-        chart_df = pd.merge(chart_df, st.session_state.daily_history[['Hour', 'Temperature']], on='Hour', how='left')
-        chart_df['Temperature'] = chart_df['Temperature'].interpolate(method='linear')
-        chart_df.loc[chart_df['Hour'] > current_hour, 'Temperature'] = None 
-        chart_df['Target'] = threshold
-        chart_df['Time Label'] = chart_df['Hour'].apply(lambda x: f"{x:02}:00")
+    # A. Actual History Line (Solid)
+    actual_line = alt.Chart(actual_df).mark_line(color='#00f2ff', strokeWidth=4).encode(x=x_axis, y=y_axis)
 
-        # Create a separate dataframe just for the "Ball" (Current Point)
-        current_point_df = chart_df[chart_df['Hour'] == current_hour].copy()
+    # B. Forecast Line (Dashed & Faded)
+    forecast_line = alt.Chart(forecast_df).mark_line(
+        color='#00f2ff', strokeWidth=2, strokeDash=[4,4], opacity=0.5
+    ).encode(x=x_axis, y=y_axis)
 
-        # --- ALTAIR CHARTING ---
-        # 1. The Main Temperature Line
-        base = alt.Chart(chart_df).encode(x=alt.X('Time Label:O', sort=None, title='Time (24h)'))
-        
-        temp_line = base.mark_line(color='#00f2ff', strokeWidth=3).encode(y=alt.Y('Temperature:Q', scale=alt.Scale(zero=False), title='Degrees (°F)'))
-        
-        # 2. The Threshold Line
-        target_line = base.mark_line(color='#ff4b4b', strokeDash=[5,5]).encode(y='Target:Q')
-        
-        # 3. THE BALL (The Large 14pt point at current hour)
-        current_ball = alt.Chart(current_point_df).mark_circle(size=200, color='#00f2ff', opacity=1).encode(
-            x='Time Label:O',
-            y='Temperature:Q'
-        )
+    # C. Threshold Line (Red)
+    threshold_line = alt.Chart(pd.DataFrame({'y': [threshold]})).mark_rule(
+        color='#ff4b4b', strokeDash=[2,2], size=2
+    ).encode(y='y:Q')
 
-        final_chart = (temp_line + target_line + current_ball).properties(height=400)
+    # D. THE BALL (14pt Marker)
+    current_ball = alt.Chart(current_point_df).mark_circle(size=250, color='#00f2ff').encode(x=x_axis, y=y_axis)
 
-        # --- UI ---
-        st.title("The Farm")
-        st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
-        
-        d_high = st.session_state.daily_history['Temperature'].max()
-        d_low = st.session_state.daily_history['Temperature'].min()
+    final_chart = (actual_line + forecast_line + threshold_line + current_ball).properties(height=400)
 
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Live", f"{live_temp}°F")
-        m2.metric("High Today", f"{d_high}°F")
-        m3.metric("Low Today", f"{d_low}°F")
+    # --- UI ---
+    st.title("The Farm")
+    st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
+    
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Live", f"{live_temp}°F")
+    m2.metric("High Today", f"{df['Temperature'].max()}°F")
+    m3.metric("Low Today", f"{df['Temperature'].min()}°F")
 
-        st.write("---")
+    st.write("---")
 
-        col_left, col_right = st.columns([1, 2])
-        with col_left:
-            if "Winter" in mode:
-                if live_temp >= threshold: st.success(f"☀️ Warming up! {live_temp}°F")
-                else: st.info(f"❄️ Waiting for {threshold}°F")
-            else:
-                if live_temp <= threshold: st.success("🌬️ Cool breeze has arrived!")
-                else: st.warning(f"🔥 Waiting for {threshold}°F")
+    col_left, col_right = st.columns([1, 2])
+    with col_left:
+        st.write(f"### Current Mode: {mode}")
+        if "Winter" in mode:
+            if live_temp >= threshold: st.success(f"☀️ Threshold met! {live_temp}°F")
+            else: st.info(f"❄️ Below threshold ({threshold}°F)")
+        else:
+            if live_temp <= threshold: st.success(f"🌬️ Threshold met! {live_temp}°F")
+            else: st.warning(f"🔥 Above threshold ({threshold}°F)")
 
-        with col_right:
-            st.altair_chart(final_chart, use_container_width=True)
+    with col_right:
+        st.altair_chart(final_chart, use_container_width=True)
 
 show_dashboard()
