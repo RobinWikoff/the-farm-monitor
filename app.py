@@ -1,118 +1,113 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, time, timedelta
 import pytz
 from PIL import Image
 
-# --- CONFIGURATION & SECURITY ---
+# --- CONFIGURATION ---
 try:
     API_KEY = st.secrets["WEATHER_API_KEY"]
 except:
     API_KEY = "6893fccbe935414644a37268660065a8"
 
 LAT, LON = "40.3720", "-105.0579"
-URL = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=imperial"
+CURRENT_URL = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=imperial"
+FORECAST_URL = f"https://api.openweathermap.org/data/2.5/forecast?lat={LAT}&lon={LON}&appid={API_KEY}&units=imperial"
 LOCAL_TZ = pytz.timezone("US/Mountain")
 
-if 'daily_history' not in st.session_state:
-    st.session_state.daily_history = pd.DataFrame(columns=['Time', 'Temp', 'Date'])
-
-# Load Custom Fractal Farmhouse Icon
+# Load Custom Icon
 try:
     farm_icon = Image.open('farm-icon.png')
-    st.set_page_config(page_title="The Farm Monitor", page_icon=farm_icon, layout="wide")
+    st.set_page_config(page_title="The Farm", page_icon=farm_icon, layout="wide")
 except:
-    st.set_page_config(page_title="The Farm Monitor", page_icon="🏔️", layout="wide")
+    st.set_page_config(page_title="The Farm", page_icon="🚜", layout="wide")
 
-def get_live_data():
+# --- DATA FUNCTIONS ---
+def get_midnight_history():
     try:
-        response = requests.get(URL, timeout=10).json()
+        response = requests.get(FORECAST_URL, timeout=10).json()
+        now_mtn = datetime.now(LOCAL_TZ)
+        midnight = LOCAL_TZ.localize(datetime.combine(now_mtn.date(), time(0, 0)))
+        
+        past_data = []
+        for entry in response['list']:
+            dt_mtn = datetime.fromtimestamp(entry['dt'], tz=pytz.UTC).astimezone(LOCAL_TZ)
+            if midnight <= dt_mtn <= now_mtn:
+                past_data.append({
+                    'Time': dt_mtn.strftime("%H:%M"),
+                    'Temp': round(entry['main']['temp'], 1),
+                    'Date': dt_mtn.date()
+                })
+        return pd.DataFrame(past_data)
+    except:
+        return pd.DataFrame(columns=['Time', 'Temp', 'Date'])
+
+def get_live_temp():
+    try:
+        response = requests.get(CURRENT_URL, timeout=10).json()
         return round(response['main']['temp'], 1)
     except:
         return None
 
-# --- SIDEBAR SETTINGS ---
+# --- INITIALIZE HISTORY ---
+if 'daily_history' not in st.session_state or st.session_state.daily_history.empty:
+    st.session_state.daily_history = get_midnight_history()
+
+# --- SIDEBAR ---
 st.sidebar.title("Settings")
 now_mtn = datetime.now(LOCAL_TZ)
-month = now_mtn.month
-default_winter = month not in [6, 7, 8, 9]
-
-mode = st.sidebar.selectbox(
-    "Monitoring Mode", 
-    ["Winter (Warming Focus)", "Summer (Cooling Focus)"], 
-    index=0 if default_winter else 1
-)
-
+mode = st.sidebar.selectbox("Monitoring Mode", ["Winter (Warming Focus)", "Summer (Cooling Focus)"], index=0 if now_mtn.month not in [6,7,8,9] else 1)
 threshold = 65.0 if "Winter" in mode else 70.0
-st.sidebar.info(f"Target Threshold: {threshold}°F")
 
 # --- DASHBOARD FRAGMENT ---
 @st.fragment(run_every=60)
 def show_dashboard():
-    new_temp = get_live_data()
+    new_temp = get_live_temp()
     now_mtn = datetime.now(LOCAL_TZ)
-    current_date = now_mtn.date()
     
     if new_temp is not None:
-        # Midnight Reset Logic
-        if not st.session_state.daily_history.empty:
-            if st.session_state.daily_history['Date'].iloc[0] != current_date:
-                st.session_state.daily_history = pd.DataFrame(columns=['Time', 'Temp', 'Date'])
+        # Midnight Reset
+        if not st.session_state.daily_history.empty and st.session_state.daily_history['Date'].iloc[0] != now_mtn.date():
+            st.session_state.daily_history = get_midnight_history()
 
-        # Append Current Reading
-        new_entry = pd.DataFrame({
-            'Time': [now_mtn.strftime("%I:%M %p")],
-            'Temp': [new_temp],
-            'Date': [current_date]
-        })
-        st.session_state.daily_history = pd.concat([st.session_state.daily_history, new_entry], ignore_index=True)
+        # Add current point
+        new_entry = pd.DataFrame({'Time': [now_mtn.strftime("%H:%M")], 'Temp': [new_temp], 'Date': [now_mtn.date()]})
+        st.session_state.daily_history = pd.concat([st.session_state.daily_history, new_entry], ignore_index=True).drop_duplicates('Time')
 
-        # Calculations
-        daily_high = st.session_state.daily_history['Temp'].max()
-        daily_low = st.session_state.daily_history['Temp'].min()
+        # --- PREPARE 24-HOUR CHART ---
+        # Create a full range of times from 00:00 to 23:00 (every hour) to anchor the axis
+        full_day_times = [f"{h:02d}:00" for h in range(24)]
+        full_day_df = pd.DataFrame({'Time': full_day_times})
         
-        # --- UI DISPLAY ---
+        # Merge real data into the 24-hour structure
+        chart_df = pd.merge(full_day_df, st.session_state.daily_history, on='Time', how='left')
+        chart_df['Target'] = threshold
+        chart_df = chart_df.set_index('Time')
+
+        # Metrics
         st.title("The Farm")
-        st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%I:%M:%S %p')}`")
+        st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%I:%M %p')}`")
         
-        # Metric Layout: Current, High, Low
-        m1, m2, m3 = st.columns([1, 1, 1])
-        with m1:
-            st.metric(label="Live Temp", value=f"{new_temp}°F")
-        with m2:
-            st.metric(label="High Today", value=f"{daily_high}°F")
-        with m3:
-            st.metric(label="Low Today", value=f"{daily_low}°F")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Live Temp", f"{new_temp}°F")
+        m2.metric("High Today", f"{st.session_state.daily_history['Temp'].max()}°F")
+        m3.metric("Low Today", f"{st.session_state.daily_history['Temp'].min()}°F")
 
         st.write("---")
 
-        # --- CHART & ALERTS ---
+        # Layout
         col_left, col_right = st.columns([1, 2])
-        
         with col_left:
             if "Winter" in mode:
-                if new_temp >= threshold:
-                    st.balloons()
-                    st.success(f"☀️ Warming up! Currently {new_temp}°F.")
-                else:
-                    st.info(f"❄️ Waiting for {threshold}°F...")
+                if new_temp >= threshold: st.success(f"☀️ Warming up! Currently {new_temp}°F.")
+                else: st.info(f"❄️ Waiting for {threshold}°F...")
             else:
-                if new_temp <= threshold:
-                    st.markdown("### 🌬️ A cool breeze has arrived!")
-                    st.toast('Cooling detected!', icon='🌬️')
-                else:
-                    st.warning(f"🔥 Waiting for {threshold}°F")
+                if new_temp <= threshold: st.success("### 🌬️ Cool breeze has arrived!")
+                else: st.warning(f"🔥 Waiting for {threshold}°F")
 
         with col_right:
-            chart_df = st.session_state.daily_history.copy()
-            chart_df['Target'] = threshold
-            st.line_chart(chart_df.set_index('Time')[['Temp', 'Target']], color=["#00f2ff", "#ff4b4b"])
+            # Displaying the 24-hour chart
+            st.line_chart(chart_df[['Temp', 'Target']], color=["#00f2ff", "#ff4b4b"])
 
 show_dashboard()
-
-with st.sidebar:
-    st.write("---")
-    if st.button("Reset Daily History"):
-        st.session_state.daily_history = pd.DataFrame(columns=['Time', 'Temp', 'Date'])
-        st.rerun()
