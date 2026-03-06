@@ -66,7 +66,7 @@ def show_dashboard():
     
     df = st.session_state.daily_data.copy()
     
-    # Calculate Trend and identify the comparison hour
+    # Calculate Trend
     comp_hour = current_hour - 1 if current_hour > 0 else 0
     prev_hour_val = df.loc[df['Hour'] == comp_hour, 'Temperature'].values
     
@@ -82,15 +82,15 @@ def show_dashboard():
     now_row = df[df['Hour'] == current_hour].copy()
     now_row['Status'] = 'Forecast'
     
+    # Unified Plotting DataFrame
     target_data = pd.DataFrame({
         'Hour': range(24),
         'Temperature': [threshold] * 24,
         'Status': ['Target'] * 24
     })
-    
     plot_df = pd.concat([df, now_row, target_data]).sort_values('Hour')
 
-    # --- ALTAIR CHARTING ---
+    # --- ALTAIR CHART ---
     x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]),
                    axis=alt.Axis(labelExpr="datum.value + ':00'", grid=True))
     y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False), title='Temperature (°F)')
@@ -103,33 +103,33 @@ def show_dashboard():
     chart = alt.Chart(plot_df).mark_line().encode(
         x=x_axis,
         y=y_axis,
-        color=alt.Color('Status:N', scale=color_scale, legend=alt.Legend(title="Legend")),
+        color=alt.Color('Status:N', scale=color_scale, legend=alt.Legend(title="Type")),
         strokeDash=alt.condition(
             alt.datum.Status == 'Actual',
             alt.value([0]), 
             alt.value([5, 5]) 
         ),
-        strokeWidth=alt.condition(
-            alt.datum.Status == 'Target',
-            alt.value(2),
-            alt.value(4)
-        )
+        strokeWidth=alt.condition(alt.datum.Status == 'Target', alt.value(2), alt.value(4))
     )
 
     ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=250, color='#00f2ff').encode(x=x_axis, y=y_axis)
-    final_chart = (chart + ball).properties(height=450)
 
     # --- UI ---
     st.title("The Farm")
     st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
     
     m1, m2, m3 = st.columns(3)
-    # Added "since HH:00" to the metric label
-    m1.metric(f"Current (since {comp_hour:02}:00)", f"{live_temp}°F", delta=f"{delta}°F" if delta != 0 else None)
+    # Using 'delta_description' for the timestamp to keep the label clean
+    m1.metric(
+        label="Current", 
+        value=f"{live_temp}°F", 
+        delta=f"{delta}°F", 
+        delta_description=f"since {comp_hour:02}:00"
+    )
     m2.metric("High Today", f"{df['Temperature'].max()}°F")
     m3.metric("Low Today", f"{df['Temperature'].min()}°F")
 
     st.write("---")
-    st.altair_chart(final_chart, use_container_width=True)
+    st.altair_chart(chart + ball, use_container_width=True)
 
 show_dashboard()
