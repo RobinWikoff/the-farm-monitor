@@ -141,7 +141,7 @@ def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_ho
 
     full = pd.concat([plot, bridge, target], ignore_index=True)
 
-    x = alt.X("Hour:Q", axis=alt.Axis(labelFontSize=16, titleFontSize=18, labelExpr="datum.value + ':00'"))
+    x = alt.X("Hour:Q", axis=alt.Axis(labelFontSize=12, titleFontSize=18, labelExpr="datum.value + ':00'", values=list(range(24)), labelAngle=-45))
     y = alt.Y(
         "Temperature:Q",
         scale=alt.Scale(zero=False, padding=60),
@@ -314,9 +314,10 @@ hi = actuals["Temperature"].max()
 lo = actuals["Temperature"].min()
 
 m1, m2, m3 = st.columns(3)
-m1.metric("Current (Feels)", f"{live_temp}°F")
-m2.metric("Today's High", f"{hi}°F")
-m3.metric("Today's Low", f"{lo}°F")
+m1.metric("Feels Like Now", f"{live_temp}°F")
+m2.metric("Today's High (Feels Like)", f"{hi}°F")
+m3.metric("Today's Low (Feels Like)", f"{lo}°F")
+st.caption("🌡️ All temperatures are *feels like* (apparent temperature), accounting for wind chill and humidity.")
 
 # Status banner
 forecast_future = df[df["Hour"] >= current_hour].copy()
