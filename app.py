@@ -49,6 +49,8 @@ df, live_temp = get_weather_data()
 
 if not df.empty and live_temp is not None:
     current_hour = now_mtn.hour
+    
+    # Update current hour with live temp for the ball/line
     df.loc[df['Hour'] == current_hour, 'Temperature'] = live_temp
     
     # Metrics
@@ -75,25 +77,31 @@ if not df.empty and live_temp is not None:
             else: st.warning(f"🔥 Staying above {threshold}°F today.")
 
     # --- CHART LOGIC ---
-    # Label Logic (Bi-directional)
+    # Label Logic (Standardized Units)
     first_hi_h = actuals[actuals['Temperature'] == hi]['Hour'].iloc[0]
     first_lo_h = actuals[actuals['Temperature'] == lo]['Hour'].iloc[0]
     
     def get_label_cfg(row):
-        if row['Hour'] == current_hour: return ("Top", f"{row['Temperature']}°")
-        if row['Hour'] == first_hi_h: return ("Top", f"{row['Temperature']}°")
-        if row['Hour'] == first_lo_h: return ("Bottom", f"{row['Temperature']}°")
+        unit_text = f"{row['Temperature']}°F"
+        if row['Hour'] == current_hour: return ("Top", unit_text)
+        if row['Hour'] == first_hi_h: return ("Top", unit_text)
+        if row['Hour'] == first_lo_h: return ("Bottom", unit_text)
         return ("None", "")
 
     df[['Lab_Pos', 'Lab_Txt']] = df.apply(lambda r: pd.Series(get_label_cfg(r)), axis=1)
     df['Status'] = df['Hour'].apply(lambda x: 'Actual' if x <= current_hour else 'Forecast')
     
+    # Connect the "Actual" line to the "Forecast" line at the current point
+    bridge = df[df['Hour'] == current_hour].copy().assign(Status='Forecast')
     target_df = pd.DataFrame({'Hour': range(24), 'Temperature': [threshold]*24, 'Status': ['Target']*24})
-    plot_df = pd.concat([df, target_df])
+    plot_df = pd.concat([df, bridge, target_df])
 
     # Scales
     x_ax = alt.X('Hour:Q', axis=alt.Axis(labelFontSize=16, titleFontSize=18, labelExpr="datum.value + ':00'"))
-    y_ax = alt.Y('Temperature:Q', scale=alt.Scale(zero=False, padding=50), axis=alt.Axis(labelFontSize=16, titleFontSize=18))
+    y_ax = alt.Y('Temperature:Q', 
+                 scale=alt.Scale(zero=False, padding=60), 
+                 axis=alt.Axis(labelFontSize=16, titleFontSize=18, labelExpr="datum.value + '°F'")) # Axis Units Fix
+    
     c_scale = alt.Scale(domain=['Actual', 'Forecast', 'Target'], range=['#00f2ff', '#ffffff', '#32CD32'])
     d_scale = alt.Scale(domain=['Actual', 'Forecast', 'Target'], range=[[0], [5, 5], [8, 4]])
 
@@ -104,11 +112,11 @@ if not df.empty and live_temp is not None:
         strokeDash=alt.StrokeDash('Status:N', scale=d_scale)
     )
     
-    ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=400, color='#00f2ff').encode(x=x_ax, y=y_ax)
+    ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=450, color='#00f2ff').encode(x=x_ax, y=y_ax)
     
-    txt_top = alt.Chart(df[df['Lab_Pos'] == "Top"]).mark_text(dy=-20, fontSize=16, fontWeight='bold', color='white').encode(x=x_ax, y=y_ax, text='Lab_Txt')
-    txt_bot = alt.Chart(df[df['Lab_Pos'] == "Bottom"]).mark_text(dy=20, fontSize=16, fontWeight='bold', color='white', baseline='top').encode(x=x_ax, y=y_ax, text='Lab_Txt')
+    txt_top = alt.Chart(df[df['Lab_Pos'] == "Top"]).mark_text(dy=-25, fontSize=16, fontWeight='bold', color='white').encode(x=x_ax, y=y_ax, text='Lab_Txt')
+    txt_bot = alt.Chart(df[df['Lab_Pos'] == "Bottom"]).mark_text(dy=25, fontSize=16, fontWeight='bold', color='white', baseline='top').encode(x=x_ax, y=y_ax, text='Lab_Txt')
 
     st.altair_chart((lines + ball + txt_top + txt_bot).properties(height=500).configure_legend(fillColor='#1e1e1e', padding=10), use_container_width=True)
 else:
-    st.warning("Fetching fresh weather data...")
+    st.warning("Re-establishing data link...")
