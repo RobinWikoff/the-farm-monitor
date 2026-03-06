@@ -106,4 +106,38 @@ def show_dashboard():
     # Connect the gap
     bridge = df[df['Hour'] == current_hour].copy()
     bridge['Status'] = 'Forecast'
-    plot_df = pd.concat([df, bridge]).sort_values('
+    plot_df = pd.concat([df, bridge]).sort_values('Hour')
+    
+    main_line = alt.Chart(plot_df).mark_line(strokeWidth=4).encode(
+        x=x_axis, y=y_axis,
+        color=alt.Color('Status:N', 
+                        scale=alt.Scale(domain=['Actual', 'Forecast'], range=['#00f2ff', '#ffffff']),
+                        legend=alt.Legend(orient='bottom-left', title=None, labelFontSize=12)),
+        strokeDash=alt.condition(alt.datum.Status == 'Actual', alt.value([0]), alt.value([5, 5]))
+    )
+
+    # 4. Current Point Ball
+    ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=300, color='#00f2ff').encode(x=x_axis, y=y_axis)
+
+    # Assemble and Resize
+    # Height of 400 with use_container_width=True creates a nice panoramic view
+    final_chart = (climate_band + target_line + main_line + ball).properties(
+        height=450, 
+        title=alt.TitleParams(text="Apparent Temperature vs. Historical Normal", fontSize=16, anchor='start')
+    ).configure_legend(
+        fillColor='#1e1e1e', 
+        padding=10, 
+        cornerRadius=5, 
+        borderWidth=1, 
+        strokeColor='gray'
+    )
+
+    st.altair_chart(final_chart, use_container_width=True)
+
+    st.write("---")
+    st.subheader("🚀 Features Coming Soon")
+    c1, c2 = st.columns(2)
+    with c1: st.markdown("* **Precipitation:** Real-time Rain/Snow tracking.")
+    with c2: st.markdown("* **Summer AM/PM:** Window optimization alerts.")
+
+show_dashboard()
