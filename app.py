@@ -6,11 +6,10 @@ import pytz
 from PIL import Image
 
 # --- CONFIGURATION & SECRETS ---
-# This pulls the key from your Streamlit Cloud "Secrets" or local .streamlit/secrets.toml
 try:
     API_KEY = st.secrets["WEATHER_API_KEY"]
 except:
-    # Fallback for local testing only
+    # Manual fallback for local testing
     API_KEY = "6893fccbe935414644a37268660065a8"
 
 LAT, LON = "40.3720", "-105.0579"
@@ -29,31 +28,22 @@ except:
 
 # --- DATA FETCHING ---
 def get_historical_data():
-    """Fetches real hourly data from Midnight Today using Open-Meteo."""
     try:
         response = requests.get(METEO_URL, timeout=10).json()
         now_mtn = datetime.now(LOCAL_TZ)
-        
         times = response['hourly']['time']
         temps = response['hourly']['temperature_2m']
         
         data_points = []
         for t, temp in zip(times, temps):
-            # Parse Open-Meteo ISO format
             dt = datetime.fromisoformat(t).replace(tzinfo=pytz.UTC).astimezone(LOCAL_TZ)
-            # Filter for TODAY only (Midnight to now)
             if dt.date() == now_mtn.date() and dt <= now_mtn:
-                data_points.append({
-                    'Hour': dt.hour,
-                    'Temp': round(temp, 1),
-                    'Date': dt.date()
-                })
+                data_points.append({'Hour': dt.hour, 'Temp': round(temp, 1), 'Date': dt.date()})
         return pd.DataFrame(data_points)
     except:
         return pd.DataFrame(columns=['Hour', 'Temp', 'Date'])
 
 def get_live_temp():
-    """Fetches current temperature via OpenWeather using Secret API Key."""
     try:
         response = requests.get(OWM_URL, timeout=10).json()
         return round(response['main']['temp'], 1)
@@ -67,9 +57,15 @@ if 'daily_history' not in st.session_state or st.session_state.daily_history.emp
 # --- SIDEBAR SETTINGS ---
 st.sidebar.title("Settings")
 now_mtn = datetime.now(LOCAL_TZ)
-mode = st.sidebar.selectbox("Mode", ["Winter", "Summer"], 
-                            index=0 if now_mtn.month not in [6,7,8,9] else 1)
-threshold = 65.0 if mode == "Winter" else 70.0
+
+# Restored Descriptive Labels
+mode = st.sidebar.selectbox(
+    "Monitoring Mode", 
+    ["Winter (Warming Focus)", "Summer (Cooling Focus)"], 
+    index=0 if now_mtn.month not in [6,7,8,9] else 1
+)
+
+threshold = 65.0 if "Winter" in mode else 70.0
 
 if st.sidebar.button("Refresh History"):
     st.session_state.daily_history = get_historical_data()
@@ -87,15 +83,13 @@ def show_dashboard():
             if st.session_state.daily_history['Date'].iloc[0] != now_mtn.date():
                 st.session_state.daily_history = get_historical_data()
 
-        # Update Session History with Live Data
+        # Update Session History
         new_entry = pd.DataFrame({'Hour': [now_mtn.hour], 'Temp': [live_temp], 'Date': [now_mtn.date()]})
         st.session_state.daily_history = pd.concat([st.session_state.daily_history, new_entry], ignore_index=True).drop_duplicates('Hour', keep='last')
 
         # --- GRAPH ENGINE ---
         chart_df = pd.DataFrame({'Hour': range(24)})
         chart_df = pd.merge(chart_df, st.session_state.daily_history[['Hour', 'Temp']], on='Hour', how='left')
-        
-        # Interpolate between Midnight and Now
         chart_df['Temp'] = chart_df['Temp'].interpolate(method='linear')
         chart_df.loc[chart_df['Hour'] > now_mtn.hour, 'Temp'] = None 
         
@@ -119,12 +113,16 @@ def show_dashboard():
 
         col_left, col_right = st.columns([1, 2])
         with col_left:
-            if mode == "Winter":
-                if live_temp >= threshold: st.success(f"☀️ Warming! {live_temp}°F")
-                else: st.info(f"❄️ Waiting for {threshold}°F")
+            if "Winter" in mode:
+                if live_temp >= threshold: 
+                    st.success(f"☀️ Warming up! Currently {live_temp}°F.")
+                else: 
+                    st.info(f"❄️ Waiting for {threshold}°F.")
             else:
-                if live_temp <= threshold: st.success("🌬️ Cool breeze!")
-                else: st.warning(f"🔥 Waiting for {threshold}°F")
+                if live_temp <= threshold: 
+                    st.success("### 🌬️ Cool breeze has arrived!")
+                else: 
+                    st.warning(f"🔥 Waiting for {threshold}°F")
 
         with col_right:
             st.line_chart(chart_df[['Temp', 'Target']], color=["#00f2ff", "#ff4b4b"])
