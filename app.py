@@ -6,11 +6,9 @@ from datetime import datetime
 import pytz
 
 # --- CONFIG & SECURITY ---
-# This looks for the 'WEATHER_API_KEY' in your Streamlit Cloud settings first!
 try:
     API_KEY = st.secrets["WEATHER_API_KEY"]
 except:
-    # Fallback for local development only
     API_KEY = "6893fccbe935414644a37268660065a8"
 
 LAT, LON = "40.3720", "-105.0579"
@@ -22,7 +20,7 @@ OWM_URL = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&
 st.set_page_config(page_title="The Farm", page_icon="🏔️", layout="wide")
 
 # --- DATA FUNCTIONS ---
-@st.cache_data(ttl=300) # Faster refresh (5 mins) for live data
+@st.cache_data(ttl=300)
 def get_weather_data():
     try:
         f_resp = requests.get(METEO_URL, timeout=10).json()
@@ -38,7 +36,7 @@ def get_weather_data():
         l_resp = requests.get(OWM_URL, timeout=10).json()
         live = round(l_resp['main']['feels_like'], 1)
         return pd.DataFrame(forecast_list), live
-    except Exception as e:
+    except:
         return pd.DataFrame(), None
 
 # --- SIDEBAR ---
@@ -117,13 +115,21 @@ if not df.empty and live_temp is not None:
 
     st.altair_chart((lines + ball + txt_top + txt_bot).properties(height=500).configure_legend(fillColor='#1e1e1e', padding=10), use_container_width=True)
 
-    # 4. Roadmap Section
+    # 4. Updated Roadmap Section
     st.write("---")
     st.subheader("🚀 Features Coming Soon")
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("**🌨️ Precipitation Tracker**\n* Real-time Rain/Snow probability.\n* Hourly accumulation forecasts.")
+        st.markdown("""
+        **🌨️ Precipitation Tracker**
+        * Real-time Rain/Snow probability.
+        * Hourly accumulation forecasts.
+        """)
     with col2:
-        st.markdown("**🌬️ Summer Optimization**\n* Smart 'Open Windows' alerts.\n* PM Cooling Efficiency metrics.")
+        st.markdown("""
+        **🌬️ Summer Optimization**
+        * **AM:** Too Warm, Time to Close the Windows.
+        * **PM:** Cool Enough, Time to Open the Windows.
+        """)
 else:
     st.warning("Securely connecting to data feed...")
