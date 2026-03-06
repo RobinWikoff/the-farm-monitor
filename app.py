@@ -68,46 +68,55 @@ def show_dashboard():
     if live_temp is not None:
         df.loc[df['Hour'] == current_hour, 'Temperature'] = live_temp
     
-    # Logic to connect Actual and Forecast lines
+    # 1. Create the Actual & Forecast segments
     df['Status'] = df['Hour'].apply(lambda x: 'Actual' if x <= current_hour else 'Forecast')
+    
+    # Bridge the gap between Actual and Forecast lines
     now_row = df[df['Hour'] == current_hour].copy()
     now_row['Status'] = 'Forecast'
-    plot_df = pd.concat([df, now_row]).sort_values('Hour')
+    
+    # 2. Create the Target segment (Horizontal line data)
+    target_data = pd.DataFrame({
+        'Hour': range(24),
+        'Temperature': [threshold] * 24,
+        'Status': ['Target'] * 24
+    })
+    
+    # Combine everything into one "Plotting DF"
+    plot_df = pd.concat([df, now_row, target_data]).sort_values('Hour')
 
     # --- ALTAIR CHARTING ---
     x_axis = alt.X('Hour:Q', title='Time (24h)', scale=alt.Scale(domain=[0, 23]),
                    axis=alt.Axis(labelExpr="datum.value + ':00'", grid=True))
     y_axis = alt.Y('Temperature:Q', scale=alt.Scale(zero=False), title='Temperature (°F)')
 
-    # 1. Temperature Lines (Actual & Forecast)
-    # We use a color scale to map names to specific hex codes
-    main_line = alt.Chart(plot_df).mark_line(strokeWidth=4).encode(
+    # Unified Legend and Color Mapping
+    color_scale = alt.Scale(
+        domain=['Actual', 'Forecast', 'Target'], 
+        range=['#00f2ff', '#ffffff', '#FFA500']
+    )
+
+    # Main chart
+    chart = alt.Chart(plot_df).mark_line().encode(
         x=x_axis,
         y=y_axis,
-        color=alt.Color('Status:N', 
-                        scale=alt.Scale(domain=['Actual', 'Forecast', 'Target'], 
-                                        range=['#00f2ff', '#ffffff', '#FFA500']),
-                        legend=alt.Legend(title="Chart Legend")),
+        color=alt.Color('Status:N', scale=color_scale, legend=alt.Legend(title="Legend")),
         strokeDash=alt.condition(
-            alt.datum.Status == 'Forecast',
-            alt.value([5, 5]),
-            alt.value([0])
+            alt.datum.Status == 'Actual',
+            alt.value([0]),  # Solid
+            alt.value([5, 5]) # Dashed (for both Forecast and Target)
+        ),
+        strokeWidth=alt.condition(
+            alt.datum.Status == 'Target',
+            alt.value(2),
+            alt.value(4)
         )
     )
 
-    # 2. Target Line (Integrated into legend)
-    # We create a dummy dataframe for the target to force it into the legend
-    target_df = pd.DataFrame({'Hour': [0, 23], 'Temperature': [threshold], 'Status': ['Target']})
-    target_line = alt.Chart(target_df).mark_line(strokeDash=[3,3], strokeWidth=2).encode(
-        x=x_axis,
-        y=y_axis,
-        color=alt.Color('Status:N')
-    )
-
-    # 3. THE BALL (14pt Marker)
+    # 3. THE BALL (14pt Marker) - Drawn on top
     ball = alt.Chart(df[df['Hour'] == current_hour]).mark_circle(size=250, color='#00f2ff').encode(x=x_axis, y=y_axis)
 
-    final_chart = (main_line + target_line + ball).properties(height=450)
+    final_chart = (chart + ball).properties(height=450)
 
     # --- UI ---
     st.title("The Farm")
