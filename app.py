@@ -235,14 +235,12 @@ def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_ho
         .encode(x=x, y=y, text="Lab_Txt")
     )
 
-    hist_layers = alt.layer()
     if not hist_band.empty:
-        band_x = alt.X("Hour:Q")
         hist_area = (
             alt.Chart(hist_band)
             .mark_area(opacity=0.18, color="#a0c4ff")
             .encode(
-                x=band_x,
+                x=alt.X("Hour:Q"),
                 y=alt.Y("HistLow:Q", title=""),
                 y2=alt.Y2("HistHigh:Q"),
                 tooltip=[
@@ -257,7 +255,7 @@ def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_ho
             alt.Chart(hist_band.assign(Status="Hist Avg (5yr)"))
             .mark_line(strokeWidth=2, opacity=0.65)
             .encode(
-                x=band_x,
+                x=alt.X("Hour:Q"),
                 y=alt.Y("HistMean:Q"),
                 color=alt.Color(
                     "Status:N",
@@ -278,10 +276,12 @@ def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_ho
                 ),
             )
         )
-        hist_layers = hist_area + hist_mean
+        chart = (hist_area + hist_mean + lines + dot + lbl_top + lbl_bot)
+    else:
+        chart = (lines + dot + lbl_top + lbl_bot)
 
     return (
-        (hist_layers + lines + dot + lbl_top + lbl_bot)
+        chart
         .properties(height=500)
         .configure_legend(fillColor="#1e1e1e", padding=10)
     )
@@ -371,7 +371,7 @@ forecast_future.loc[forecast_future["Hour"] == current_hour, "Temperature"] = li
 render_status_banner(live_temp, threshold, forecast_future, mode)
 
 # Chart
-st.altair_chart(build_chart(df, live_temp, threshold, current_hour, hist_band), use_container_width=True)
+st.altair_chart(build_chart(df, live_temp, threshold, current_hour, hist_band), width="stretch")
 
 # Data Sources
 st.write("---")
