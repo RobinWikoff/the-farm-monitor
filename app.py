@@ -357,7 +357,7 @@ m1.metric(
 )
 m2.metric("Today's High (Feels Like)", f"{hi}°F")
 m3.metric("Today's Low (Feels Like)", f"{lo}°F")
-st.caption("🌡️ All temperatures are *feels like* (apparent temperature), accounting for wind chill and humidity.")
+st.caption("🌡️ All temperatures are *feels like* (apparent temperature), accounting for wind chill, humidity, and sun warmth.")
 
 # Status banner
 forecast_future = df[df["Hour"] >= current_hour].copy()
