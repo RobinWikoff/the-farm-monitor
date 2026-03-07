@@ -368,6 +368,7 @@ render_status_banner(live_temp, threshold, forecast_future, mode)
 st.altair_chart(build_chart(df, live_temp, threshold, current_hour, hist_band), use_container_width=True)
 
 # Data Sources
+st.write("---")
 with st.expander("📡 About the Data Sources"):
     col_a, col_b = st.columns(2)
     with col_a:
@@ -395,7 +396,6 @@ with st.expander("📡 About the Data Sources"):
     st.caption("💡 Because both sources use gridded or blended models, readings may differ slightly from a backyard weather station at The Farm's exact location.")
 
 # Roadmap
-st.write("---")
 with st.expander("🚀 Features Coming Soon"):
     col1, col2 = st.columns(2)
     with col1:
