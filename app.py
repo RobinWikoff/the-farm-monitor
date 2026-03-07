@@ -83,9 +83,15 @@ def fetch_historical_band(today: datetime) -> pd.DataFrame:
     from Open-Meteo Archive API. Returns a DataFrame with columns:
       Hour (int), HistHigh (float), HistLow (float), HistMean (float)
     """
+    # Strip timezone so replace(year=...) works reliably and cache key stays stable
+    today_naive = today.replace(tzinfo=None)
     all_rows = []
     for years_back in range(1, HISTORY_YEARS + 1):
-        past_date = today.replace(year=today.year - years_back)
+        try:
+            past_date = today_naive.replace(year=today_naive.year - years_back)
+        except ValueError:
+            # Handle Feb 29 in non-leap years — fall back to Feb 28
+            past_date = today_naive.replace(month=2, day=28, year=today_naive.year - years_back)
         date_str = past_date.strftime("%Y-%m-%d")
         params = {
             "latitude": LAT,
