@@ -1,10 +1,13 @@
 import streamlit as st
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import pandas as pd
 import altair as alt
 from datetime import datetime, timedelta
 import pytz
 import logging
+import time
 
 # ---------------------------------------------------------------------------
 # CONFIG
@@ -76,48 +79,58 @@ def fetch_live_temp(api_key: str) -> tuple[float, str, str]:
     return feels_like, station_name, station_id
 
 
+def _make_retry_session() -> requests.Session:
+    """Create a requests session with exponential backoff retry on 429/5xx."""
+    session = requests.Session()
+    retry = Retry(
+        total=5,
+        backoff_factor=2,        # waits 2, 4, 8, 16, 32 seconds between retries
+        status_forcelist=[429, 500, 502, 503, 504],
+        respect_retry_after_header=True,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    return session
+
+
 @st.cache_data(ttl=86400)
 def fetch_historical_band(today: datetime) -> pd.DataFrame:
     """
     Fetch the same calendar day (month/day) across the past HISTORY_YEARS years
-    from Open-Meteo Archive API using a SINGLE request covering the full date range.
-    Filters to only rows matching today's month/day, then computes per-hour min/max/mean.
+    from Open-Meteo Archive API. Uses per-year requests with retry/backoff and
+    a small sleep between calls to stay under the free-tier rate limit.
     Returns a DataFrame with columns: Hour (int), HistHigh (float), HistLow (float), HistMean (float)
     """
     today_naive = today.replace(tzinfo=None)
-    target_month = today_naive.month
-    target_day = today_naive.day
-
-    # Single request: full range from HISTORY_YEARS ago to yesterday
-    start_year = today_naive.year - HISTORY_YEARS
-    start_date = f"{start_year}-01-01"
-    end_date = (today_naive - timedelta(days=1)).strftime("%Y-%m-%d")
-
-    params = {
-        "latitude": LAT,
-        "longitude": LON,
-        "start_date": start_date,
-        "end_date": end_date,
-        "hourly": "apparent_temperature",
-        "temperature_unit": "fahrenheit",
-        "timezone": "America/Denver",
-    }
-    try:
-        resp = requests.get(METEO_ARCHIVE_BASE, params=params, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-    except requests.RequestException as e:
-        logger.warning("Historical fetch failed: %s", e)
-        return pd.DataFrame(columns=["Hour", "HistHigh", "HistLow", "HistMean"])
-
+    session = _make_retry_session()
     all_rows = []
-    for t, temp in zip(data["hourly"]["time"], data["hourly"]["apparent_temperature"]):
-        if temp is None:
+
+    for years_back in range(1, HISTORY_YEARS + 1):
+        try:
+            past_date = today_naive.replace(year=today_naive.year - years_back)
+        except ValueError:
+            past_date = today_naive.replace(month=2, day=28, year=today_naive.year - years_back)
+        date_str = past_date.strftime("%Y-%m-%d")
+        params = {
+            "latitude": LAT,
+            "longitude": LON,
+            "start_date": date_str,
+            "end_date": date_str,
+            "hourly": "apparent_temperature",
+            "temperature_unit": "fahrenheit",
+            "timezone": "America/Denver",
+        }
+        try:
+            resp = session.get(METEO_ARCHIVE_BASE, params=params, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+            for t, temp in zip(data["hourly"]["time"], data["hourly"]["apparent_temperature"]):
+                if temp is not None:
+                    all_rows.append({"Hour": datetime.fromisoformat(t).hour, "Temperature": temp})
+        except requests.RequestException as e:
+            logger.warning("Historical fetch failed for %s: %s", date_str, e)
             continue
-        dt = datetime.fromisoformat(t)
-        # Keep only rows that match today's month and day
-        if dt.month == target_month and dt.day == target_day:
-            all_rows.append({"Hour": dt.hour, "Temperature": temp})
+        time.sleep(1)   # polite pause between calls to avoid rate limiting
 
     if not all_rows:
         return pd.DataFrame(columns=["Hour", "HistHigh", "HistLow", "HistMean"])
