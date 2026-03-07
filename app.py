@@ -16,14 +16,6 @@ HISTORY_YEARS = 5
 
 THRESHOLDS = {"Winter (Warming Focus)": 65.0, "Summer (Cooling Focus)": 70.0}
 
-METEO_URL = (
-    f"https://api.open-meteo.com/v1/forecast"
-    f"?latitude={LAT}&longitude={LON}"
-    f"&hourly=apparent_temperature"
-    f"&temperature_unit=fahrenheit"
-    f"&timezone=auto"
-)
-OWM_BASE = "https://api.openweathermap.org/data/2.5/weather"
 VC_BASE = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline"
 
 logger = logging.getLogger(__name__)
@@ -31,15 +23,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # HELPERS
 # ---------------------------------------------------------------------------
-def _get_api_key() -> str:
-    """Return OWM API key from secrets."""
-    try:
-        return st.secrets["WEATHER_API_KEY"]
-    except (KeyError, FileNotFoundError):
-        st.error("⚠️ WEATHER_API_KEY not found in Streamlit secrets. Add it to `.streamlit/secrets.toml`.")
-        st.stop()
-
-
 def _get_vc_api_key() -> str:
     """Return Visual Crossing API key from secrets."""
     try:
@@ -50,39 +33,41 @@ def _get_vc_api_key() -> str:
 
 
 @st.cache_data(ttl=300)
-def fetch_forecast() -> pd.DataFrame:
+def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, float]:
     """
-    Fetch today's hourly apparent-temperature forecast from Open-Meteo.
-    Returns a DataFrame with columns: Hour (int), Temperature (float).
-    Open-Meteo returns local time when timezone=auto, so NO tz conversion needed.
+    Fetch today's hourly feelslike forecast AND current conditions from
+    Visual Crossing Timeline API in a single call.
+    Returns (forecast_df, live_temp) where forecast_df has columns: Hour (int), Temperature (float).
     """
-    resp = requests.get(METEO_URL, timeout=10)
+    location = f"{LAT},{LON}"
+    url = f"{VC_BASE}/{location}/today"
+    params = {
+        "unitGroup": "us",
+        "include": "hours,current",
+        "elements": "datetime,feelslike",
+        "key": vc_api_key,
+        "contentType": "json",
+        "timezone": "America/Denver",
+    }
+    resp = requests.get(url, params=params, timeout=15)
     resp.raise_for_status()
     data = resp.json()
 
-    now_date = datetime.now(LOCAL_TZ).date()
+    # Hourly forecast
     rows = []
-    for t, temp in zip(data["hourly"]["time"], data["hourly"]["apparent_temperature"]):
-        dt = datetime.fromisoformat(t)
-        if dt.date() == now_date:
-            rows.append({"Hour": dt.hour, "Temperature": round(temp, 1)})
+    for day in data.get("days", []):
+        for hour in day.get("hours", []):
+            temp = hour.get("feelslike")
+            dt_str = hour.get("datetime", "")  # "HH:mm:ss"
+            if temp is not None and dt_str:
+                rows.append({"Hour": int(dt_str.split(":")[0]), "Temperature": round(temp, 1)})
+    forecast_df = pd.DataFrame(rows)
 
-    return pd.DataFrame(rows)
+    # Current conditions
+    current = data.get("currentConditions", {})
+    live_temp = round(current.get("feelslike", forecast_df.iloc[-1]["Temperature"]), 1)
 
-
-@st.cache_data(ttl=60)
-def fetch_live_temp(api_key: str) -> tuple[float, str, str]:
-    """Fetch current feels-like temperature from OpenWeatherMap.
-    Returns (feels_like, station_name, station_id).
-    """
-    params = {"lat": LAT, "lon": LON, "appid": api_key, "units": "imperial"}
-    resp = requests.get(OWM_BASE, params=params, timeout=10)
-    resp.raise_for_status()
-    data = resp.json()
-    feels_like = round(data["main"]["feels_like"], 1)
-    station_name = data.get("name", "Unknown")
-    station_id = str(data.get("id", "N/A"))
-    return feels_like, station_name, station_id
+    return forecast_df, live_temp
 
 
 @st.cache_data(ttl=86400)
@@ -337,12 +322,10 @@ mode = st.sidebar.selectbox("Monitoring Mode", list(THRESHOLDS.keys()))
 threshold = THRESHOLDS[mode]
 
 # Fetch data
-api_key = _get_api_key()
+vc_api_key = _get_vc_api_key()
 with st.spinner("Fetching latest weather data…"):
     try:
-        df = fetch_forecast()
-        live_temp, owm_station_name, owm_station_id = fetch_live_temp(api_key)
-        vc_api_key = _get_vc_api_key()
+        df, live_temp = fetch_forecast_and_current(vc_api_key)
         hist_band = fetch_historical_band(now_mtn, vc_api_key)
     except requests.RequestException as e:
         logger.error("Weather fetch failed: %s", e)
@@ -409,18 +392,18 @@ with st.expander("📡 About the Data Sources"):
         - Blended for accuracy at the requested coordinates
         """)
     with col_b:
-        st.markdown(f"""
-        **🏢 OpenWeatherMap** *(Live "Feels Like" Temperature)*
+        st.markdown("""
+        **🏢 Visual Crossing** *(Live "Feels Like" & Forecast)*
 
-        OWM aggregates data from multiple sources near your location:
-        - NWS (National Weather Service) reporting stations
-        - METAR airport observation data (likely **KFNL** — Fort Collins/Loveland Airport)
-        - Citizen/personal weather stations in the network
+        Visual Crossing blends data from multiple trusted sources:
+        - NWS/NOAA weather station observations
+        - METAR airport reports (including nearby **KFNL** — Fort Collins/Loveland Airport)
+        - High-resolution global forecast models updated continuously
 
-        **Resolved station:** `{owm_station_name}` (OWM ID: `{owm_station_id}`)
-        The live temp refreshes every **60 seconds**.
+        Live conditions and today's hourly forecast refresh every **5 minutes**.
+        The 5-year historical band refreshes once daily.
         """)
-    st.caption("💡 Because both sources use gridded or blended models, readings may differ slightly from a backyard weather station at The Farm's exact location.")
+    st.caption("💡 All sources use gridded or blended models — readings may differ slightly from a backyard weather station at The Farm's exact location.")
 
 # Roadmap
 with st.expander("🚀 Features Coming Soon"):
