@@ -2,6 +2,16 @@
 
 ---
 
+## v8 — Goodbye Open Meteo
+Moved forecast and live temperature entirely to Visual Crossing. Open-Meteo and OpenWeatherMap both removed.
+- Replaced `fetch_forecast` (Open-Meteo) and `fetch_live_temp` (OWM) with single `fetch_forecast_and_current()` call to Visual Crossing Timeline API
+- `WEATHER_API_KEY` (OWM) no longer needed in Streamlit secrets — only `VISUAL_CROSSING_API_KEY` required
+- Live conditions and hourly forecast now refresh every 5 minutes from Visual Crossing `currentConditions` and `hours` data
+- Updated "About the Data Sources" expander to reflect Visual Crossing as sole source for forecast and live temp
+- Removed `OWM_BASE`, `METEO_URL` constants and `_get_api_key()` helper
+
+---
+
 ## v7 — Historical Band Needs Visual Crossing API
 Swapped Open-Meteo archive API for Visual Crossing Timeline API for the 5-year historical band.
 - Replaced all Open-Meteo archive calls with Visual Crossing `feelslike` hourly data
@@ -59,8 +69,8 @@ Optimized for mobile viewing and cleaned up UI navigation.
 First named release. Added data sourcing transparency, live trend indicator, and expanded roadmap.
 - Added `get_temp_trend()`: compares live temp to prior hour forecast, renders ↑↓ delta on "Feels Like Now" metric with "since HH:00" label
 - `fetch_live_temp()` now returns `(feels_like, station_name, station_id)` tuple
+- Expanded Kitty Comfort Thresholds with alert states: Winter/Summer "Now Kitties are NOT comfortable" conditions (threshold was met but conditions have since worsened)
 - Added "📡 About the Data Sources" expandable section explaining Open-Meteo (forecast) and OpenWeatherMap (live temp), including live resolved OWM station name and ID
 - Updated temperature caption to include sun warmth alongside wind chill and humidity
 - Expanded "Features Coming Soon" roadmap with: Humidity, Wind (with Corgi Spin 🐕 local unit), Sunrise/Sunset, Brightness, AQI, Kitty Comfort Thresholds 🐱, Real vs. Feels Like Toggle
 - Removed `st.write("---")` divider between Data Sources and Features Coming Soon sections
-- Expanded Kitty Comfort Thresholds with alert states: Winter/Summer "Now Kitties are NOT comfortable" conditions (threshold was met but conditions have since worsened)
