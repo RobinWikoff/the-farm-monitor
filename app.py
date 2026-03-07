@@ -157,7 +157,7 @@ def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_ho
 
     full = pd.concat([plot, bridge, target], ignore_index=True)
 
-    x = alt.X("Hour:Q", axis=alt.Axis(labelFontSize=11, titleFontSize=14, labelExpr="datum.value + ':00'", values=list(range(0, 24, 2)), labelAngle=-45))
+    x = alt.X("Hour:Q", axis=alt.Axis(labelFontSize=11, titleFontSize=14, labelExpr="datum.value + ':00'", values=list(range(24)), labelAngle=-45))
     y = alt.Y(
         "Temperature:Q",
         scale=alt.Scale(zero=False, padding=40),
@@ -397,8 +397,7 @@ with st.expander("📡 About the Data Sources"):
 
 # Roadmap
 st.write("---")
-st.subheader("🚀 Features Coming Soon")
-with st.expander("Click to expand"):
+with st.expander("🚀 Features Coming Soon"):
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("""
@@ -436,4 +435,11 @@ with st.expander("Click to expand"):
         * Current AQI with health category label.
         * Primary pollutant breakdown.
         * Hourly AQI forecast trend.
+
+        **🐱 Kitty Comfort Thresholds**
+        * *Winter:* Warm enough outside? (above 32°F) · No big wind? · No rain or snow?
+        * *Summer:* Not too hot? (below 80°F) · No big wind? · No rain?
+
+        **🌡️ Real vs. Feels Like Toggle**
+        * Settings panel toggle to switch between actual air temperature and apparent (feels like) temperature across all readings and the chart.
         """)
