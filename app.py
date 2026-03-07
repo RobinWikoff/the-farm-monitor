@@ -80,38 +80,44 @@ def fetch_live_temp(api_key: str) -> tuple[float, str, str]:
 def fetch_historical_band(today: datetime) -> pd.DataFrame:
     """
     Fetch the same calendar day (month/day) across the past HISTORY_YEARS years
-    from Open-Meteo Archive API. Returns a DataFrame with columns:
-      Hour (int), HistHigh (float), HistLow (float), HistMean (float)
+    from Open-Meteo Archive API using a SINGLE request covering the full date range.
+    Filters to only rows matching today's month/day, then computes per-hour min/max/mean.
+    Returns a DataFrame with columns: Hour (int), HistHigh (float), HistLow (float), HistMean (float)
     """
-    # Strip timezone so replace(year=...) works reliably and cache key stays stable
     today_naive = today.replace(tzinfo=None)
+    target_month = today_naive.month
+    target_day = today_naive.day
+
+    # Single request: full range from HISTORY_YEARS ago to yesterday
+    start_year = today_naive.year - HISTORY_YEARS
+    start_date = f"{start_year}-01-01"
+    end_date = (today_naive - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    params = {
+        "latitude": LAT,
+        "longitude": LON,
+        "start_date": start_date,
+        "end_date": end_date,
+        "hourly": "apparent_temperature",
+        "temperature_unit": "fahrenheit",
+        "timezone": "America/Denver",
+    }
+    try:
+        resp = requests.get(METEO_ARCHIVE_BASE, params=params, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+    except requests.RequestException as e:
+        logger.warning("Historical fetch failed: %s", e)
+        return pd.DataFrame(columns=["Hour", "HistHigh", "HistLow", "HistMean"])
+
     all_rows = []
-    for years_back in range(1, HISTORY_YEARS + 1):
-        try:
-            past_date = today_naive.replace(year=today_naive.year - years_back)
-        except ValueError:
-            # Handle Feb 29 in non-leap years — fall back to Feb 28
-            past_date = today_naive.replace(month=2, day=28, year=today_naive.year - years_back)
-        date_str = past_date.strftime("%Y-%m-%d")
-        params = {
-            "latitude": LAT,
-            "longitude": LON,
-            "start_date": date_str,
-            "end_date": date_str,
-            "hourly": "apparent_temperature",
-            "temperature_unit": "fahrenheit",
-            "timezone": "America/Denver",
-        }
-        try:
-            resp = requests.get(METEO_ARCHIVE_BASE, params=params, timeout=10)
-            resp.raise_for_status()
-            data = resp.json()
-            for t, temp in zip(data["hourly"]["time"], data["hourly"]["apparent_temperature"]):
-                if temp is not None:
-                    all_rows.append({"Hour": datetime.fromisoformat(t).hour, "Temperature": temp})
-        except requests.RequestException as e:
-            logger.warning("Historical fetch failed for %s: %s", date_str, e)
+    for t, temp in zip(data["hourly"]["time"], data["hourly"]["apparent_temperature"]):
+        if temp is None:
             continue
+        dt = datetime.fromisoformat(t)
+        # Keep only rows that match today's month and day
+        if dt.month == target_month and dt.day == target_day:
+            all_rows.append({"Hour": dt.hour, "Temperature": temp})
 
     if not all_rows:
         return pd.DataFrame(columns=["Hour", "HistHigh", "HistLow", "HistMean"])
