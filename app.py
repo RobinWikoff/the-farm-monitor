@@ -368,7 +368,6 @@ render_status_banner(live_temp, threshold, forecast_future, mode)
 st.altair_chart(build_chart(df, live_temp, threshold, current_hour, hist_band), use_container_width=True)
 
 # Data Sources
-st.write("---")
 with st.expander("📡 About the Data Sources"):
     col_a, col_b = st.columns(2)
     with col_a:
