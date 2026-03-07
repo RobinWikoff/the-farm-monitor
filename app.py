@@ -54,7 +54,6 @@ def fetch_forecast() -> pd.DataFrame:
     now_date = datetime.now(LOCAL_TZ).date()
     rows = []
     for t, temp in zip(data["hourly"]["time"], data["hourly"]["apparent_temperature"]):
-        # Open-Meteo ISO strings are already in the requested timezone
         dt = datetime.fromisoformat(t)
         if dt.date() == now_date:
             rows.append({"Hour": dt.hour, "Temperature": round(temp, 1)})
@@ -62,24 +61,27 @@ def fetch_forecast() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-@st.cache_data(ttl=60)   # live temp refreshes more frequently
-def fetch_live_temp(api_key: str) -> float:
-    """Fetch current feels-like temperature from OpenWeatherMap."""
+@st.cache_data(ttl=60)
+def fetch_live_temp(api_key: str) -> tuple[float, str, str]:
+    """Fetch current feels-like temperature from OpenWeatherMap.
+    Returns (feels_like, station_name, station_id).
+    """
     params = {"lat": LAT, "lon": LON, "appid": api_key, "units": "imperial"}
     resp = requests.get(OWM_BASE, params=params, timeout=10)
     resp.raise_for_status()
-    return round(resp.json()["main"]["feels_like"], 1)
+    data = resp.json()
+    feels_like = round(data["main"]["feels_like"], 1)
+    station_name = data.get("name", "Unknown")
+    station_id = str(data.get("id", "N/A"))
+    return feels_like, station_name, station_id
 
 
-@st.cache_data(ttl=86400)  # historical data changes daily at most
+@st.cache_data(ttl=86400)
 def fetch_historical_band(today: datetime) -> pd.DataFrame:
     """
     Fetch the same calendar day (month/day) across the past HISTORY_YEARS years
     from Open-Meteo Archive API. Returns a DataFrame with columns:
       Hour (int), HistHigh (float), HistLow (float), HistMean (float)
-    
-    We fetch each past year's matching date as a single-day window, collect
-    all hourly apparent_temperature readings, then compute per-hour min/max/mean.
     """
     all_rows = []
     for years_back in range(1, HISTORY_YEARS + 1):
@@ -120,19 +122,33 @@ def fetch_historical_band(today: datetime) -> pd.DataFrame:
     return band
 
 
+def get_temp_trend(df: pd.DataFrame, live_temp: float, current_hour: int) -> tuple[float | None, str | None]:
+    """
+    Compute the 1-hour temperature delta for the trend indicator.
+    Compares live_temp at current_hour against the forecast value at current_hour - 1.
+    Returns (delta, since_label) or (None, None) if prior hour data is unavailable.
+    """
+    if current_hour == 0:
+        return None, None
+    prior_hour = current_hour - 1
+    prior_rows = df[df["Hour"] == prior_hour]
+    if prior_rows.empty:
+        return None, None
+    prior_temp = prior_rows.iloc[0]["Temperature"]
+    delta = round(live_temp - prior_temp, 1)
+    since_label = f"since {prior_hour:02d}:00"
+    return delta, since_label
+
+
 def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_hour: int, hist_band: pd.DataFrame) -> alt.LayerChart:
     """Assemble the Altair line chart with actual/forecast/target layers plus historical band."""
-    # Inject live temp for current hour AFTER caching, so cache stays clean
     plot = df.copy()
     plot.loc[plot["Hour"] == current_hour, "Temperature"] = live_temp
 
-    # Status column
     plot["Status"] = plot["Hour"].apply(lambda h: "Actual" if h <= current_hour else "Forecast")
 
-    # Bridge row so line is visually continuous at the current hour
     bridge = plot[plot["Hour"] == current_hour].copy().assign(Status="Forecast")
 
-    # Target line
     target = pd.DataFrame({
         "Hour": range(24),
         "Temperature": [threshold] * 24,
@@ -172,14 +188,12 @@ def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_ho
         )
     )
 
-    # Current-hour dot
     dot = (
         alt.Chart(plot[plot["Hour"] == current_hour])
         .mark_circle(size=450, color="#00f2ff")
         .encode(x=x, y=y)
     )
 
-    # Label helpers (only on actuals to avoid duplicates on target layer)
     actuals = plot[plot["Status"] == "Actual"]
     hi = actuals["Temperature"].max()
     lo = actuals["Temperature"].min()
@@ -208,7 +222,6 @@ def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_ho
         .encode(x=x, y=y, text="Lab_Txt")
     )
 
-    # Historical band layers (rendered first so they sit behind everything)
     hist_layers = alt.layer()
     if not hist_band.empty:
         band_x = alt.X("Hour:Q")
@@ -294,7 +307,7 @@ api_key = _get_api_key()
 with st.spinner("Fetching latest weather data…"):
     try:
         df = fetch_forecast()
-        live_temp = fetch_live_temp(api_key)
+        live_temp, owm_station_name, owm_station_id = fetch_live_temp(api_key)
         hist_band = fetch_historical_band(now_mtn)
     except requests.RequestException as e:
         logger.error("Weather fetch failed: %s", e)
@@ -307,14 +320,26 @@ if df.empty:
 
 current_hour = now_mtn.hour
 
-# Metrics (compute AFTER we know live_temp so current hour is accurate)
+# Metrics
 actuals = df[df["Hour"] <= current_hour].copy()
 actuals.loc[actuals["Hour"] == current_hour, "Temperature"] = live_temp
 hi = actuals["Temperature"].max()
 lo = actuals["Temperature"].min()
 
+# 1-hour trend delta for "Feels Like Now"
+temp_delta, since_label = get_temp_trend(df, live_temp, current_hour)
+if temp_delta is not None:
+    delta_str = f"{temp_delta:+.1f}°F {since_label}"
+else:
+    delta_str = None
+
 m1, m2, m3 = st.columns(3)
-m1.metric("Feels Like Now", f"{live_temp}°F")
+m1.metric(
+    "Feels Like Now",
+    f"{live_temp}°F",
+    delta=delta_str,
+    delta_color="normal",   # green = warmer, red = cooler
+)
 m2.metric("Today's High (Feels Like)", f"{hi}°F")
 m3.metric("Today's Low (Feels Like)", f"{lo}°F")
 st.caption("🌡️ All temperatures are *feels like* (apparent temperature), accounting for wind chill and humidity.")
@@ -327,6 +352,34 @@ render_status_banner(live_temp, threshold, forecast_future, mode)
 # Chart
 st.altair_chart(build_chart(df, live_temp, threshold, current_hour, hist_band), use_container_width=True)
 
+# Data Sources
+st.write("---")
+with st.expander("📡 About the Data Sources"):
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown("""
+        **🌐 Open-Meteo** *(Forecast & Historical Band)*
+
+        Open-Meteo blends multiple global weather models. For this location it uses:
+        - **Forecast:** NOAA's GFS (Global Forecast System), updated every 6 hours
+        - **Historical (5yr band):** ERA5 reanalysis data from ECMWF/Copernicus — a fusion of satellite imagery, ground stations, weather balloons, and ocean buoys processed into a unified ~2.5 km grid
+
+        This is **not** a single local weather station — it's a gridded model interpolated for coordinates `40.3720°N, 105.0579°W`.
+        """)
+    with col_b:
+        st.markdown(f"""
+        **🏢 OpenWeatherMap** *(Live "Feels Like" Temperature)*
+
+        OWM aggregates data from multiple sources near your location:
+        - NWS (National Weather Service) reporting stations
+        - METAR airport observation data (likely **KFNL** — Fort Collins/Loveland Airport)
+        - Citizen/personal weather stations in the network
+
+        **Resolved station:** `{owm_station_name}` (OWM ID: `{owm_station_id}`)
+        The live temp refreshes every **60 seconds**.
+        """)
+    st.caption("💡 Because both sources use gridded or blended models, readings may differ slightly from a backyard weather station at The Farm's exact location.")
+
 # Roadmap
 st.write("---")
 st.subheader("🚀 Features Coming Soon")
@@ -336,10 +389,35 @@ with col1:
     **🌨️ Precipitation Tracker**
     * Real-time Rain/Snow probability.
     * Hourly accumulation forecasts.
+
+    **💧 Humidity**
+    * Current relative humidity.
+    * Hourly forecast trend.
+    * Dew point tracking.
+
+    **🌬️ Wind**
+    * Now, Min & Max speeds.
+    * Forecasted gusts.
+    * Direction (compass).
+    * Change in direction over time *(local unit: Corgi Spins 🐕)*.
+
+    **🌅 Sunrise / Sunset**
+    * Today's exact sunrise & sunset times.
+    * Golden hour window.
+    * Daylight duration & change from yesterday.
+
+    **☀️ Brightness**
+    * Cloud cover percentage & trend.
+    * UV Index with exposure guidance.
     """)
 with col2:
     st.markdown("""
     **🌬️ Summer Optimization**
     * **AM:** Too Warm, Time to Close the Windows.
     * **PM:** Cool Enough, Time to Open the Windows.
+
+    **🌫️ Air Quality Index (AQI)**
+    * Current AQI with health category label.
+    * Primary pollutant breakdown.
+    * Hourly AQI forecast trend.
     """)
