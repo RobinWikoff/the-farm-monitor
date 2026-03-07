@@ -1,13 +1,10 @@
 import streamlit as st
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 import pandas as pd
 import altair as alt
 from datetime import datetime, timedelta
 import pytz
 import logging
-import time
 
 # ---------------------------------------------------------------------------
 # CONFIG
@@ -26,8 +23,8 @@ METEO_URL = (
     f"&temperature_unit=fahrenheit"
     f"&timezone=auto"
 )
-METEO_ARCHIVE_BASE = "https://archive-api.open-meteo.com/v1/archive"
 OWM_BASE = "https://api.openweathermap.org/data/2.5/weather"
+VC_BASE = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline"
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +32,20 @@ logger = logging.getLogger(__name__)
 # HELPERS
 # ---------------------------------------------------------------------------
 def _get_api_key() -> str:
-    """Return API key from secrets; raise a clear error if missing."""
+    """Return OWM API key from secrets."""
     try:
         return st.secrets["WEATHER_API_KEY"]
-    except (KeyError, FileNotFoundError) as e:
+    except (KeyError, FileNotFoundError):
         st.error("⚠️ WEATHER_API_KEY not found in Streamlit secrets. Add it to `.streamlit/secrets.toml`.")
+        st.stop()
+
+
+def _get_vc_api_key() -> str:
+    """Return Visual Crossing API key from secrets."""
+    try:
+        return st.secrets["VISUAL_CROSSING_API_KEY"]
+    except (KeyError, FileNotFoundError):
+        st.error("⚠️ VISUAL_CROSSING_API_KEY not found in Streamlit secrets. Add it to `.streamlit/secrets.toml`.")
         st.stop()
 
 
@@ -79,30 +85,15 @@ def fetch_live_temp(api_key: str) -> tuple[float, str, str]:
     return feels_like, station_name, station_id
 
 
-def _make_retry_session() -> requests.Session:
-    """Create a requests session with exponential backoff retry on 429/5xx."""
-    session = requests.Session()
-    retry = Retry(
-        total=5,
-        backoff_factor=2,        # waits 2, 4, 8, 16, 32 seconds between retries
-        status_forcelist=[429, 500, 502, 503, 504],
-        respect_retry_after_header=True,
-    )
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount("https://", adapter)
-    return session
-
-
 @st.cache_data(ttl=86400)
-def fetch_historical_band(today: datetime) -> pd.DataFrame:
+def fetch_historical_band(today: datetime, vc_api_key: str) -> pd.DataFrame:
     """
     Fetch the same calendar day (month/day) across the past HISTORY_YEARS years
-    from Open-Meteo Archive API. Uses per-year requests with retry/backoff and
-    a small sleep between calls to stay under the free-tier rate limit.
+    using the Visual Crossing Timeline API — a single request per year, with
+    feelslike as the apparent temperature equivalent.
     Returns a DataFrame with columns: Hour (int), HistHigh (float), HistLow (float), HistMean (float)
     """
     today_naive = today.replace(tzinfo=None)
-    session = _make_retry_session()
     all_rows = []
 
     for years_back in range(1, HISTORY_YEARS + 1):
@@ -111,26 +102,29 @@ def fetch_historical_band(today: datetime) -> pd.DataFrame:
         except ValueError:
             past_date = today_naive.replace(month=2, day=28, year=today_naive.year - years_back)
         date_str = past_date.strftime("%Y-%m-%d")
+        location = f"{LAT},{LON}"
+        url = f"{VC_BASE}/{location}/{date_str}/{date_str}"
         params = {
-            "latitude": LAT,
-            "longitude": LON,
-            "start_date": date_str,
-            "end_date": date_str,
-            "hourly": "apparent_temperature",
-            "temperature_unit": "fahrenheit",
-            "timezone": "America/Denver",
+            "unitGroup": "us",
+            "include": "hours",
+            "elements": "datetime,feelslike",
+            "key": vc_api_key,
+            "contentType": "json",
         }
         try:
-            resp = session.get(METEO_ARCHIVE_BASE, params=params, timeout=15)
+            resp = requests.get(url, params=params, timeout=15)
             resp.raise_for_status()
             data = resp.json()
-            for t, temp in zip(data["hourly"]["time"], data["hourly"]["apparent_temperature"]):
-                if temp is not None:
-                    all_rows.append({"Hour": datetime.fromisoformat(t).hour, "Temperature": temp})
+            for day in data.get("days", []):
+                for hour in day.get("hours", []):
+                    temp = hour.get("feelslike")
+                    dt_str = hour.get("datetime", "")   # format: "HH:mm:ss"
+                    if temp is not None and dt_str:
+                        hour_int = int(dt_str.split(":")[0])
+                        all_rows.append({"Hour": hour_int, "Temperature": temp})
         except requests.RequestException as e:
             logger.warning("Historical fetch failed for %s: %s", date_str, e)
             continue
-        time.sleep(1)   # polite pause between calls to avoid rate limiting
 
     if not all_rows:
         return pd.DataFrame(columns=["Hour", "HistHigh", "HistLow", "HistMean"])
@@ -348,7 +342,8 @@ with st.spinner("Fetching latest weather data…"):
     try:
         df = fetch_forecast()
         live_temp, owm_station_name, owm_station_id = fetch_live_temp(api_key)
-        hist_band = fetch_historical_band(now_mtn)
+        vc_api_key = _get_vc_api_key()
+        hist_band = fetch_historical_band(now_mtn, vc_api_key)
     except requests.RequestException as e:
         logger.error("Weather fetch failed: %s", e)
         st.error(f"Could not reach weather API: {e}")
@@ -398,13 +393,20 @@ with st.expander("📡 About the Data Sources"):
     col_a, col_b = st.columns(2)
     with col_a:
         st.markdown("""
-        **🌐 Open-Meteo** *(Forecast & Historical Band)*
+        **🌐 Open-Meteo** *(Hourly Forecast)*
 
-        Open-Meteo blends multiple global weather models. For this location it uses:
-        - **Forecast:** NOAA's GFS (Global Forecast System), updated every 6 hours
-        - **Historical (5yr band):** ERA5 reanalysis data from ECMWF/Copernicus — a fusion of satellite imagery, ground stations, weather balloons, and ocean buoys processed into a unified ~2.5 km grid
+        Open-Meteo blends multiple global weather models. For forecasts it uses:
+        - **NOAA's GFS (Global Forecast System)**, updated every 6 hours
+        - Interpolated for coordinates `40.3720°N, 105.0579°W` at ~2.5 km grid resolution
 
-        This is **not** a single local weather station — it's a gridded model interpolated for coordinates `40.3720°N, 105.0579°W`.
+        This is **not** a single local weather station — it's a gridded model estimate.
+
+        **📅 Visual Crossing** *(5-Year Historical Band)*
+
+        The shaded historical band is sourced from Visual Crossing's Timeline API, which pulls from:
+        - NWS/NOAA weather station observations
+        - METAR airport reports and global reanalysis data
+        - Blended for accuracy at the requested coordinates
         """)
     with col_b:
         st.markdown(f"""
