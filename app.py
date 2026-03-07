@@ -157,11 +157,11 @@ def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_ho
 
     full = pd.concat([plot, bridge, target], ignore_index=True)
 
-    x = alt.X("Hour:Q", axis=alt.Axis(labelFontSize=12, titleFontSize=18, labelExpr="datum.value + ':00'", values=list(range(24)), labelAngle=-45))
+    x = alt.X("Hour:Q", axis=alt.Axis(labelFontSize=11, titleFontSize=14, labelExpr="datum.value + ':00'", values=list(range(0, 24, 2)), labelAngle=-45))
     y = alt.Y(
         "Temperature:Q",
-        scale=alt.Scale(zero=False, padding=60),
-        axis=alt.Axis(labelFontSize=16, titleFontSize=18, labelExpr="datum.value + '°F'"),
+        scale=alt.Scale(zero=False, padding=40),
+        axis=alt.Axis(labelFontSize=13, titleFontSize=14, labelExpr="datum.value + '°F'"),
     )
 
     color_scale = alt.Scale(
@@ -182,9 +182,16 @@ def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_ho
             color=alt.Color(
                 "Status:N",
                 scale=color_scale,
-                legend=alt.Legend(orient="bottom-left", labelFontSize=14, title=None),
+                legend=alt.Legend(
+                    orient="bottom",
+                    labelFontSize=12,
+                    title=None,
+                    columns=2,
+                    columnPadding=20,
+                    rowPadding=6,
+                ),
             ),
-            strokeDash=alt.StrokeDash("Status:N", scale=dash_scale),
+            strokeDash=alt.StrokeDash("Status:N", scale=dash_scale, legend=None),
         )
     )
 
@@ -213,12 +220,12 @@ def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_ho
 
     lbl_top = (
         alt.Chart(plot[plot["Lab_Pos"] == "Top"])
-        .mark_text(dy=-25, fontSize=16, fontWeight="bold", color="white")
+        .mark_text(dy=-22, fontSize=13, fontWeight="bold", color="white")
         .encode(x=x, y=y, text="Lab_Txt")
     )
     lbl_bot = (
         alt.Chart(plot[plot["Lab_Pos"] == "Bottom"])
-        .mark_text(dy=25, fontSize=16, fontWeight="bold", color="white", baseline="top")
+        .mark_text(dy=22, fontSize=13, fontWeight="bold", color="white", baseline="top")
         .encode(x=x, y=y, text="Lab_Txt")
     )
 
@@ -249,11 +256,19 @@ def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_ho
                 color=alt.Color(
                     "Status:N",
                     scale=color_scale,
-                    legend=alt.Legend(orient="bottom-left", labelFontSize=14, title=None),
+                    legend=alt.Legend(
+                        orient="bottom",
+                        labelFontSize=12,
+                        title=None,
+                        columns=2,
+                        columnPadding=20,
+                        rowPadding=6,
+                    ),
                 ),
                 strokeDash=alt.StrokeDash(
                     "Status:N",
                     scale=dash_scale,
+                    legend=None,
                 ),
             )
         )
@@ -383,41 +398,42 @@ with st.expander("📡 About the Data Sources"):
 # Roadmap
 st.write("---")
 st.subheader("🚀 Features Coming Soon")
-col1, col2 = st.columns(2)
-with col1:
-    st.markdown("""
-    **🌨️ Precipitation Tracker**
-    * Real-time Rain/Snow probability.
-    * Hourly accumulation forecasts.
+with st.expander("Click to expand"):
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("""
+        **🌨️ Precipitation Tracker**
+        * Real-time Rain/Snow probability.
+        * Hourly accumulation forecasts.
 
-    **💧 Humidity**
-    * Current relative humidity.
-    * Hourly forecast trend.
-    * Dew point tracking.
+        **💧 Humidity**
+        * Current relative humidity.
+        * Hourly forecast trend.
+        * Dew point tracking.
 
-    **🌬️ Wind**
-    * Now, Min & Max speeds.
-    * Forecasted gusts.
-    * Direction (compass).
-    * Change in direction over time *(local unit: Corgi Spins 🐕)*.
+        **🌬️ Wind**
+        * Now, Min & Max speeds.
+        * Forecasted gusts.
+        * Direction (compass).
+        * Change in direction over time *(local unit: Corgi Spins 🐕)*.
 
-    **🌅 Sunrise / Sunset**
-    * Today's exact sunrise & sunset times.
-    * Golden hour window.
-    * Daylight duration & change from yesterday.
+        **🌅 Sunrise / Sunset**
+        * Today's exact sunrise & sunset times.
+        * Golden hour window.
+        * Daylight duration & change from yesterday.
 
-    **☀️ Brightness**
-    * Cloud cover percentage & trend.
-    * UV Index with exposure guidance.
-    """)
-with col2:
-    st.markdown("""
-    **🌬️ Summer Optimization**
-    * **AM:** Too Warm, Time to Close the Windows.
-    * **PM:** Cool Enough, Time to Open the Windows.
+        **☀️ Brightness**
+        * Cloud cover percentage & trend.
+        * UV Index with exposure guidance.
+        """)
+    with col2:
+        st.markdown("""
+        **🌬️ Summer Optimization**
+        * **AM:** Too Warm, Time to Close the Windows.
+        * **PM:** Cool Enough, Time to Open the Windows.
 
-    **🌫️ Air Quality Index (AQI)**
-    * Current AQI with health category label.
-    * Primary pollutant breakdown.
-    * Hourly AQI forecast trend.
-    """)
+        **🌫️ Air Quality Index (AQI)**
+        * Current AQI with health category label.
+        * Primary pollutant breakdown.
+        * Hourly AQI forecast trend.
+        """)
