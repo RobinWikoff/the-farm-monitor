@@ -464,7 +464,9 @@ with st.expander("🚀 Features Coming Soon"):
 
         **🐱 Kitty Comfort Thresholds**
         * *Winter:* Warm enough outside? (above 32°F) · No big wind? · No rain or snow?
+        * *Winter alert:* Now Kitties are NOT comfortable — it did meet threshold but now is too cold, windy, or rainy.
         * *Summer:* Not too hot? (below 80°F) · No big wind? · No rain?
+        * *Summer alert:* Now Kitties are NOT comfortable — it did meet threshold but now it's too hot, windy, or rainy.
 
         **🌡️ Real vs. Feels Like Toggle**
         * Settings panel toggle to switch between actual air temperature and apparent (feels like) temperature across all readings and the chart.
