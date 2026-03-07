@@ -63,3 +63,4 @@ First named release. Added data sourcing transparency, live trend indicator, and
 - Updated temperature caption to include sun warmth alongside wind chill and humidity
 - Expanded "Features Coming Soon" roadmap with: Humidity, Wind (with Corgi Spin 🐕 local unit), Sunrise/Sunset, Brightness, AQI, Kitty Comfort Thresholds 🐱, Real vs. Feels Like Toggle
 - Removed `st.write("---")` divider between Data Sources and Features Coming Soon sections
+- Expanded Kitty Comfort Thresholds with alert states: Winter/Summer "Now Kitties are NOT comfortable" conditions (threshold was met but conditions have since worsened)
