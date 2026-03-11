@@ -2,6 +2,15 @@
 
 ---
 
+## v10 — Dev Label
+Added DEV indicator to browser tab and app heading when running in the dev environment.
+- Browser tab shows "The Farm [DEV]" in dev, "The Farm" in prod
+- App heading shows "The Farm: How's the Weather? — DEV" in dev
+- Reads `ENV = "dev"` from Streamlit secrets — absent in prod, no code change needed to distinguish environments
+- Closes #18
+
+---
+
 ## v9 — Remove Features Coming Soon Section
 Cleaned up the UI by removing the roadmap expander — all features are now tracked as GitHub Issues.
 - Removed "🚀 Features Coming Soon" expander and all roadmap content from `app.py`
