@@ -332,7 +332,7 @@ with st.spinner("Fetching latest weather data…"):
         df, live_temp = fetch_forecast_and_current(vc_api_key)
     except requests.RequestException as e:
         logger.error("Forecast fetch failed: %s", e)
-        st.error(f"Could not reach weather API: {e}")
+        st.error("Could not reach the weather API. Please try again in a few minutes.")
         st.stop()
 
     # Historical band — cached 7 days, falls back to session state if API is rate limited
