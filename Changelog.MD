@@ -2,6 +2,14 @@
 
 ---
 
+## v9 — Remove Features Coming Soon Section
+Cleaned up the UI by removing the roadmap expander — all features are now tracked as GitHub Issues.
+- Removed "🚀 Features Coming Soon" expander and all roadmap content from `app.py`
+- Roadmap is now fully managed in GitHub Issues with P1–P4 priority labels
+- Closes #14
+
+---
+
 ## v8 — Goodbye Open Meteo
 Moved forecast and live temperature entirely to Visual Crossing. Open-Meteo and OpenWeatherMap both removed.
 - Replaced `fetch_forecast` (Open-Meteo) and `fetch_live_temp` (OWM) with single `fetch_forecast_and_current()` call to Visual Crossing Timeline API
