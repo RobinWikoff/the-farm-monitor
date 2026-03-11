@@ -328,19 +328,28 @@ threshold = THRESHOLDS[mode]
 # Fetch data
 vc_api_key = _get_vc_api_key()
 with st.spinner("Fetching latest weather data…"):
+    # Forecast + current — fall back to session state if API is rate limited
     try:
         df, live_temp = fetch_forecast_and_current(vc_api_key)
+        if not df.empty:
+            st.session_state["df"] = df
+            st.session_state["live_temp"] = live_temp
     except requests.RequestException as e:
-        logger.error("Forecast fetch failed: %s", e)
-        st.error("Could not reach the weather API. Please try again in a few minutes.")
-        st.stop()
+        logger.warning("Forecast fetch failed, using cached fallback: %s", e)
+        df = st.session_state.get("df", pd.DataFrame())
+        live_temp = st.session_state.get("live_temp", None)
+        if df.empty or live_temp is None:
+            st.error("Could not reach the weather API and no cached data is available. Please try again in a few minutes.")
+            st.stop()
+        else:
+            st.warning("⚠️ Weather API temporarily unavailable — showing last known data.")
 
     # Historical band — cached 7 days, falls back to session state if API is rate limited
     today_str = now_mtn.strftime("%Y-%m-%d")
     try:
         hist_band = fetch_historical_band(today_str, vc_api_key)
         if not hist_band.empty:
-            st.session_state["hist_band"] = hist_band  # save last known good
+            st.session_state["hist_band"] = hist_band
     except requests.RequestException as e:
         logger.warning("Historical band fetch failed, using cached fallback: %s", e)
         hist_band = st.session_state.get("hist_band", pd.DataFrame(columns=["Hour", "HistHigh", "HistLow", "HistMean"]))
