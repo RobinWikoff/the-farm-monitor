@@ -310,8 +310,12 @@ def render_status_banner(live_temp: float, threshold: float, forecast_future: pd
 # ---------------------------------------------------------------------------
 # APP
 # ---------------------------------------------------------------------------
-st.set_page_config(page_title="The Farm", page_icon="🏔️", layout="wide")
-st.title("The Farm: How's the Weather?")
+_env = st.secrets.get("ENV", "prod")
+_is_dev = _env == "dev"
+_page_title = "The Farm [DEV]" if _is_dev else "The Farm"
+
+st.set_page_config(page_title=_page_title, page_icon="🏔️", layout="wide")
+st.title("The Farm: How's the Weather?" + (" — DEV" if _is_dev else ""))
 
 now_mtn = datetime.now(LOCAL_TZ)
 st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
