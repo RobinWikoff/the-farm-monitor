@@ -2,6 +2,15 @@
 
 ---
 
+## v12 — App Shows Blank Screen When API Rate Limited
+Added session state fallback for forecast and live temp data so the app degrades gracefully when Visual Crossing is rate limited.
+- Forecast and live temp now saved to session state on every successful load
+- If API returns 429, app shows last known good data with a yellow warning banner
+- If API returns 429 AND no session state exists, shows a clear error message instead of blank screen
+- Closes #20 (pending verification after quota reset)
+
+---
+
 ## v11 — Today_Naive Was A Ghost
 Fixed recurring historical band disappearance, extended caching, added session state fallback, and patched API key exposure in error messages.
 - Fixed `today_naive` reference bug in `fetch_historical_band` — variable was removed in a previous patch but still referenced, causing silent crashes
