@@ -2,6 +2,17 @@
 
 ---
 
+## v11 — Today_Naive Was A Ghost
+Fixed recurring historical band disappearance, extended caching, added session state fallback, and patched API key exposure in error messages.
+- Fixed `today_naive` reference bug in `fetch_historical_band` — variable was removed in a previous patch but still referenced, causing silent crashes
+- Extended historical band cache TTL from 24 hours to 7 days — 5-year historical data barely changes, cuts Visual Crossing record usage by 7x
+- Added session state fallback for historical band — if VC is rate limited, app shows last known good band instead of crashing
+- Extended forecast cache from 5 to 10 minutes to reduce API calls
+- Sanitized error messages — API errors no longer display full request URL (which included the API key)
+- Closes #15, Closes #19
+
+---
+
 ## v10 — Dev Label
 Added DEV indicator to browser tab and app heading when running in the dev environment.
 - Browser tab shows "The Farm [DEV]" in dev, "The Farm" in prod

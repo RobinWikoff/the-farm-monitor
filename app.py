@@ -32,7 +32,7 @@ def _get_vc_api_key() -> str:
         st.stop()
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=600)
 def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, float]:
     """
     Fetch today's hourly feelslike forecast AND current conditions from
@@ -70,22 +70,22 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, float]:
     return forecast_df, live_temp
 
 
-@st.cache_data(ttl=86400)
-def fetch_historical_band(today: datetime, vc_api_key: str) -> pd.DataFrame:
+@st.cache_data(ttl=604800)  # 7-day TTL — historical data barely changes
+def fetch_historical_band(today_str: str, vc_api_key: str) -> pd.DataFrame:
     """
     Fetch the same calendar day (month/day) across the past HISTORY_YEARS years
-    using the Visual Crossing Timeline API — a single request per year, with
-    feelslike as the apparent temperature equivalent.
+    using the Visual Crossing Timeline API — one request per year.
+    today_str format: YYYY-MM-DD — string keeps cache key stable all day.
     Returns a DataFrame with columns: Hour (int), HistHigh (float), HistLow (float), HistMean (float)
     """
-    today_naive = today.replace(tzinfo=None)
+    today = datetime.strptime(today_str, "%Y-%m-%d")
     all_rows = []
 
     for years_back in range(1, HISTORY_YEARS + 1):
         try:
-            past_date = today_naive.replace(year=today_naive.year - years_back)
+            past_date = today.replace(year=today.year - years_back)
         except ValueError:
-            past_date = today_naive.replace(month=2, day=28, year=today_naive.year - years_back)
+            past_date = today.replace(month=2, day=28, year=today.year - years_back)
         date_str = past_date.strftime("%Y-%m-%d")
         location = f"{LAT},{LON}"
         url = f"{VC_BASE}/{location}/{date_str}/{date_str}"
@@ -330,11 +330,22 @@ vc_api_key = _get_vc_api_key()
 with st.spinner("Fetching latest weather data…"):
     try:
         df, live_temp = fetch_forecast_and_current(vc_api_key)
-        hist_band = fetch_historical_band(now_mtn, vc_api_key)
     except requests.RequestException as e:
-        logger.error("Weather fetch failed: %s", e)
-        st.error(f"Could not reach weather API: {e}")
+        logger.error("Forecast fetch failed: %s", e)
+        st.error("Could not reach the weather API. Please try again in a few minutes.")
         st.stop()
+
+    # Historical band — cached 7 days, falls back to session state if API is rate limited
+    today_str = now_mtn.strftime("%Y-%m-%d")
+    try:
+        hist_band = fetch_historical_band(today_str, vc_api_key)
+        if not hist_band.empty:
+            st.session_state["hist_band"] = hist_band  # save last known good
+    except requests.RequestException as e:
+        logger.warning("Historical band fetch failed, using cached fallback: %s", e)
+        hist_band = st.session_state.get("hist_band", pd.DataFrame(columns=["Hour", "HistHigh", "HistLow", "HistMean"]))
+        if hist_band.empty:
+            st.caption("⚠️ Historical band temporarily unavailable.")
 
 if df.empty:
     st.warning("No forecast data available for today.")
