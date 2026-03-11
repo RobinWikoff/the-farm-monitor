@@ -7,7 +7,7 @@ Added session state fallback for forecast and live temp data so the app degrades
 - Forecast and live temp now saved to session state on every successful load
 - If API returns 429, app shows last known good data with a yellow warning banner
 - If API returns 429 AND no session state exists, shows a clear error message instead of blank screen
-- Closes #20 (pending verification after quota reset)
+- Closes #20
 
 ---
 
@@ -18,7 +18,8 @@ Fixed recurring historical band disappearance, extended caching, added session s
 - Added session state fallback for historical band — if VC is rate limited, app shows last known good band instead of crashing
 - Extended forecast cache from 5 to 10 minutes to reduce API calls
 - Sanitized error messages — API errors no longer display full request URL (which included the API key)
-- Closes #15, Closes #19
+- Closes #19
+- Note: #15 (historical band disappearing) pending verification after quota reset
 
 ---
 
