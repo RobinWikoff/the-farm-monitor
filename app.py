@@ -71,14 +71,15 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, float]:
 
 
 @st.cache_data(ttl=86400)
-def fetch_historical_band(today: datetime, vc_api_key: str) -> pd.DataFrame:
+def fetch_historical_band(today_str: str, vc_api_key: str) -> pd.DataFrame:
+    """today_str format: YYYY-MM-DD — using string keeps cache key stable all day."""
+    today = datetime.strptime(today_str, "%Y-%m-%d")
     """
     Fetch the same calendar day (month/day) across the past HISTORY_YEARS years
     using the Visual Crossing Timeline API — a single request per year, with
     feelslike as the apparent temperature equivalent.
     Returns a DataFrame with columns: Hour (int), HistHigh (float), HistLow (float), HistMean (float)
     """
-    today_naive = today.replace(tzinfo=None)
     all_rows = []
 
     for years_back in range(1, HISTORY_YEARS + 1):
@@ -330,7 +331,7 @@ vc_api_key = _get_vc_api_key()
 with st.spinner("Fetching latest weather data…"):
     try:
         df, live_temp = fetch_forecast_and_current(vc_api_key)
-        hist_band = fetch_historical_band(now_mtn, vc_api_key)
+        hist_band = fetch_historical_band(now_mtn.strftime("%Y-%m-%d"), vc_api_key)
     except requests.RequestException as e:
         logger.error("Weather fetch failed: %s", e)
         st.error(f"Could not reach weather API: {e}")
