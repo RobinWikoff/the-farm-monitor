@@ -338,14 +338,14 @@ def render_status_banner(live_temp: float, threshold: float, forecast_future: pd
     if is_winter:
         title = "❄️ Winter Warming Mode"
         if live_temp >= threshold:
-            st.success(f"✅ {title}: {live_temp}°F (threshold {threshold}°F). Setpoint reached; stop heating.")
+            st.success(f"✅ {title}: {live_temp}°F (threshold {threshold}°F). It's warm outside; maybe wear shorts!")
         else:
             hits = forecast_future[forecast_future["Temperature"] >= threshold]
             if not hits.empty:
                 forecast_hour = int(hits.iloc[0]["Hour"])
-                st.info(f"⏳ {title}: {live_temp}°F, warming to {threshold}°F by {forecast_hour:02d}:00. Delta {delta:+.1f}°F.")
+                st.info(f"⏳ {title}: {live_temp}°F, warming to {threshold}°F by {forecast_hour:02d}:00. Delta {delta:+.1f}°F. Then it will be warm.")
             else:
-                st.warning(f"❄️ {title}: {live_temp}°F is below {threshold}°F and forecast does not reach target today.")
+                st.warning(f"❄️ {title}: {live_temp}°F is below {threshold}°F and forecast says it won't be warm today.")
     else:
         title = "☀️ Summer Cooling Mode"
         if live_temp <= threshold:
