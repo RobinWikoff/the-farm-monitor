@@ -33,18 +33,18 @@ def _get_vc_api_key() -> str:
 
 
 @st.cache_data(ttl=600)
-def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, float]:
+def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
     """
-    Fetch today's hourly feelslike forecast AND current conditions from
+    Fetch today's hourly forecast AND current conditions from
     Visual Crossing Timeline API in a single call.
-    Returns (forecast_df, live_temp) where forecast_df has columns: Hour (int), Temperature (float).
+    Returns (forecast_df, live_temp) where forecast_df has columns: Hour (int), Actual (float), FeelsLike (float).
     """
     location = f"{LAT},{LON}"
     url = f"{VC_BASE}/{location}/today"
     params = {
         "unitGroup": "us",
         "include": "hours,current",
-        "elements": "datetime,feelslike",
+        "elements": "datetime,temp,feelslike",
         "key": vc_api_key,
         "contentType": "json",
         "timezone": "America/Denver",
@@ -57,15 +57,31 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, float]:
     rows = []
     for day in data.get("days", []):
         for hour in day.get("hours", []):
-            temp = hour.get("feelslike")
+            actual = hour.get("temp")
+            feelslike = hour.get("feelslike")
             dt_str = hour.get("datetime", "")  # "HH:mm:ss"
-            if temp is not None and dt_str:
-                rows.append({"Hour": int(dt_str.split(":")[0]), "Temperature": round(temp, 1)})
+            if dt_str and actual is not None and feelslike is not None:
+                rows.append({
+                    "Hour": int(dt_str.split(":")[0]),
+                    "Actual": round(actual, 1),
+                    "FeelsLike": round(feelslike, 1),
+                })
     forecast_df = pd.DataFrame(rows)
 
     # Current conditions
     current = data.get("currentConditions", {})
-    live_temp = round(current.get("feelslike", forecast_df.iloc[-1]["Temperature"]), 1)
+    live_actual = current.get("temp")
+    live_feelslike = current.get("feelslike")
+
+    if live_actual is None and not forecast_df.empty:
+        live_actual = forecast_df.iloc[-1]["Actual"]
+    if live_feelslike is None and not forecast_df.empty:
+        live_feelslike = forecast_df.iloc[-1]["FeelsLike"]
+
+    live_temp = {
+        "Actual": round(live_actual, 1) if live_actual is not None else None,
+        "FeelsLike": round(live_feelslike, 1) if live_feelslike is not None else None,
+    }
 
     return forecast_df, live_temp
 
@@ -92,7 +108,7 @@ def fetch_historical_band(today_str: str, vc_api_key: str) -> pd.DataFrame:
         params = {
             "unitGroup": "us",
             "include": "hours",
-            "elements": "datetime,feelslike",
+            "elements": "datetime,temp,feelslike",
             "key": vc_api_key,
             "contentType": "json",
         }
@@ -102,27 +118,56 @@ def fetch_historical_band(today_str: str, vc_api_key: str) -> pd.DataFrame:
             data = resp.json()
             for day in data.get("days", []):
                 for hour in day.get("hours", []):
-                    temp = hour.get("feelslike")
+                    actual = hour.get("temp")
+                    feelslike = hour.get("feelslike")
                     dt_str = hour.get("datetime", "")   # format: "HH:mm:ss"
-                    if temp is not None and dt_str:
+                    if actual is not None and feelslike is not None and dt_str:
                         hour_int = int(dt_str.split(":")[0])
-                        all_rows.append({"Hour": hour_int, "Temperature": temp})
+                        all_rows.append({
+                            "Hour": hour_int,
+                            "Actual": actual,
+                            "FeelsLike": feelslike,
+                        })
         except requests.RequestException as e:
             logger.warning("Historical fetch failed for %s: %s", date_str, e)
             continue
 
     if not all_rows:
-        return pd.DataFrame(columns=["Hour", "HistHigh", "HistLow", "HistMean"])
+        return pd.DataFrame(
+            columns=[
+                "Hour",
+                "ActualHigh",
+                "ActualLow",
+                "ActualMean",
+                "FeelsLikeHigh",
+                "FeelsLikeLow",
+                "FeelsLikeMean",
+            ]
+        )
 
     hist_df = pd.DataFrame(all_rows)
     band = (
-        hist_df.groupby("Hour")["Temperature"]
-        .agg(HistHigh="max", HistLow="min", HistMean="mean")
+        hist_df.groupby("Hour").agg(
+            ActualHigh=("Actual", "max"),
+            ActualLow=("Actual", "min"),
+            ActualMean=("Actual", "mean"),
+            FeelsLikeHigh=("FeelsLike", "max"),
+            FeelsLikeLow=("FeelsLike", "min"),
+            FeelsLikeMean=("FeelsLike", "mean"),
+        )
         .reset_index()
     )
-    band["HistHigh"] = band["HistHigh"].round(1)
-    band["HistLow"] = band["HistLow"].round(1)
-    band["HistMean"] = band["HistMean"].round(1)
+
+    for c in [
+        "ActualHigh",
+        "ActualLow",
+        "ActualMean",
+        "FeelsLikeHigh",
+        "FeelsLikeLow",
+        "FeelsLikeMean",
+    ]:
+        band[c] = band[c].round(1)
+
     return band
 
 
@@ -287,24 +332,31 @@ def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_ho
 
 def render_status_banner(live_temp: float, threshold: float, forecast_future: pd.DataFrame, mode: str) -> None:
     """Show contextual warming/cooling status banner."""
-    if "Winter" in mode:
+    is_winter = "Winter" in mode
+    delta = round(live_temp - threshold, 1)
+
+    if is_winter:
+        title = "❄️ Winter Warming Mode"
         if live_temp >= threshold:
-            st.success(f"✅ Above target ({threshold}°F). House warming active.")
+            st.success(f"✅ {title}: {live_temp}°F (threshold {threshold}°F). Setpoint reached; stop heating.")
         else:
             hits = forecast_future[forecast_future["Temperature"] >= threshold]
             if not hits.empty:
-                st.info(f"⏳ Warming: Reaching {threshold}°F at {hits.iloc[0]['Hour']}:00")
+                forecast_hour = int(hits.iloc[0]["Hour"])
+                st.info(f"⏳ {title}: {live_temp}°F, warming to {threshold}°F by {forecast_hour:02d}:00. Delta {delta:+.1f}°F.")
             else:
-                st.warning(f"❄️ Alert: Remaining below {threshold}°F today.")
+                st.warning(f"❄️ {title}: {live_temp}°F is below {threshold}°F and forecast does not reach target today.")
     else:
+        title = "☀️ Summer Cooling Mode"
         if live_temp <= threshold:
-            st.success(f"✅ Below target ({threshold}°F). Open windows.")
+            st.success(f"✅ {title}: {live_temp}°F (threshold {threshold}°F). Cooling target met.")
         else:
             hits = forecast_future[forecast_future["Temperature"] <= threshold]
             if not hits.empty:
-                st.info(f"🌡️ Cooling: Dropping to {threshold}°F at {hits.iloc[0]['Hour']}:00")
+                forecast_hour = int(hits.iloc[0]["Hour"])
+                st.info(f"🌡️ {title}: {live_temp}°F, cooling to {threshold}°F by {forecast_hour:02d}:00. Delta {delta:+.1f}°F.")
             else:
-                st.warning(f"🔥 Alert: Staying above {threshold}°F today.")
+                st.warning(f"🔥 {title}: {live_temp}°F stays above {threshold}°F with no cooling target ahead today.")
 
 
 # ---------------------------------------------------------------------------
@@ -324,6 +376,11 @@ st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
 st.sidebar.title("Settings")
 mode = st.sidebar.selectbox("Monitoring Mode", list(THRESHOLDS.keys()))
 threshold = THRESHOLDS[mode]
+
+# Temperature operand toggle (actual vs feels like)
+temp_mode = st.sidebar.radio("Temperature Type", ["Feels Like", "Actual"])
+selected_temp_key = "FeelsLike" if temp_mode == "Feels Like" else "Actual"
+selected_metric_title = f"{temp_mode} Now"
 
 # Fetch data
 vc_api_key = _get_vc_api_key()
@@ -360,39 +417,71 @@ if df.empty:
     st.warning("No forecast data available for today.")
     st.stop()
 
+# Choose dataset for display mode (actual or feels like)
+if selected_temp_key not in df.columns:
+    st.error(f"Selected temperature key '{selected_temp_key}' is not available in fetched data.")
+    st.stop()
+
+df_display = df[["Hour", selected_temp_key]].rename(columns={selected_temp_key: "Temperature"}).copy()
+selected_live_temp = live_temp.get(selected_temp_key)
+if selected_live_temp is None:
+    st.error(f"Selected latest temperature value for '{selected_temp_key}' is unavailable.")
+    st.stop()
+
+if hist_band.empty:
+    hist_band_display = hist_band
+else:
+    if selected_temp_key == "Actual":
+        hist_band_display = hist_band[["Hour", "ActualHigh", "ActualLow", "ActualMean"]].rename(
+            columns={
+                "ActualHigh": "HistHigh",
+                "ActualLow": "HistLow",
+                "ActualMean": "HistMean",
+            }
+        )
+    else:
+        hist_band_display = hist_band[["Hour", "FeelsLikeHigh", "FeelsLikeLow", "FeelsLikeMean"]].rename(
+            columns={
+                "FeelsLikeHigh": "HistHigh",
+                "FeelsLikeLow": "HistLow",
+                "FeelsLikeMean": "HistMean",
+            }
+        )
+
 current_hour = now_mtn.hour
 
 # Metrics
-actuals = df[df["Hour"] <= current_hour].copy()
-actuals.loc[actuals["Hour"] == current_hour, "Temperature"] = live_temp
+actuals = df_display[df_display["Hour"] <= current_hour].copy()
+actuals.loc[actuals["Hour"] == current_hour, "Temperature"] = selected_live_temp
 hi = actuals["Temperature"].max()
 lo = actuals["Temperature"].min()
 
-# 1-hour trend delta for "Feels Like Now"
-temp_delta, since_label = get_temp_trend(df, live_temp, current_hour)
-if temp_delta is not None:
-    delta_str = f"{temp_delta:+.1f}°F {since_label}"
+# 1-hour trend delta
+trend_delta, since_label = get_temp_trend(df_display, selected_live_temp, current_hour)
+if trend_delta is not None:
+    delta_str = f"{trend_delta:+.1f}°F {since_label}"
 else:
     delta_str = None
 
 m1, m2, m3 = st.columns(3)
 m1.metric(
-    "Feels Like Now",
-    f"{live_temp}°F",
+    selected_metric_title,
+    f"{selected_live_temp}°F",
     delta=delta_str,
-    delta_color="normal",   # green = warmer, red = cooler
+    delta_color="normal",
 )
-m2.metric("Today's High (Feels Like)", f"{hi}°F")
-m3.metric("Today's Low (Feels Like)", f"{lo}°F")
-st.caption("🌡️ All temperatures are *feels like* (apparent temperature), accounting for wind chill, humidity, and sun warmth.")
+m2.metric(f"Today's High ({temp_mode})", f"{hi}°F")
+m3.metric(f"Today's Low ({temp_mode})", f"{lo}°F")
+caption_heat = "apparent temperature" if selected_temp_key == "FeelsLike" else "actual air temperature"
+st.caption(f"🌡️ All temperatures are shown as {caption_heat}.")
 
 # Status banner
-forecast_future = df[df["Hour"] >= current_hour].copy()
-forecast_future.loc[forecast_future["Hour"] == current_hour, "Temperature"] = live_temp
-render_status_banner(live_temp, threshold, forecast_future, mode)
+forecast_future = df_display[df_display["Hour"] >= current_hour].copy()
+forecast_future.loc[forecast_future["Hour"] == current_hour, "Temperature"] = selected_live_temp
+render_status_banner(selected_live_temp, threshold, forecast_future, mode)
 
 # Chart
-st.altair_chart(build_chart(df, live_temp, threshold, current_hour, hist_band), width="stretch")
+st.altair_chart(build_chart(df_display, selected_live_temp, threshold, current_hour, hist_band_display), width="stretch")
 
 # Data Sources
 st.write("---")
@@ -417,7 +506,7 @@ with st.expander("📡 About the Data Sources"):
         """)
     with col_b:
         st.markdown("""
-        **🏢 Visual Crossing** *(Live "Feels Like" & Forecast)*
+        **🏢 Visual Crossing** *(Live Actual & Feels Like Forecast)*
 
         Visual Crossing blends data from multiple trusted sources:
         - NWS/NOAA weather station observations
