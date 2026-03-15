@@ -1,6 +1,26 @@
 # The Farm: Comfort Temperature Monitor — Changelog
 
----
+## [Unreleased] - 2026-03-15
+### Fixed
+- Issue #17: Improved status banner copy for all modes:
+  - Cool Months: warm focus, cool-but-getting-warm, cool-all-day.
+  - Warm Months: cool focus, warm-but-getting-cool, warm-all-day.
+
+## 2026-03-15
+### Added
+- Added real vs actual temperature toggle to the dashboard.
+
+### Fixed
+- Fixed `.streamlit/secrets.toml` parsing issue (unbalanced quotes).
+- Resolved `StreamlitSecretNotFoundError` for `VISUAL_CROSSING_API_KEY`.
+- Clarified local dev startup port discovery process and improved startup reliability.
+
+### Changed
+- Streamlit run command documentation updated for explicit port fallback (`--server.port`).
+- Updated secrets handling guidance: use secure env secrets in production, `.streamlit/secrets.toml` for local dev.
+
+### Notes
+- `VISUAL_CROSSING_API_KEY` should be stored in CI/CD/host secret manager for production deploys.
 
 ## v12 — App Shows Blank Screen When API Rate Limited
 Added session state fallback for forecast and live temp data so the app degrades gracefully when Visual Crossing is rate limited.
