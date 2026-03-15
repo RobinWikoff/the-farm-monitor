@@ -336,27 +336,27 @@ def render_status_banner(live_temp: float, threshold: float, forecast_future: pd
     delta = round(live_temp - threshold, 1)
 
     if is_winter:
-        title = "❄️ Winter Warming Mode"
+        title = "❄️ Cool Months"
         if live_temp >= threshold:
-            st.success(f"✅ {title}: {live_temp}°F (threshold {threshold}°F). It's warm outside; maybe wear shorts!")
+            st.success(f"✅ {title}: It's warm outside; maybe wear shorts! {live_temp}°F (threshold {threshold}°F).")
         else:
             hits = forecast_future[forecast_future["Temperature"] >= threshold]
             if not hits.empty:
                 forecast_hour = int(hits.iloc[0]["Hour"])
-                st.info(f"⏳ {title}: {live_temp}°F, warming to {threshold}°F by {forecast_hour:02d}:00. Delta {delta:+.1f}°F. Then it will be warm.")
+                st.info(f"⏳ {title}: It's cool now and will be warm later: {live_temp}°F, warming to {threshold}°F by {forecast_hour:02d}:00. Delta {delta:+.1f}°F.")
             else:
-                st.warning(f"❄️ {title}: {live_temp}°F is below {threshold}°F and forecast says it won't be warm today.")
+                st.warning(f"❄️ {title}: It's cool now and won't be warm later: {live_temp}°F is below {threshold}°F.")
     else:
-        title = "☀️ Summer Cooling Mode"
+        title = "☀️ Warm Months"
         if live_temp <= threshold:
-            st.success(f"✅ {title}: {live_temp}°F (threshold {threshold}°F). Cooling target met.")
+            st.success(f"✅ {title}: It's cool outside! Windows Open: {live_temp}°F (threshold {threshold}°F). Cooling target met.")
         else:
             hits = forecast_future[forecast_future["Temperature"] <= threshold]
             if not hits.empty:
                 forecast_hour = int(hits.iloc[0]["Hour"])
-                st.info(f"🌡️ {title}: {live_temp}°F, cooling to {threshold}°F by {forecast_hour:02d}:00. Delta {delta:+.1f}°F.")
+                st.info(f"🌡️ {title}: Its' warm out and will be cool later: {live_temp}°F, cooling to {threshold}°F by {forecast_hour:02d}:00. Delta {delta:+.1f}°F.")
             else:
-                st.warning(f"🔥 {title}: {live_temp}°F stays above {threshold}°F with no cooling target ahead today.")
+                st.warning(f"🔥 {title}: It's warm outside and won't be cool later: {live_temp}°F stays above {threshold}°F.")
 
 
 # ---------------------------------------------------------------------------
