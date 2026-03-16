@@ -146,6 +146,25 @@ def test_fetch_historical_band_partial_failure_still_aggregates(monkeypatch):
     assert row_h0["WindSpeedMean"] == 5.0
 
 
+def test_fetch_historical_band_stops_after_first_429(monkeypatch):
+    call_count = 0
+
+    def fake_get(url, params, timeout):
+        nonlocal call_count
+        call_count += 1
+        error = app.requests.HTTPError("429 Client Error")
+        error.response = type("Response", (), {"status_code": 429})()
+        raise error
+
+    monkeypatch.setattr(app, "HISTORY_YEARS", 5)
+    monkeypatch.setattr(app.requests, "get", fake_get)
+
+    band = app.fetch_historical_band.__wrapped__("2025-03-16", "fake-key")
+
+    assert band.empty
+    assert call_count == 1
+
+
 def test_build_chart_layers_without_hist_band():
     df = pd.DataFrame(
         {
