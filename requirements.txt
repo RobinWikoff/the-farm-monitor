@@ -3,3 +3,4 @@ pandas
 requests
 altair<5
 pytz
+pytest
