@@ -23,6 +23,14 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # HELPERS
 # ---------------------------------------------------------------------------
+def wind_degree_to_cardinal(degrees: float | None) -> str:
+    if degrees is None:
+        return "Unknown"
+    dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+    idx = int(((degrees + 22.5) % 360) / 45)
+    return dirs[idx]
+
+
 def _get_vc_api_key() -> str:
     """Return Visual Crossing API key from secrets."""
     try:
@@ -44,7 +52,7 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
     params = {
         "unitGroup": "us",
         "include": "hours,current",
-        "elements": "datetime,temp,feelslike",
+        "elements": "datetime,temp,feelslike,windspeed,wdir",
         "key": vc_api_key,
         "contentType": "json",
         "timezone": "America/Denver",
@@ -59,12 +67,18 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
         for hour in day.get("hours", []):
             actual = hour.get("temp")
             feelslike = hour.get("feelslike")
+            windspeed = hour.get("windspeed")
+            winddeg = hour.get("wdir")
             dt_str = hour.get("datetime", "")  # "HH:mm:ss"
-            if dt_str and actual is not None and feelslike is not None:
+            if dt_str and actual is not None and feelslike is not None and windspeed is not None and winddeg is not None:
+                hour_int = int(dt_str.split(":")[0])
                 rows.append({
-                    "Hour": int(dt_str.split(":")[0]),
+                    "Hour": hour_int,
                     "Actual": round(actual, 1),
                     "FeelsLike": round(feelslike, 1),
+                    "WindSpeed": round(windspeed, 1),
+                    "WindDeg": round(winddeg, 1),
+                    "WindDir": wind_degree_to_cardinal(winddeg),
                 })
     forecast_df = pd.DataFrame(rows)
 
@@ -72,15 +86,24 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
     current = data.get("currentConditions", {})
     live_actual = current.get("temp")
     live_feelslike = current.get("feelslike")
+    live_windspeed = current.get("windspeed")
+    live_winddeg = current.get("wdir")
 
     if live_actual is None and not forecast_df.empty:
         live_actual = forecast_df.iloc[-1]["Actual"]
     if live_feelslike is None and not forecast_df.empty:
         live_feelslike = forecast_df.iloc[-1]["FeelsLike"]
+    if live_windspeed is None and not forecast_df.empty:
+        live_windspeed = forecast_df.iloc[-1]["WindSpeed"]
+    if live_winddeg is None and not forecast_df.empty:
+        live_winddeg = forecast_df.iloc[-1]["WindDeg"]
 
     live_temp = {
         "Actual": round(live_actual, 1) if live_actual is not None else None,
         "FeelsLike": round(live_feelslike, 1) if live_feelslike is not None else None,
+        "WindSpeed": round(live_windspeed, 1) if live_windspeed is not None else None,
+        "WindDeg": round(live_winddeg, 1) if live_winddeg is not None else None,
+        "WindDir": wind_degree_to_cardinal(live_winddeg) if live_winddeg is not None else "Unknown",
     }
 
     return forecast_df, live_temp
@@ -108,7 +131,7 @@ def fetch_historical_band(today_str: str, vc_api_key: str) -> pd.DataFrame:
         params = {
             "unitGroup": "us",
             "include": "hours",
-            "elements": "datetime,temp,feelslike",
+            "elements": "datetime,temp,feelslike,windspeed",
             "key": vc_api_key,
             "contentType": "json",
         }
@@ -120,13 +143,15 @@ def fetch_historical_band(today_str: str, vc_api_key: str) -> pd.DataFrame:
                 for hour in day.get("hours", []):
                     actual = hour.get("temp")
                     feelslike = hour.get("feelslike")
+                    windspeed = hour.get("windspeed")
                     dt_str = hour.get("datetime", "")   # format: "HH:mm:ss"
-                    if actual is not None and feelslike is not None and dt_str:
+                    if actual is not None and feelslike is not None and windspeed is not None and dt_str:
                         hour_int = int(dt_str.split(":")[0])
                         all_rows.append({
                             "Hour": hour_int,
                             "Actual": actual,
                             "FeelsLike": feelslike,
+                            "WindSpeed": windspeed,
                         })
         except requests.RequestException as e:
             logger.warning("Historical fetch failed for %s: %s", date_str, e)
@@ -154,6 +179,9 @@ def fetch_historical_band(today_str: str, vc_api_key: str) -> pd.DataFrame:
             FeelsLikeHigh=("FeelsLike", "max"),
             FeelsLikeLow=("FeelsLike", "min"),
             FeelsLikeMean=("FeelsLike", "mean"),
+            WindSpeedHigh=("WindSpeed", "max"),
+            WindSpeedLow=("WindSpeed", "min"),
+            WindSpeedMean=("WindSpeed", "mean"),
         )
         .reset_index()
     )
@@ -165,6 +193,9 @@ def fetch_historical_band(today_str: str, vc_api_key: str) -> pd.DataFrame:
         "FeelsLikeHigh",
         "FeelsLikeLow",
         "FeelsLikeMean",
+        "WindSpeedHigh",
+        "WindSpeedLow",
+        "WindSpeedMean",
     ]:
         band[c] = band[c].round(1)
 
@@ -357,161 +388,218 @@ def render_status_banner(live_temp: float, threshold: float, forecast_future: pd
                 st.warning(f"It's warm outside and won't be cool later: {live_temp}°F stays above {threshold}°F. -- Warm Months")
 
 
+def render_wind_banner(wind_speed: float | None, wind_dir: str | None) -> None:
+    """Show current wind status banner."""
+    if wind_speed is None or wind_dir is None:
+        st.warning("Wind information is currently unavailable.")
+        return
+    st.markdown(f"**Wind Speed Now:** {wind_speed} mph | **Wind Direction:** {wind_dir}")
+
+
+def build_wind_chart(df: pd.DataFrame, current_hour: int, hist_band: pd.DataFrame) -> alt.LayerChart:
+    wind_df = df.copy()
+    wind_df["Status"] = wind_df["Hour"].apply(lambda h: "Actual" if h <= current_hour else "Forecast")
+
+    wind_line = alt.Chart(wind_df).mark_line(strokeWidth=4).encode(
+        x=alt.X("Hour:Q", axis=alt.Axis(values=list(range(24)), labelAngle=-45, labelFontSize=11)),
+        y=alt.Y("WindSpeed:Q", axis=alt.Axis(title="Wind Speed (mph)", labelFontSize=11, titleFontSize=14)),
+        color=alt.Color("Status:N", scale=alt.Scale(domain=["Actual", "Forecast"], range=["#00f2ff", "#ffffff"])),
+    )
+
+    if not hist_band.empty and "WindSpeedMean" in hist_band.columns:
+        wind_band = alt.Chart(hist_band).mark_area(opacity=0.18, color="#a0c4ff").encode(
+            x=alt.X("Hour:Q"),
+            y=alt.Y("WindSpeedLow:Q"),
+            y2=alt.Y2("WindSpeedHigh:Q"),
+        )
+        wind_hist_line = alt.Chart(hist_band).mark_line(color="#66b2ff", opacity=0.7).encode(
+            x="Hour:Q",
+            y="WindSpeedMean:Q",
+        )
+        chart = wind_band + wind_hist_line + wind_line
+    else:
+        chart = wind_line
+
+    return chart.properties(height=300).configure_legend(fillColor="#1e1e1e", padding=10)
+
+
 # ---------------------------------------------------------------------------
 # APP
 # ---------------------------------------------------------------------------
-_env = st.secrets.get("ENV", "prod")
-_is_dev = _env == "dev"
-_page_title = "The Farm [DEV]" if _is_dev else "The Farm"
+def run_app() -> None:
+    _env = st.secrets.get("ENV", "prod")
+    _is_dev = _env == "dev"
+    _page_title = "The Farm [DEV]" if _is_dev else "The Farm"
 
-st.set_page_config(page_title=_page_title, page_icon="🏔️", layout="wide")
-st.title("The Farm: How's the Weather?" + (" — DEV" if _is_dev else ""))
+    st.set_page_config(page_title=_page_title, page_icon="🏔️", layout="wide")
+    st.title("The Farm: How's the Weather?" + (" — DEV" if _is_dev else ""))
 
-now_mtn = datetime.now(LOCAL_TZ)
-st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
+    now_mtn = datetime.now(LOCAL_TZ)
+    st.markdown(f"**Loveland, CO** | `{now_mtn.strftime('%H:%M:%S')}`")
 
-# Sidebar
-st.sidebar.title("Settings")
-mode = st.sidebar.selectbox("Monitoring Mode", list(THRESHOLDS.keys()))
-threshold = THRESHOLDS[mode]
+    # Sidebar
+    st.sidebar.title("Settings")
+    mode = st.sidebar.selectbox("Monitoring Mode", list(THRESHOLDS.keys()))
+    threshold = THRESHOLDS[mode]
 
-# Temperature operand toggle (actual vs feels like)
-temp_mode = st.sidebar.radio("Temperature Type", ["Feels Like", "Actual"])
-selected_temp_key = "FeelsLike" if temp_mode == "Feels Like" else "Actual"
-selected_metric_title = f"{temp_mode} Now"
+    # Temperature operand toggle (actual vs feels like)
+    temp_mode = st.sidebar.radio("Temperature Type", ["Feels Like", "Actual"])
+    selected_temp_key = "FeelsLike" if temp_mode == "Feels Like" else "Actual"
+    selected_metric_title = f"{temp_mode} Now"
 
-# Fetch data
-vc_api_key = _get_vc_api_key()
-with st.spinner("Fetching latest weather data…"):
-    # Forecast + current — fall back to session state if API is rate limited
-    try:
-        df, live_temp = fetch_forecast_and_current(vc_api_key)
-        if not df.empty:
-            st.session_state["df"] = df
-            st.session_state["live_temp"] = live_temp
-    except requests.RequestException as e:
-        logger.warning("Forecast fetch failed, using cached fallback: %s", e)
-        df = st.session_state.get("df", pd.DataFrame())
-        live_temp = st.session_state.get("live_temp", None)
-        if df.empty or live_temp is None:
-            st.error("Could not reach the weather API and no cached data is available. Please try again in a few minutes.")
-            st.stop()
-        else:
-            st.warning("⚠️ Weather API temporarily unavailable — showing last known data.")
+    # Fetch data
+    vc_api_key = _get_vc_api_key()
+    with st.spinner("Fetching latest weather data…"):
+        # Forecast + current — fall back to session state if API is rate limited
+        try:
+            df, live_temp = fetch_forecast_and_current(vc_api_key)
+            if not df.empty:
+                st.session_state["df"] = df
+                st.session_state["live_temp"] = live_temp
+        except requests.RequestException as e:
+            logger.warning("Forecast fetch failed, using cached fallback: %s", e)
+            df = st.session_state.get("df", pd.DataFrame())
+            live_temp = st.session_state.get("live_temp", None)
+            if df.empty or live_temp is None:
+                st.error("Could not reach the weather API and no cached data is available. Please try again in a few minutes.")
+                st.stop()
+            else:
+                st.warning("⚠️ Weather API temporarily unavailable — showing last known data.")
 
-    # Historical band — cached 7 days, falls back to session state if API is rate limited
-    today_str = now_mtn.strftime("%Y-%m-%d")
-    try:
-        hist_band = fetch_historical_band(today_str, vc_api_key)
-        if not hist_band.empty:
-            st.session_state["hist_band"] = hist_band
-    except requests.RequestException as e:
-        logger.warning("Historical band fetch failed, using cached fallback: %s", e)
-        hist_band = st.session_state.get("hist_band", pd.DataFrame(columns=["Hour", "HistHigh", "HistLow", "HistMean"]))
-        if hist_band.empty:
-            st.caption("⚠️ Historical band temporarily unavailable.")
+        # Historical band — cached 7 days, falls back to session state if API is rate limited
+        today_str = now_mtn.strftime("%Y-%m-%d")
+        try:
+            hist_band = fetch_historical_band(today_str, vc_api_key)
+            if not hist_band.empty:
+                st.session_state["hist_band"] = hist_band
+        except requests.RequestException as e:
+            logger.warning("Historical band fetch failed, using cached fallback: %s", e)
+            hist_band = st.session_state.get("hist_band", pd.DataFrame(columns=["Hour", "HistHigh", "HistLow", "HistMean"]))
+            if hist_band.empty:
+                st.caption("⚠️ Historical band temporarily unavailable.")
 
-if df.empty:
-    st.warning("No forecast data available for today.")
-    st.stop()
+    if df.empty:
+        st.warning("No forecast data available for today.")
+        st.stop()
 
-# Choose dataset for display mode (actual or feels like)
-if selected_temp_key not in df.columns:
-    st.error(f"Selected temperature key '{selected_temp_key}' is not available in fetched data.")
-    st.stop()
+    # Choose dataset for display mode (actual or feels like)
+    if selected_temp_key not in df.columns:
+        st.error(f"Selected temperature key '{selected_temp_key}' is not available in fetched data.")
+        st.stop()
 
-df_display = df[["Hour", selected_temp_key]].rename(columns={selected_temp_key: "Temperature"}).copy()
-selected_live_temp = live_temp.get(selected_temp_key)
-if selected_live_temp is None:
-    st.error(f"Selected latest temperature value for '{selected_temp_key}' is unavailable.")
-    st.stop()
+    df_display = df[["Hour", selected_temp_key]].rename(columns={selected_temp_key: "Temperature"}).copy()
+    selected_live_temp = live_temp.get(selected_temp_key)
+    if selected_live_temp is None:
+        st.error(f"Selected latest temperature value for '{selected_temp_key}' is unavailable.")
+        st.stop()
 
-if hist_band.empty:
-    hist_band_display = hist_band
-else:
-    if selected_temp_key == "Actual":
-        hist_band_display = hist_band[["Hour", "ActualHigh", "ActualLow", "ActualMean"]].rename(
-            columns={
-                "ActualHigh": "HistHigh",
-                "ActualLow": "HistLow",
-                "ActualMean": "HistMean",
-            }
-        )
+    if hist_band.empty:
+        hist_band_display = hist_band
     else:
-        hist_band_display = hist_band[["Hour", "FeelsLikeHigh", "FeelsLikeLow", "FeelsLikeMean"]].rename(
-            columns={
-                "FeelsLikeHigh": "HistHigh",
-                "FeelsLikeLow": "HistLow",
-                "FeelsLikeMean": "HistMean",
-            }
-        )
+        if selected_temp_key == "Actual":
+            hist_band_display = hist_band[["Hour", "ActualHigh", "ActualLow", "ActualMean"]].rename(
+                columns={
+                    "ActualHigh": "HistHigh",
+                    "ActualLow": "HistLow",
+                    "ActualMean": "HistMean",
+                }
+            )
+        else:
+            hist_band_display = hist_band[["Hour", "FeelsLikeHigh", "FeelsLikeLow", "FeelsLikeMean"]].rename(
+                columns={
+                    "FeelsLikeHigh": "HistHigh",
+                    "FeelsLikeLow": "HistLow",
+                    "FeelsLikeMean": "HistMean",
+                }
+            )
 
-current_hour = now_mtn.hour
+    current_hour = now_mtn.hour
 
-# Metrics
-actuals = df_display[df_display["Hour"] <= current_hour].copy()
-actuals.loc[actuals["Hour"] == current_hour, "Temperature"] = selected_live_temp
-hi = actuals["Temperature"].max()
-lo = actuals["Temperature"].min()
+    # Metrics
+    actuals = df_display[df_display["Hour"] <= current_hour].copy()
+    actuals.loc[actuals["Hour"] == current_hour, "Temperature"] = selected_live_temp
+    hi = actuals["Temperature"].max()
+    lo = actuals["Temperature"].min()
 
-# 1-hour trend delta
-trend_delta, since_label = get_temp_trend(df_display, selected_live_temp, current_hour)
-if trend_delta is not None:
-    delta_str = f"{trend_delta:+.1f}°F {since_label}"
-else:
-    delta_str = None
+    # 1-hour trend delta
+    trend_delta, since_label = get_temp_trend(df_display, selected_live_temp, current_hour)
+    if trend_delta is not None:
+        delta_str = f"{trend_delta:+.1f}°F {since_label}"
+    else:
+        delta_str = None
 
-m1, m2, m3 = st.columns(3)
-m1.metric(
-    selected_metric_title,
-    f"{selected_live_temp}°F",
-    delta=delta_str,
-    delta_color="normal",
-)
-m2.metric(f"Today's High ({temp_mode})", f"{hi}°F")
-m3.metric(f"Today's Low ({temp_mode})", f"{lo}°F")
-caption_heat = "apparent temperature" if selected_temp_key == "FeelsLike" else "actual air temperature"
-st.caption(f"🌡️ All temperatures are shown as {caption_heat}.")
+    m1, m2, m3 = st.columns(3)
+    m1.metric(
+        selected_metric_title,
+        f"{selected_live_temp}°F",
+        delta=delta_str,
+        delta_color="normal",
+    )
+    m2.metric(f"Today's High ({temp_mode})", f"{hi}°F")
+    m3.metric(f"Today's Low ({temp_mode})", f"{lo}°F")
+    caption_heat = "apparent temperature" if selected_temp_key == "FeelsLike" else "actual air temperature"
+    st.caption(f"🌡️ All temperatures are shown as {caption_heat}.")
 
-# Status banner
-forecast_future = df_display[df_display["Hour"] >= current_hour].copy()
-forecast_future.loc[forecast_future["Hour"] == current_hour, "Temperature"] = selected_live_temp
-render_status_banner(selected_live_temp, threshold, forecast_future, mode)
+    # Status banner
+    forecast_future = df_display[df_display["Hour"] >= current_hour].copy()
+    forecast_future.loc[forecast_future["Hour"] == current_hour, "Temperature"] = selected_live_temp
+    render_status_banner(selected_live_temp, threshold, forecast_future, mode)
 
-# Chart
-st.altair_chart(build_chart(df_display, selected_live_temp, threshold, current_hour, hist_band_display), width="stretch")
+    # Wind section
+    wind_df = df[["Hour", "WindSpeed", "WindDir"]].copy()
+    selected_wind_speed = live_temp.get("WindSpeed")
+    selected_wind_dir = live_temp.get("WindDir")
+    if not wind_df.empty and current_hour in wind_df["Hour"].values and selected_wind_speed is not None:
+        wind_df.loc[wind_df["Hour"] == current_hour, "WindSpeed"] = selected_wind_speed
 
-# Data Sources
-st.write("---")
-with st.expander("📡 About the Data Sources"):
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.markdown("""
-        **🌐 Open-Meteo** *(Hourly Forecast)*
+    render_wind_banner(selected_wind_speed, selected_wind_dir)
 
-        Open-Meteo blends multiple global weather models. For forecasts it uses:
-        - **NOAA's GFS (Global Forecast System)**, updated every 6 hours
-        - Interpolated for coordinates `40.3720°N, 105.0579°W` at ~2.5 km grid resolution
+    # Wind chart
+    if hist_band.empty:
+        wind_hist_band = pd.DataFrame(columns=["Hour", "WindSpeedHigh", "WindSpeedLow", "WindSpeedMean"])
+    else:
+        wind_hist_band = hist_band[["Hour", "WindSpeedHigh", "WindSpeedLow", "WindSpeedMean"]]
 
-        This is **not** a single local weather station — it's a gridded model estimate.
+    st.altair_chart(build_wind_chart(wind_df, current_hour, wind_hist_band), width="stretch")
 
-        **📅 Visual Crossing** *(5-Year Historical Band)*
+    # Chart
+    st.altair_chart(build_chart(df_display, selected_live_temp, threshold, current_hour, hist_band_display), width="stretch")
 
-        The shaded historical band is sourced from Visual Crossing's Timeline API, which pulls from:
-        - NWS/NOAA weather station observations
-        - METAR airport reports and global reanalysis data
-        - Blended for accuracy at the requested coordinates
-        """)
-    with col_b:
-        st.markdown("""
-        **🏢 Visual Crossing** *(Live Actual & Feels Like Forecast)*
+    # Data Sources
+    st.write("---")
+    with st.expander("📡 About the Data Sources"):
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown("""
+            **🌐 Open-Meteo** *(Hourly Forecast)*
 
-        Visual Crossing blends data from multiple trusted sources:
-        - NWS/NOAA weather station observations
-        - METAR airport reports (including nearby **KFNL** — Fort Collins/Loveland Airport)
-        - High-resolution global forecast models updated continuously
+            Open-Meteo blends multiple global weather models. For forecasts it uses:
+            - **NOAA's GFS (Global Forecast System)**, updated every 6 hours
+            - Interpolated for coordinates `40.3720°N, 105.0579°W` at ~2.5 km grid resolution
 
-        Live conditions and today's hourly forecast refresh every **5 minutes**.
-        The 5-year historical band refreshes once daily.
-        """)
-    st.caption("💡 All sources use gridded or blended models — readings may differ slightly from a backyard weather station at The Farm's exact location.")
+            This is **not** a single local weather station — it's a gridded model estimate.
+
+            **📅 Visual Crossing** *(5-Year Historical Band)*
+
+            The shaded historical band is sourced from Visual Crossing's Timeline API, which pulls from:
+            - NWS/NOAA weather station observations
+            - METAR airport reports and global reanalysis data
+            - Blended for accuracy at the requested coordinates
+            """)
+        with col_b:
+            st.markdown("""
+            **🏢 Visual Crossing** *(Live Actual & Feels Like Forecast)*
+
+            Visual Crossing blends data from multiple trusted sources:
+            - NWS/NOAA weather station observations
+            - METAR airport reports (including nearby **KFNL** — Fort Collins/Loveland Airport)
+            - High-resolution global forecast models updated continuously
+
+            Live conditions and today's hourly forecast refresh every **5 minutes**.
+            The 5-year historical band refreshes once daily.
+            """)
+        st.caption("💡 All sources use gridded or blended models — readings may differ slightly from a backyard weather station at The Farm's exact location.")
+
+
+if __name__ == "__main__":
+    run_app()
