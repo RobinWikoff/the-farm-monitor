@@ -1,5 +1,5 @@
 streamlit>=1.35.0
-pandas
+pandas>=2.0,<3
 requests
 altair<5
 pytz
