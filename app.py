@@ -70,14 +70,14 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
             windspeed = hour.get("windspeed")
             winddeg = hour.get("wdir")
             dt_str = hour.get("datetime", "")  # "HH:mm:ss"
-            if dt_str and actual is not None and feelslike is not None and windspeed is not None and winddeg is not None:
+            if dt_str and actual is not None and feelslike is not None:
                 hour_int = int(dt_str.split(":")[0])
                 rows.append({
                     "Hour": hour_int,
                     "Actual": round(actual, 1),
                     "FeelsLike": round(feelslike, 1),
-                    "WindSpeed": round(windspeed, 1),
-                    "WindDeg": round(winddeg, 1),
+                    "WindSpeed": round(windspeed, 1) if windspeed is not None else None,
+                    "WindDeg": round(winddeg, 1) if winddeg is not None else None,
                     "WindDir": wind_degree_to_cardinal(winddeg),
                 })
     forecast_df = pd.DataFrame(rows)
@@ -228,7 +228,7 @@ def build_chart(df: pd.DataFrame, live_temp: float, threshold: float, current_ho
     plot = df.copy()
     plot.loc[plot["Hour"] == current_hour, "Temperature"] = live_temp
 
-    plot["Status"] = plot["Hour"].apply(lambda h: "Actual" if h <= current_hour else "Forecast")
+    plot["Status"] = plot["Hour"].apply(lambda h: "Actual" if h <= current_hour else "Forecast").astype(object)
 
     bridge = plot[plot["Hour"] == current_hour].copy().assign(Status="Forecast")
 
@@ -401,11 +401,16 @@ def render_wind_banner(wind_speed: float | None, wind_dir: str | None) -> None:
 
 def build_wind_chart(df: pd.DataFrame, current_hour: int, hist_band: pd.DataFrame) -> alt.LayerChart:
     wind_df = df.copy()
-    wind_df["Status"] = wind_df["Hour"].apply(lambda h: "Actual" if h <= current_hour else "Forecast")
+    wind_df["Status"] = wind_df["Hour"].apply(lambda h: "Actual" if h <= current_hour else "Forecast").astype(object)
+
+    max_speed = wind_df["WindSpeed"].dropna().max() if not wind_df["WindSpeed"].dropna().empty else 0
+    y_max = max(50, max_speed + 5)
+
+    x_axis = alt.Axis(values=list(range(24)), labelAngle=-45, labelFontSize=11, labelExpr="datum.value + ':00'")
 
     wind_line = alt.Chart(wind_df).mark_line(strokeWidth=4).encode(
-        x=alt.X("Hour:Q", axis=alt.Axis(values=list(range(24)), labelAngle=-45, labelFontSize=11)),
-        y=alt.Y("WindSpeed:Q", axis=alt.Axis(title="Wind Speed (mph)", labelFontSize=11, titleFontSize=14)),
+        x=alt.X("Hour:Q", axis=x_axis),
+        y=alt.Y("WindSpeed:Q", axis=alt.Axis(title="Wind Speed (mph)", labelFontSize=11, titleFontSize=14), scale=alt.Scale(domain=[0, y_max])),
         color=alt.Color("Status:N", scale=alt.Scale(domain=["Actual", "Forecast"], range=["#00f2ff", "#ffffff"])),
     )
 

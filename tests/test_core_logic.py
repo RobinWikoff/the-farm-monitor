@@ -54,6 +54,37 @@ def test_get_temp_trend_missing_prior_hour_returns_none_tuple():
     assert result == (None, None)
 
 
+def test_fetch_forecast_and_current_keeps_hours_when_wdir_missing(monkeypatch):
+    payload = {
+        "days": [
+            {
+                "hours": [
+                    {"datetime": "00:00:00", "temp": 30.0, "feelslike": 28.0, "windspeed": 5.0},
+                    {"datetime": "01:00:00", "temp": 31.0, "feelslike": 29.0, "windspeed": 6.0},
+                ]
+            }
+        ],
+        "currentConditions": {
+            "temp": 32.0,
+            "feelslike": 30.0,
+            "windspeed": 7.0,
+        },
+    }
+
+    def fake_get(url, params, timeout):
+        return _MockResponse(payload)
+
+    monkeypatch.setattr(app.requests, "get", fake_get)
+
+    forecast_df, live_temp = app.fetch_forecast_and_current.__wrapped__("fake-key")
+
+    assert len(forecast_df) == 2
+    assert forecast_df["Hour"].tolist() == [0, 1]
+    assert forecast_df["WindDir"].tolist() == ["Unknown", "Unknown"]
+    assert live_temp["Actual"] == 32.0
+    assert live_temp["WindDir"] == "Unknown"
+
+
 def test_fetch_historical_band_leap_year_fallback_and_aggregation(monkeypatch):
     called_urls = []
 
