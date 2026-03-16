@@ -70,14 +70,14 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
             windspeed = hour.get("windspeed")
             winddeg = hour.get("wdir")
             dt_str = hour.get("datetime", "")  # "HH:mm:ss"
-            if dt_str and actual is not None and feelslike is not None and windspeed is not None and winddeg is not None:
+            if dt_str and actual is not None and feelslike is not None:
                 hour_int = int(dt_str.split(":")[0])
                 rows.append({
                     "Hour": hour_int,
                     "Actual": round(actual, 1),
                     "FeelsLike": round(feelslike, 1),
-                    "WindSpeed": round(windspeed, 1),
-                    "WindDeg": round(winddeg, 1),
+                    "WindSpeed": round(windspeed, 1) if windspeed is not None else None,
+                    "WindDeg": round(winddeg, 1) if winddeg is not None else None,
                     "WindDir": wind_degree_to_cardinal(winddeg),
                 })
     forecast_df = pd.DataFrame(rows)
