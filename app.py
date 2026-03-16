@@ -5,6 +5,8 @@ import altair as alt
 from datetime import datetime, timedelta
 import pytz
 import logging
+import math
+import os
 
 # ---------------------------------------------------------------------------
 # CONFIG
@@ -38,6 +40,71 @@ def _get_vc_api_key() -> str:
     except (KeyError, FileNotFoundError):
         st.error("⚠️ VISUAL_CROSSING_API_KEY not found in Streamlit secrets. Add it to `.streamlit/secrets.toml`.")
         st.stop()
+
+
+def _build_dev_sample_payload(now_mtn: datetime) -> tuple[pd.DataFrame, dict, pd.DataFrame]:
+    """Create deterministic sample weather payload for local dev without external API calls."""
+    rows = []
+    hist_rows = []
+
+    for h in range(24):
+        base = 54.0 + 10.0 * math.sin((h - 6) * math.pi / 12.0)
+        feels = base - 1.5 + 1.2 * math.sin(h * math.pi / 6.0)
+        wind_speed = max(0.0, 9.0 + 4.0 * math.sin((h + 2) * math.pi / 12.0))
+        wind_deg = (h * 15) % 360
+
+        rows.append(
+            {
+                "Hour": h,
+                "Actual": round(base, 1),
+                "FeelsLike": round(feels, 1),
+                "WindSpeed": round(wind_speed, 1),
+                "WindDeg": round(wind_deg, 1),
+                "WindDir": wind_degree_to_cardinal(wind_deg),
+            }
+        )
+
+        hist_rows.append(
+            {
+                "Hour": h,
+                "ActualHigh": round(base + 6.5, 1),
+                "ActualLow": round(base - 6.0, 1),
+                "ActualMean": round(base + 0.3, 1),
+                "FeelsLikeHigh": round(feels + 6.0, 1),
+                "FeelsLikeLow": round(feels - 6.2, 1),
+                "FeelsLikeMean": round(feels + 0.2, 1),
+                "WindSpeedHigh": round(wind_speed + 3.5, 1),
+                "WindSpeedLow": round(max(0.0, wind_speed - 3.0), 1),
+                "WindSpeedMean": round(wind_speed + 0.4, 1),
+            }
+        )
+
+    df = pd.DataFrame(rows)
+    hist_band = pd.DataFrame(hist_rows)
+
+    current_hour = now_mtn.hour
+    live_row = df[df["Hour"] == current_hour].iloc[0]
+    live_temp = {
+        "Actual": float(live_row["Actual"]),
+        "FeelsLike": float(live_row["FeelsLike"]),
+        "WindSpeed": float(live_row["WindSpeed"]),
+        "WindDeg": float(live_row["WindDeg"]),
+        "WindDir": str(live_row["WindDir"]),
+    }
+
+    return df, live_temp, hist_band
+
+
+def _as_bool(value, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return default
 
 
 @st.cache_data(ttl=600)
@@ -435,8 +502,8 @@ def build_wind_chart(df: pd.DataFrame, current_hour: int, hist_band: pd.DataFram
 # APP
 # ---------------------------------------------------------------------------
 def run_app() -> None:
-    _env = st.secrets.get("ENV", "prod")
-    _is_dev = _env == "dev"
+    _env = st.secrets.get("ENV", os.getenv("ENV", "prod"))
+    _is_dev = str(_env).strip().lower() == "dev"
     _page_title = "The Farm [DEV]" if _is_dev else "The Farm"
 
     st.set_page_config(page_title=_page_title, page_icon="🏔️", layout="wide")
@@ -455,40 +522,47 @@ def run_app() -> None:
     selected_temp_key = "FeelsLike" if temp_mode == "Feels Like" else "Actual"
     selected_metric_title = f"{temp_mode} Now"
 
-    # Fetch data
-    vc_api_key = _get_vc_api_key()
-    with st.spinner("Fetching latest weather data…"):
-        # Forecast + current — fall back to session state if API is rate limited
-        try:
-            df, live_temp = fetch_forecast_and_current(vc_api_key)
-            if not df.empty:
-                st.session_state["df"] = df
-                st.session_state["live_temp"] = live_temp
-        except requests.RequestException as e:
-            logger.warning("Forecast fetch failed, using cached fallback: %s", e)
-            df = st.session_state.get("df", pd.DataFrame())
-            live_temp = st.session_state.get("live_temp", None)
-            if df.empty or live_temp is None:
-                st.error("Could not reach the weather API and no cached data is available. Please try again in a few minutes.")
-                st.stop()
-            else:
-                st.warning("⚠️ Weather API temporarily unavailable — showing last known data.")
+    dev_sample_setting = st.secrets.get("DEV_USE_SAMPLE_DATA", os.getenv("DEV_USE_SAMPLE_DATA"))
+    dev_use_sample_data = _is_dev and _as_bool(dev_sample_setting, default=True)
 
-        # Historical band — cached 7 days, falls back to session state if API is rate limited
-        today_str = now_mtn.strftime("%Y-%m-%d")
-        try:
-            hist_band = fetch_historical_band(today_str, vc_api_key)
-            if not hist_band.empty:
-                st.session_state["hist_band"] = hist_band
-            else:
+    if dev_use_sample_data:
+        st.info("Using local dev sample weather data (no external API calls).")
+        df, live_temp, hist_band = _build_dev_sample_payload(now_mtn)
+    else:
+        # Fetch data
+        vc_api_key = _get_vc_api_key()
+        with st.spinner("Fetching latest weather data…"):
+            # Forecast + current — fall back to session state if API is rate limited
+            try:
+                df, live_temp = fetch_forecast_and_current(vc_api_key)
+                if not df.empty:
+                    st.session_state["df"] = df
+                    st.session_state["live_temp"] = live_temp
+            except requests.RequestException as e:
+                logger.warning("Forecast fetch failed, using cached fallback: %s", e)
+                df = st.session_state.get("df", pd.DataFrame())
+                live_temp = st.session_state.get("live_temp", None)
+                if df.empty or live_temp is None:
+                    st.error("Could not reach the weather API and no cached data is available. Please try again in a few minutes.")
+                    st.stop()
+                else:
+                    st.warning("⚠️ Weather API temporarily unavailable — showing last known data.")
+
+            # Historical band — cached 7 days, falls back to session state if API is rate limited
+            today_str = now_mtn.strftime("%Y-%m-%d")
+            try:
+                hist_band = fetch_historical_band(today_str, vc_api_key)
+                if not hist_band.empty:
+                    st.session_state["hist_band"] = hist_band
+                else:
+                    hist_band = st.session_state.get("hist_band", pd.DataFrame(columns=["Hour", "HistHigh", "HistLow", "HistMean"]))
+                    if hist_band.empty:
+                        st.caption("⚠️ Historical band temporarily unavailable.")
+            except requests.RequestException as e:
+                logger.warning("Historical band fetch failed, using cached fallback: %s", e)
                 hist_band = st.session_state.get("hist_band", pd.DataFrame(columns=["Hour", "HistHigh", "HistLow", "HistMean"]))
                 if hist_band.empty:
                     st.caption("⚠️ Historical band temporarily unavailable.")
-        except requests.RequestException as e:
-            logger.warning("Historical band fetch failed, using cached fallback: %s", e)
-            hist_band = st.session_state.get("hist_band", pd.DataFrame(columns=["Hour", "HistHigh", "HistLow", "HistMean"]))
-            if hist_band.empty:
-                st.caption("⚠️ Historical band temporarily unavailable.")
 
     if df.empty:
         st.warning("No forecast data available for today.")
