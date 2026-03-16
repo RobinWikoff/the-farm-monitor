@@ -88,7 +88,6 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
     live_feelslike = current.get("feelslike")
     live_windspeed = current.get("windspeed")
     live_winddeg = current.get("wdir")
-
     if live_actual is None and not forecast_df.empty:
         live_actual = forecast_df.iloc[-1]["Actual"]
     if live_feelslike is None and not forecast_df.empty:
@@ -154,6 +153,10 @@ def fetch_historical_band(today_str: str, vc_api_key: str) -> pd.DataFrame:
                             "WindSpeed": windspeed,
                         })
         except requests.RequestException as e:
+            status_code = getattr(getattr(e, "response", None), "status_code", None)
+            if status_code == 429:
+                logger.warning("Historical fetch rate-limited on %s; stopping further yearly requests.", date_str)
+                break
             logger.warning("Historical fetch failed for %s: %s", date_str, e)
             continue
 
@@ -472,6 +475,10 @@ def run_app() -> None:
             hist_band = fetch_historical_band(today_str, vc_api_key)
             if not hist_band.empty:
                 st.session_state["hist_band"] = hist_band
+            else:
+                hist_band = st.session_state.get("hist_band", pd.DataFrame(columns=["Hour", "HistHigh", "HistLow", "HistMean"]))
+                if hist_band.empty:
+                    st.caption("⚠️ Historical band temporarily unavailable.")
         except requests.RequestException as e:
             logger.warning("Historical band fetch failed, using cached fallback: %s", e)
             hist_band = st.session_state.get("hist_band", pd.DataFrame(columns=["Hour", "HistHigh", "HistLow", "HistMean"]))
