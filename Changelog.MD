@@ -4,6 +4,7 @@
 ### Fixed
 - Issue #30: Historical API rate limit handling — stop fetching further yearly data on first 429 response; fall back to cached band or a single caption instead of showing an error.
 - Forecast data disappearing when Visual Crossing returns `wdir: null` — relaxed hourly row filter to only require `temp` and `feelslike`; wind speed and direction now stored as `None` when absent rather than rejecting the row. Added regression test to prevent recurrence.
+- Issue #34: Added dev-only sample weather data mode (`ENV=dev` + `DEV_USE_SAMPLE_DATA=true`) so local development can run without consuming external weather API quota.
 - Issue #17: Improved status banner copy for all modes:
   - Cool Months: warm focus, cool-but-getting-warm, cool-all-day.
   - Warm Months: cool focus, warm-but-getting-cool, warm-all-day.
