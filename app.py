@@ -34,7 +34,10 @@ def wind_degree_to_cardinal(degrees: float | None) -> str:
 
 
 def _get_vc_api_key() -> str:
-    """Return Visual Crossing API key from secrets."""
+    """Return Visual Crossing API key from Streamlit secrets or environment."""
+    env_key = os.getenv("VISUAL_CROSSING_API_KEY")
+    if env_key:
+        return env_key
     try:
         return st.secrets["VISUAL_CROSSING_API_KEY"]
     except (KeyError, FileNotFoundError):
