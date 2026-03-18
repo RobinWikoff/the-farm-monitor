@@ -1,3 +1,6 @@
 __pycache__/
 .pytest_cache/
 .streamlit/secrets.toml
+.env
+.env.*
+!.env.example

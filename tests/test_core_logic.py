@@ -59,8 +59,18 @@ def test_fetch_forecast_and_current_keeps_hours_when_wdir_missing(monkeypatch):
         "days": [
             {
                 "hours": [
-                    {"datetime": "00:00:00", "temp": 30.0, "feelslike": 28.0, "windspeed": 5.0},
-                    {"datetime": "01:00:00", "temp": 31.0, "feelslike": 29.0, "windspeed": 6.0},
+                    {
+                        "datetime": "00:00:00",
+                        "temp": 30.0,
+                        "feelslike": 28.0,
+                        "windspeed": 5.0,
+                    },
+                    {
+                        "datetime": "01:00:00",
+                        "temp": 31.0,
+                        "feelslike": 29.0,
+                        "windspeed": 6.0,
+                    },
                 ]
             }
         ],
@@ -94,8 +104,18 @@ def test_fetch_historical_band_leap_year_fallback_and_aggregation(monkeypatch):
             "days": [
                 {
                     "hours": [
-                        {"datetime": "00:00:00", "temp": 30.0, "feelslike": 28.0, "windspeed": 5.0},
-                        {"datetime": "01:00:00", "temp": 31.0, "feelslike": 29.0, "windspeed": 6.0},
+                        {
+                            "datetime": "00:00:00",
+                            "temp": 30.0,
+                            "feelslike": 28.0,
+                            "windspeed": 5.0,
+                        },
+                        {
+                            "datetime": "01:00:00",
+                            "temp": 31.0,
+                            "feelslike": 29.0,
+                            "windspeed": 6.0,
+                        },
                     ]
                 }
             ]
@@ -126,7 +146,9 @@ def test_fetch_historical_band_leap_year_fallback_and_aggregation(monkeypatch):
     ]
 
 
-def test_fetch_historical_band_empty_response_returns_expected_empty_schema(monkeypatch):
+def test_fetch_historical_band_empty_response_returns_expected_empty_schema(
+    monkeypatch,
+):
     def fake_get(url, params, timeout):
         return _MockResponse({"days": []})
 
@@ -333,11 +355,17 @@ def test_render_status_banner_all_threshold_paths(
     called = {"success": 0, "info": 0, "warning": 0}
 
     monkeypatch.setattr(
-        app.st, "success", lambda msg: called.__setitem__("success", called["success"] + 1)
+        app.st,
+        "success",
+        lambda msg: called.__setitem__("success", called["success"] + 1),
     )
-    monkeypatch.setattr(app.st, "info", lambda msg: called.__setitem__("info", called["info"] + 1))
     monkeypatch.setattr(
-        app.st, "warning", lambda msg: called.__setitem__("warning", called["warning"] + 1)
+        app.st, "info", lambda msg: called.__setitem__("info", called["info"] + 1)
+    )
+    monkeypatch.setattr(
+        app.st,
+        "warning",
+        lambda msg: called.__setitem__("warning", called["warning"] + 1),
     )
 
     app.render_status_banner(
@@ -353,7 +381,9 @@ def test_render_status_banner_all_threshold_paths(
             assert count == 0
 
 
-def test_render_status_banner_winter_info_uses_first_qualifying_forecast_hour_in_text(monkeypatch):
+def test_render_status_banner_winter_info_uses_first_qualifying_forecast_hour_in_text(
+    monkeypatch,
+):
     captured = {}
 
     monkeypatch.setattr(app.st, "success", lambda msg: None)
@@ -377,7 +407,9 @@ def test_render_status_banner_winter_info_uses_first_qualifying_forecast_hour_in
     assert "by 12:00" in captured["msg"]
 
 
-def test_render_status_banner_summer_info_uses_first_qualifying_forecast_hour_in_text(monkeypatch):
+def test_render_status_banner_summer_info_uses_first_qualifying_forecast_hour_in_text(
+    monkeypatch,
+):
     captured = {}
 
     monkeypatch.setattr(app.st, "success", lambda msg: None)
