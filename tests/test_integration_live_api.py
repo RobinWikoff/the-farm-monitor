@@ -38,13 +38,19 @@ _load_env_if_present()
 
 def _require_live_mode() -> str:
     if not _as_bool(os.getenv("RUN_LIVE_INTEGRATION_TESTS")):
-        pytest.skip("Set RUN_LIVE_INTEGRATION_TESTS=true to run live integration tests.")
+        pytest.skip(
+            "Set RUN_LIVE_INTEGRATION_TESTS=true to run live integration tests."
+        )
     api_key = os.getenv("VISUAL_CROSSING_API_KEY")
     if not api_key:
-        pytest.skip("Set VISUAL_CROSSING_API_KEY via environment or .env to run live tests.")
+        pytest.skip(
+            "Set VISUAL_CROSSING_API_KEY via environment or .env to run live tests."
+        )
     placeholder_values = {"your_key", "your_key_here", "changeme", "replace_me"}
     if api_key.strip().lower() in placeholder_values:
-        pytest.skip("Set VISUAL_CROSSING_API_KEY to a real token before running live tests.")
+        pytest.skip(
+            "Set VISUAL_CROSSING_API_KEY to a real token before running live tests."
+        )
     return api_key
 
 
@@ -59,7 +65,9 @@ def test_live_forecast_and_current_shape(monkeypatch):
     def counted_get(*args, **kwargs):
         call_count["count"] += 1
         if call_count["count"] > 1:
-            raise AssertionError("Quota guard: forecast/current test exceeded one API call")
+            raise AssertionError(
+                "Quota guard: forecast/current test exceeded one API call"
+            )
         return original_get(*args, **kwargs)
 
     monkeypatch.setattr(app.requests, "get", counted_get)
@@ -150,7 +158,11 @@ def test_app_loads_without_error_in_dev_sample_mode(monkeypatch):
     monkeypatch.setattr(app.st, "altair_chart", lambda *args, **kwargs: None)
     monkeypatch.setattr(app.st, "spinner", lambda *args, **kwargs: _DummyContext())
     monkeypatch.setattr(app.st, "expander", lambda *args, **kwargs: _DummyContext())
-    monkeypatch.setattr(app.st, "stop", lambda: (_ for _ in ()).throw(AssertionError("st.stop() should not be called")))
+    monkeypatch.setattr(
+        app.st,
+        "stop",
+        lambda: (_ for _ in ()).throw(AssertionError("st.stop() should not be called")),
+    )
 
     def fake_columns(count):
         return tuple(_DummyMetricColumn() for _ in range(count))
