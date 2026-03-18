@@ -156,8 +156,18 @@ def test_fetch_historical_band_partial_failure_still_aggregates(monkeypatch):
                 "days": [
                     {
                         "hours": [
-                            {"datetime": "00:00:00", "temp": 30.0, "feelslike": 28.0, "windspeed": 5.0},
-                            {"datetime": "01:00:00", "temp": 32.0, "feelslike": 30.0, "windspeed": 7.0},
+                            {
+                                "datetime": "00:00:00",
+                                "temp": 30.0,
+                                "feelslike": 28.0,
+                                "windspeed": 5.0,
+                            },
+                            {
+                                "datetime": "01:00:00",
+                                "temp": 32.0,
+                                "feelslike": 30.0,
+                                "windspeed": 7.0,
+                            },
                         ]
                     }
                 ]
@@ -204,7 +214,9 @@ def test_build_chart_layers_without_hist_band():
         }
     )
 
-    chart = app.build_chart(df=df, live_temp=64.2, threshold=65.0, current_hour=12, hist_band=pd.DataFrame())
+    chart = app.build_chart(
+        df=df, live_temp=64.2, threshold=65.0, current_hour=12, hist_band=pd.DataFrame()
+    )
     spec = chart.to_dict()
 
     assert "layer" in spec
@@ -227,7 +239,9 @@ def test_build_chart_layers_with_hist_band():
         }
     )
 
-    chart = app.build_chart(df=df, live_temp=64.2, threshold=65.0, current_hour=12, hist_band=hist_band)
+    chart = app.build_chart(
+        df=df, live_temp=64.2, threshold=65.0, current_hour=12, hist_band=hist_band
+    )
     spec = chart.to_dict()
 
     assert "layer" in spec
@@ -244,7 +258,13 @@ def test_build_chart_serialized_spec_has_live_override_for_current_hour():
 
     current_hour = 12
     live_temp = 64.2
-    chart = app.build_chart(df=df, live_temp=live_temp, threshold=65.0, current_hour=current_hour, hist_band=pd.DataFrame())
+    chart = app.build_chart(
+        df=df,
+        live_temp=live_temp,
+        threshold=65.0,
+        current_hour=current_hour,
+        hist_band=pd.DataFrame(),
+    )
     spec = chart.to_dict()
 
     datasets = spec.get("datasets", {})
@@ -263,20 +283,62 @@ def test_build_chart_serialized_spec_has_live_override_for_current_hour():
 @pytest.mark.parametrize(
     "live_temp, threshold, forecast_future, mode, expected_call",
     [
-        (66.0, 65.0, pd.DataFrame({"Hour": [10], "Temperature": [66.0]}), "Winter (Warming Focus)", "success"),
-        (62.0, 65.0, pd.DataFrame({"Hour": [12, 13], "Temperature": [64.0, 65.0]}), "Winter (Warming Focus)", "info"),
-        (62.0, 65.0, pd.DataFrame({"Hour": [12, 13], "Temperature": [64.0, 64.5]}), "Winter (Warming Focus)", "warning"),
-        (68.0, 70.0, pd.DataFrame({"Hour": [10], "Temperature": [68.0]}), "Summer (Cooling Focus)", "success"),
-        (73.0, 70.0, pd.DataFrame({"Hour": [12, 13], "Temperature": [72.0, 70.0]}), "Summer (Cooling Focus)", "info"),
-        (73.0, 70.0, pd.DataFrame({"Hour": [12, 13], "Temperature": [72.0, 71.0]}), "Summer (Cooling Focus)", "warning"),
+        (
+            66.0,
+            65.0,
+            pd.DataFrame({"Hour": [10], "Temperature": [66.0]}),
+            "Winter (Warming Focus)",
+            "success",
+        ),
+        (
+            62.0,
+            65.0,
+            pd.DataFrame({"Hour": [12, 13], "Temperature": [64.0, 65.0]}),
+            "Winter (Warming Focus)",
+            "info",
+        ),
+        (
+            62.0,
+            65.0,
+            pd.DataFrame({"Hour": [12, 13], "Temperature": [64.0, 64.5]}),
+            "Winter (Warming Focus)",
+            "warning",
+        ),
+        (
+            68.0,
+            70.0,
+            pd.DataFrame({"Hour": [10], "Temperature": [68.0]}),
+            "Summer (Cooling Focus)",
+            "success",
+        ),
+        (
+            73.0,
+            70.0,
+            pd.DataFrame({"Hour": [12, 13], "Temperature": [72.0, 70.0]}),
+            "Summer (Cooling Focus)",
+            "info",
+        ),
+        (
+            73.0,
+            70.0,
+            pd.DataFrame({"Hour": [12, 13], "Temperature": [72.0, 71.0]}),
+            "Summer (Cooling Focus)",
+            "warning",
+        ),
     ],
 )
-def test_render_status_banner_all_threshold_paths(monkeypatch, live_temp, threshold, forecast_future, mode, expected_call):
+def test_render_status_banner_all_threshold_paths(
+    monkeypatch, live_temp, threshold, forecast_future, mode, expected_call
+):
     called = {"success": 0, "info": 0, "warning": 0}
 
-    monkeypatch.setattr(app.st, "success", lambda msg: called.__setitem__("success", called["success"] + 1))
+    monkeypatch.setattr(
+        app.st, "success", lambda msg: called.__setitem__("success", called["success"] + 1)
+    )
     monkeypatch.setattr(app.st, "info", lambda msg: called.__setitem__("info", called["info"] + 1))
-    monkeypatch.setattr(app.st, "warning", lambda msg: called.__setitem__("warning", called["warning"] + 1))
+    monkeypatch.setattr(
+        app.st, "warning", lambda msg: called.__setitem__("warning", called["warning"] + 1)
+    )
 
     app.render_status_banner(
         live_temp=live_temp,
