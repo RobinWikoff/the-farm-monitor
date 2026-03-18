@@ -359,9 +359,7 @@ def test_render_status_banner_all_threshold_paths(
         "success",
         lambda msg: called.__setitem__("success", called["success"] + 1),
     )
-    monkeypatch.setattr(
-        app.st, "info", lambda msg: called.__setitem__("info", called["info"] + 1)
-    )
+    monkeypatch.setattr(app.st, "info", lambda msg: called.__setitem__("info", called["info"] + 1))
     monkeypatch.setattr(
         app.st,
         "warning",
