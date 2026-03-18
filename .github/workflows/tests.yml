@@ -1,0 +1,73 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+      - feature/**
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      run_live_api_tests:
+        description: Run live API integration tests
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  test:
+    name: Unit and integration tests (non-live)
+    if: github.event_name != 'workflow_dispatch' || inputs.run_live_api_tests == false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests excluding live API marker
+        run: pytest -q -m "not live_api"
+
+  live-api-tests:
+    name: Live API integration tests (manual)
+    if: github.event_name == 'workflow_dispatch' && inputs.run_live_api_tests == true
+    runs-on: ubuntu-latest
+    env:
+      RUN_LIVE_INTEGRATION_TESTS: "true"
+      VISUAL_CROSSING_API_KEY: ${{ secrets.VISUAL_CROSSING_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate secret is present
+        run: |
+          if [ -z "$VISUAL_CROSSING_API_KEY" ]; then
+            echo "VISUAL_CROSSING_API_KEY secret is not set."
+            echo "Add repository secret VISUAL_CROSSING_API_KEY before running this job."
+            exit 1
+          fi
+
+      - name: Run live API tests only
+        run: pytest -q -m live_api
