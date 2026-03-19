@@ -659,7 +659,7 @@ def build_precip_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
 
     now_dot = (
         alt.Chart(actual[actual["Hour"] == current_hour])
-        .mark_circle(size=250, color="#4db6ff")
+        .mark_circle(size=260, color="#00f2ff")
         .encode(x=x, y=y)
     )
 
@@ -676,13 +676,17 @@ def build_precip_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
         )
         label = (
             alt.Chart(label_df)
-            .mark_text(dy=-16, fontSize=12, fontWeight="bold", color="white")
+            .mark_text(dy=-16, fontSize=12, fontWeight="bold", color="#d9f2ff")
             .encode(x=x, y=y, text="Label")
         )
     else:
         label = alt.Chart(pd.DataFrame({"Hour": [], "PrecipIn": [], "Label": []})).mark_text()
 
-    return (line + now_dot + label).properties(height=280)
+    return (
+        (line + now_dot + label)
+        .properties(height=280)
+        .configure_legend(fillColor="#1e1e1e", padding=10)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -892,10 +896,17 @@ def run_app() -> None:
     else:
         total_precip_so_far = round(float(precip_actual["PrecipIn"].fillna(0).sum()), 2)
 
-    raining_now = (live_precip_in or 0) > 0 or (live_snow_in or 0) > 0
+    # Use the most recent actual datapoint in the chart series for "recently" status.
+    if precip_actual.empty:
+        rain_or_snow_recently = False
+    else:
+        latest_row = precip_actual.sort_values("Hour").iloc[-1]
+        latest_precip = latest_row.get("PrecipIn")
+        latest_snow = latest_row.get("SnowIn")
+        rain_or_snow_recently = (latest_precip or 0) > 0 or (latest_snow or 0) > 0
 
     p1, p2, p3, p4 = st.columns(4)
-    p1.metric("Raining or Snowing Now?", "Yes" if raining_now else "No")
+    p1.metric("Rain or Snow Recently?", "Yes" if rain_or_snow_recently else "No")
     p2.metric("Total Accumulation So Far Today", f"{total_precip_so_far} in")
     p3.metric(
         "Forecasted Precipitation Now %",
@@ -907,6 +918,7 @@ def run_app() -> None:
     )
 
     st.altair_chart(build_precip_chart(precip_df, current_hour), width="stretch")
+    st.caption("💧 Precipitation chart shows hourly actual precipitation amount in inches.")
 
     # Data Sources
     st.write("---")
@@ -931,12 +943,18 @@ def run_app() -> None:
             """)
         with col_b:
             st.markdown("""
-            **🏢 Visual Crossing** *(Live Actual & Feels Like Forecast)*
+            **🏢 Visual Crossing** *(Live + Hourly Conditions)*
 
             Visual Crossing blends data from multiple trusted sources:
             - NWS/NOAA weather station observations
             - METAR airport reports (including nearby **KFNL** — Fort Collins/Loveland Airport)
             - High-resolution global forecast models updated continuously
+
+            Additional fields used in this app:
+            - **Precipitation amount** (`precip`, inches)
+            - **Precipitation probability** (`precipprob`, %)
+            - **Relative humidity** (`humidity`, %)
+            - **Snow amount** (`snow`, inches)
 
             Live conditions and today's hourly forecast refresh every **5 minutes**.
             The 5-year historical band refreshes once daily.
