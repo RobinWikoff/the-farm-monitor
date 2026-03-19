@@ -59,6 +59,10 @@ def _build_dev_sample_payload(
         base = 54.0 + 10.0 * math.sin((h - 6) * math.pi / 12.0)
         feels = base - 1.5 + 1.2 * math.sin(h * math.pi / 6.0)
         wind_speed = max(0.0, 9.0 + 4.0 * math.sin((h + 2) * math.pi / 12.0))
+        precip = max(0.0, 0.08 * math.sin((h - 3) * math.pi / 8.0))
+        precip_prob = max(0.0, min(100.0, 55.0 + 35.0 * math.sin((h - 2) * math.pi / 8.0)))
+        humidity = max(10.0, min(100.0, 62.0 + 22.0 * math.sin((h + 1) * math.pi / 10.0)))
+        snow = precip if base <= 32.0 else 0.0
         wind_deg = (h * 15) % 360
 
         rows.append(
@@ -69,6 +73,10 @@ def _build_dev_sample_payload(
                 "WindSpeed": round(wind_speed, 1),
                 "WindDeg": round(wind_deg, 1),
                 "WindDir": wind_degree_to_cardinal(wind_deg),
+                "PrecipIn": round(precip, 2),
+                "PrecipProb": round(precip_prob, 1),
+                "Humidity": round(humidity, 1),
+                "SnowIn": round(snow, 2),
             }
         )
 
@@ -98,6 +106,10 @@ def _build_dev_sample_payload(
         "WindSpeed": float(live_row["WindSpeed"]),
         "WindDeg": float(live_row["WindDeg"]),
         "WindDir": str(live_row["WindDir"]),
+        "PrecipIn": float(live_row["PrecipIn"]),
+        "PrecipProb": float(live_row["PrecipProb"]),
+        "Humidity": float(live_row["Humidity"]),
+        "SnowIn": float(live_row["SnowIn"]),
     }
 
     return df, live_temp, hist_band
@@ -127,7 +139,7 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
     params = {
         "unitGroup": "us",
         "include": "hours,current",
-        "elements": "datetime,temp,feelslike,windspeed,wdir",
+        "elements": "datetime,temp,feelslike,windspeed,wdir,precip,precipprob,humidity,snow",
         "key": vc_api_key,
         "contentType": "json",
         "timezone": "America/Denver",
@@ -144,6 +156,10 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
             feelslike = hour.get("feelslike")
             windspeed = hour.get("windspeed")
             winddeg = hour.get("wdir")
+            precip = hour.get("precip")
+            precipprob = hour.get("precipprob")
+            humidity = hour.get("humidity")
+            snow = hour.get("snow")
             dt_str = hour.get("datetime", "")  # "HH:mm:ss"
             if dt_str and actual is not None and feelslike is not None:
                 hour_int = int(dt_str.split(":")[0])
@@ -155,6 +171,10 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
                         "WindSpeed": round(windspeed, 1) if windspeed is not None else None,
                         "WindDeg": round(winddeg, 1) if winddeg is not None else None,
                         "WindDir": wind_degree_to_cardinal(winddeg),
+                        "PrecipIn": round(precip, 2) if precip is not None else None,
+                        "PrecipProb": round(precipprob, 1) if precipprob is not None else None,
+                        "Humidity": round(humidity, 1) if humidity is not None else None,
+                        "SnowIn": round(snow, 2) if snow is not None else None,
                     }
                 )
     forecast_df = pd.DataFrame(rows)
@@ -165,6 +185,10 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
     live_feelslike = current.get("feelslike")
     live_windspeed = current.get("windspeed")
     live_winddeg = current.get("wdir")
+    live_precip = current.get("precip")
+    live_precipprob = current.get("precipprob")
+    live_humidity = current.get("humidity")
+    live_snow = current.get("snow")
     if live_actual is None and not forecast_df.empty:
         live_actual = forecast_df.iloc[-1]["Actual"]
     if live_feelslike is None and not forecast_df.empty:
@@ -173,6 +197,14 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
         live_windspeed = forecast_df.iloc[-1]["WindSpeed"]
     if live_winddeg is None and not forecast_df.empty:
         live_winddeg = forecast_df.iloc[-1]["WindDeg"]
+    if live_precip is None and not forecast_df.empty:
+        live_precip = forecast_df.iloc[-1]["PrecipIn"]
+    if live_precipprob is None and not forecast_df.empty:
+        live_precipprob = forecast_df.iloc[-1]["PrecipProb"]
+    if live_humidity is None and not forecast_df.empty:
+        live_humidity = forecast_df.iloc[-1]["Humidity"]
+    if live_snow is None and not forecast_df.empty:
+        live_snow = forecast_df.iloc[-1]["SnowIn"]
 
     live_temp = {
         "Actual": round(live_actual, 1) if live_actual is not None else None,
@@ -180,6 +212,10 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
         "WindSpeed": round(live_windspeed, 1) if live_windspeed is not None else None,
         "WindDeg": round(live_winddeg, 1) if live_winddeg is not None else None,
         "WindDir": wind_degree_to_cardinal(live_winddeg) if live_winddeg is not None else "Unknown",
+        "PrecipIn": round(live_precip, 2) if live_precip is not None else None,
+        "PrecipProb": round(live_precipprob, 1) if live_precipprob is not None else None,
+        "Humidity": round(live_humidity, 1) if live_humidity is not None else None,
+        "SnowIn": round(live_snow, 2) if live_snow is not None else None,
     }
 
     return forecast_df, live_temp
@@ -582,6 +618,77 @@ def build_wind_chart(
     return chart.properties(height=300).configure_legend(fillColor="#1e1e1e", padding=10)
 
 
+def build_precip_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
+    """Build hourly precipitation chart (inches) for actual hours only."""
+    precip_df = df.copy()
+    precip_df["Status"] = precip_df["Hour"].apply(
+        lambda h: "Actual" if h <= current_hour else "Future"
+    )
+    actual = precip_df[(precip_df["Status"] == "Actual") & (precip_df["PrecipIn"].notna())]
+
+    max_precip = actual["PrecipIn"].max() if not actual.empty else 0
+    y_max = max(0.3, max_precip + 0.05)
+
+    x = alt.X(
+        "Hour:Q",
+        axis=alt.Axis(
+            values=list(range(24)),
+            labelAngle=-45,
+            labelFontSize=11,
+            labelExpr="datum.value + ':00'",
+        ),
+    )
+    y = alt.Y(
+        "PrecipIn:Q",
+        axis=alt.Axis(title="Precipitation (in)", labelFontSize=11, titleFontSize=14),
+        scale=alt.Scale(domain=[0, y_max]),
+    )
+
+    line = (
+        alt.Chart(actual)
+        .mark_line(strokeWidth=4, color="#4db6ff")
+        .encode(
+            x=x,
+            y=y,
+            tooltip=[
+                alt.Tooltip("Hour:Q", title="Hour"),
+                alt.Tooltip("PrecipIn:Q", title="Precip in"),
+            ],
+        )
+    )
+
+    now_dot = (
+        alt.Chart(actual[actual["Hour"] == current_hour])
+        .mark_circle(size=260, color="#00f2ff")
+        .encode(x=x, y=y)
+    )
+
+    if not actual.empty:
+        max_row = actual.loc[actual["PrecipIn"] == actual["PrecipIn"].max()].iloc[0]
+        label_df = pd.DataFrame(
+            [
+                {
+                    "Hour": max_row["Hour"],
+                    "PrecipIn": max_row["PrecipIn"],
+                    "Label": f"{max_row['PrecipIn']} in",
+                }
+            ]
+        )
+        label = (
+            alt.Chart(label_df)
+            .mark_text(dy=-16, fontSize=12, fontWeight="bold", color="#d9f2ff")
+            .encode(x=x, y=y, text="Label")
+        )
+    else:
+        label = alt.Chart(pd.DataFrame({"Hour": [], "PrecipIn": [], "Label": []})).mark_text()
+
+    return (
+        (line + now_dot + label)
+        .properties(height=280)
+        .configure_legend(fillColor="#1e1e1e", padding=10)
+    )
+
+
 # ---------------------------------------------------------------------------
 # APP
 # ---------------------------------------------------------------------------
@@ -760,6 +867,59 @@ def run_app() -> None:
         width="stretch",
     )
 
+    st.write("---")
+
+    # Precipitation section (just before Data Sources)
+    for precip_col in ["PrecipIn", "PrecipProb", "Humidity", "SnowIn"]:
+        if precip_col not in df.columns:
+            df[precip_col] = None
+
+    precip_df = df[["Hour", "PrecipIn", "PrecipProb", "Humidity", "SnowIn"]].copy()
+    live_precip_in = live_temp.get("PrecipIn")
+    live_precip_prob = live_temp.get("PrecipProb")
+    live_humidity = live_temp.get("Humidity")
+    live_snow_in = live_temp.get("SnowIn")
+
+    if not precip_df.empty and current_hour in precip_df["Hour"].values:
+        if live_precip_in is not None:
+            precip_df.loc[precip_df["Hour"] == current_hour, "PrecipIn"] = live_precip_in
+        if live_precip_prob is not None:
+            precip_df.loc[precip_df["Hour"] == current_hour, "PrecipProb"] = live_precip_prob
+        if live_humidity is not None:
+            precip_df.loc[precip_df["Hour"] == current_hour, "Humidity"] = live_humidity
+        if live_snow_in is not None:
+            precip_df.loc[precip_df["Hour"] == current_hour, "SnowIn"] = live_snow_in
+
+    precip_actual = precip_df[precip_df["Hour"] <= current_hour].copy()
+    if precip_actual.empty or precip_actual["PrecipIn"].dropna().empty:
+        total_precip_so_far = 0.0
+    else:
+        total_precip_so_far = round(float(precip_actual["PrecipIn"].fillna(0).sum()), 2)
+
+    # Use the most recent actual datapoint in the chart series for "recently" status.
+    if precip_actual.empty:
+        rain_or_snow_recently = False
+    else:
+        latest_row = precip_actual.sort_values("Hour").iloc[-1]
+        latest_precip = latest_row.get("PrecipIn")
+        latest_snow = latest_row.get("SnowIn")
+        rain_or_snow_recently = (latest_precip or 0) > 0 or (latest_snow or 0) > 0
+
+    p1, p2, p3, p4 = st.columns(4)
+    p1.metric("Rain or Snow Recently?", "Yes" if rain_or_snow_recently else "No")
+    p2.metric("Total Accumulation So Far Today", f"{total_precip_so_far} in")
+    p3.metric(
+        "Forecasted Precipitation Now %",
+        f"{live_precip_prob}%" if live_precip_prob is not None else "N/A",
+    )
+    p4.metric(
+        "Relative Humidity Now %",
+        f"{live_humidity}%" if live_humidity is not None else "N/A",
+    )
+
+    st.altair_chart(build_precip_chart(precip_df, current_hour), width="stretch")
+    st.caption("💧 Precipitation chart shows hourly actual precipitation amount in inches.")
+
     # Data Sources
     st.write("---")
     with st.expander("📡 About the Data Sources"):
@@ -783,12 +943,18 @@ def run_app() -> None:
             """)
         with col_b:
             st.markdown("""
-            **🏢 Visual Crossing** *(Live Actual & Feels Like Forecast)*
+            **🏢 Visual Crossing** *(Live + Hourly Conditions)*
 
             Visual Crossing blends data from multiple trusted sources:
             - NWS/NOAA weather station observations
             - METAR airport reports (including nearby **KFNL** — Fort Collins/Loveland Airport)
             - High-resolution global forecast models updated continuously
+
+            Additional fields used in this app:
+            - **Precipitation amount** (`precip`, inches)
+            - **Precipitation probability** (`precipprob`, %)
+            - **Relative humidity** (`humidity`, %)
+            - **Snow amount** (`snow`, inches)
 
             Live conditions and today's hourly forecast refresh every **5 minutes**.
             The 5-year historical band refreshes once daily.

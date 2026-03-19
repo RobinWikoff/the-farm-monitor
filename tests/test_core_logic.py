@@ -95,6 +95,54 @@ def test_fetch_forecast_and_current_keeps_hours_when_wdir_missing(monkeypatch):
     assert live_temp["WindDir"] == "Unknown"
 
 
+def test_fetch_forecast_and_current_maps_precip_probability_and_humidity(monkeypatch):
+    payload = {
+        "days": [
+            {
+                "hours": [
+                    {
+                        "datetime": "00:00:00",
+                        "temp": 35.0,
+                        "feelslike": 33.0,
+                        "windspeed": 5.0,
+                        "wdir": 180,
+                        "precip": 0.12,
+                        "precipprob": 65,
+                        "humidity": 77,
+                        "snow": 0.0,
+                    }
+                ]
+            }
+        ],
+        "currentConditions": {
+            "temp": 36.0,
+            "feelslike": 34.0,
+            "windspeed": 6.0,
+            "wdir": 200,
+            "precip": 0.2,
+            "precipprob": 70,
+            "humidity": 80,
+            "snow": 0.0,
+        },
+    }
+
+    def fake_get(url, params, timeout):
+        return _MockResponse(payload)
+
+    monkeypatch.setattr(app.requests, "get", fake_get)
+
+    forecast_df, live_temp = app.fetch_forecast_and_current.__wrapped__("fake-key")
+
+    assert forecast_df["PrecipIn"].tolist() == [0.12]
+    assert forecast_df["PrecipProb"].tolist() == [65.0]
+    assert forecast_df["Humidity"].tolist() == [77.0]
+    assert forecast_df["SnowIn"].tolist() == [0.0]
+    assert live_temp["PrecipIn"] == 0.2
+    assert live_temp["PrecipProb"] == 70.0
+    assert live_temp["Humidity"] == 80.0
+    assert live_temp["SnowIn"] == 0.0
+
+
 def test_fetch_historical_band_leap_year_fallback_and_aggregation(monkeypatch):
     called_urls = []
 
@@ -300,6 +348,24 @@ def test_build_chart_serialized_spec_has_live_override_for_current_hour():
         and row.get("Temperature") == live_temp
         for row in all_rows
     )
+
+
+def test_build_precip_chart_layers():
+    df = pd.DataFrame(
+        {
+            "Hour": list(range(24)),
+            "PrecipIn": [0.0] * 8 + [0.1, 0.15, 0.12] + [0.0] * 13,
+            "PrecipProb": [20.0] * 24,
+            "Humidity": [55.0] * 24,
+            "SnowIn": [0.0] * 24,
+        }
+    )
+
+    chart = app.build_precip_chart(df=df, current_hour=10)
+    spec = chart.to_dict()
+
+    assert "layer" in spec
+    assert len(spec["layer"]) == 3
 
 
 @pytest.mark.parametrize(
