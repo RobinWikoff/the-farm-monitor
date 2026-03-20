@@ -222,6 +222,7 @@ def resolve_runtime_config(
 
     env_raw = _get_cfg_value("ENV", secrets, environ)
     env_name = str(env_raw if env_raw is not None else "prod").strip().lower()
+    env_is_known = env_name in {"dev", "prod"}
     is_dev = env_name == "dev"
     is_ci = _as_bool(_get_cfg_value("CI", secrets, environ), default=False) or _as_bool(
         _get_cfg_value("GITHUB_ACTIONS", secrets, environ), default=False
@@ -231,9 +232,11 @@ def resolve_runtime_config(
     requested_sample_raw = _get_cfg_value("DEV_USE_SAMPLE_DATA", secrets, environ)
     requested_sample_default = True if is_dev else False
     dev_use_sample_requested = _as_bool(requested_sample_raw, default=requested_sample_default)
+    dev_use_sample_explicit = requested_sample_raw is not None
 
     allow_live_raw = _get_cfg_value("DEV_ALLOW_LIVE_API", secrets, environ)
     dev_allow_live_api = _as_bool(allow_live_raw, default=False)
+    dev_allow_live_api_explicit = allow_live_raw is not None
 
     if is_ci and run_live_tests:
         effective_data_mode = "live"
@@ -267,22 +270,36 @@ def resolve_runtime_config(
 
     return {
         "env": env_name,
+        "env_is_known": env_is_known,
         "is_dev": is_dev,
         "is_ci": is_ci,
         "profile": profile,
         "dev_allow_live_api": dev_allow_live_api,
+        "dev_allow_live_api_explicit": dev_allow_live_api_explicit,
         "dev_use_sample_requested": dev_use_sample_requested,
+        "dev_use_sample_explicit": dev_use_sample_explicit,
+        "run_live_tests_requested": run_live_tests,
         "effective_data_mode": effective_data_mode,
         "live_api_enabled": live_api_enabled,
         "policy_reason": policy_reason,
     }
 
 
-def validate_runtime_config(runtime: Mapping[str, Any]) -> list[str]:
+def inspect_runtime_config(runtime: Mapping[str, Any]) -> dict[str, list[str]]:
     issues: list[str] = []
+    warnings: list[str] = []
+    env_name = runtime.get("env")
+    env_is_known = bool(runtime.get("env_is_known", env_name in {"dev", "prod"}))
+    is_dev = bool(runtime.get("is_dev"))
+    is_ci = bool(runtime.get("is_ci"))
     profile = runtime.get("profile")
     effective_data_mode = runtime.get("effective_data_mode")
     live_api_enabled = runtime.get("live_api_enabled")
+    dev_allow_live_api = bool(runtime.get("dev_allow_live_api"))
+    dev_allow_live_api_explicit = bool(runtime.get("dev_allow_live_api_explicit"))
+    dev_use_sample_requested = bool(runtime.get("dev_use_sample_requested"))
+    dev_use_sample_explicit = bool(runtime.get("dev_use_sample_explicit"))
+    run_live_tests_requested = bool(runtime.get("run_live_tests_requested"))
 
     expected_profiles = {
         "dev-safe",
@@ -293,17 +310,27 @@ def validate_runtime_config(runtime: Mapping[str, Any]) -> list[str]:
     }
     if profile not in expected_profiles:
         issues.append(f"Unknown runtime profile: {profile}")
+    if not env_is_known:
+        issues.append(f"Unsupported ENV value: {env_name}")
 
     if profile == "ci-non-live":
         if live_api_enabled:
             issues.append("ci-non-live must not enable live APIs.")
         if effective_data_mode != "sample":
             issues.append("ci-non-live must use sample mode.")
+        if dev_allow_live_api:
+            issues.append(
+                "CI non-live mode cannot set DEV_ALLOW_LIVE_API=true without RUN_LIVE_INTEGRATION_TESTS=true."
+            )
     elif profile == "ci-live-manual":
         if not live_api_enabled:
             issues.append("ci-live-manual must enable live APIs.")
         if effective_data_mode != "live":
             issues.append("ci-live-manual must use live mode.")
+        if not run_live_tests_requested:
+            issues.append("ci-live-manual requires RUN_LIVE_INTEGRATION_TESTS=true.")
+        if not dev_allow_live_api:
+            issues.append("ci-live-manual requires DEV_ALLOW_LIVE_API=true.")
     elif profile == "dev-safe":
         if live_api_enabled or effective_data_mode != "sample":
             issues.append("dev-safe must disable live APIs and use sample mode.")
@@ -311,7 +338,20 @@ def validate_runtime_config(runtime: Mapping[str, Any]) -> list[str]:
         if not live_api_enabled or effective_data_mode != "live":
             issues.append("prod must enable live APIs and use live mode.")
 
-    return issues
+    if is_ci and run_live_tests_requested and dev_use_sample_requested:
+        warnings.append("DEV_USE_SAMPLE_DATA is ignored in ci-live-manual mode.")
+    if not is_ci and not is_dev and (dev_allow_live_api_explicit or dev_use_sample_explicit):
+        warnings.append("DEV_* flags are ignored outside dev and CI profiles.")
+
+    return {"errors": issues, "warnings": warnings}
+
+
+def validate_runtime_config(runtime: Mapping[str, Any]) -> list[str]:
+    return inspect_runtime_config(runtime)["errors"]
+
+
+def get_runtime_config_warnings(runtime: Mapping[str, Any]) -> list[str]:
+    return inspect_runtime_config(runtime)["warnings"]
 
 
 def _dev_guardrail_state_path() -> str:
@@ -1408,6 +1448,7 @@ def run_app() -> None:
     secrets = _get_streamlit_secrets()
     runtime = resolve_runtime_config(secrets, os.environ)
     runtime_issues = validate_runtime_config(runtime)
+    runtime_warnings = get_runtime_config_warnings(runtime)
     _is_dev = runtime["is_dev"]
     _page_title = "The Farm [DEV]" if _is_dev else "The Farm"
 
@@ -1439,6 +1480,9 @@ def run_app() -> None:
     if runtime_issues:
         st.error("Invalid runtime configuration: " + " | ".join(runtime_issues))
         st.stop()
+
+    for warning_text in runtime_warnings:
+        st.warning("Runtime configuration warning: " + warning_text)
 
     if _is_dev:
         snapshot = get_dev_guardrail_snapshot(
