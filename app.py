@@ -41,6 +41,13 @@ class DevAPIBlockedError(RuntimeError):
     """Raised when dev guardrails intentionally block a live API request."""
 
 
+def _get_streamlit_secrets() -> Mapping[str, Any]:
+    try:
+        return st.secrets
+    except Exception:
+        return {}
+
+
 def _format_dev_guardrail_sidebar_line(item: Mapping[str, Any]) -> str:
     line = (
         f"{item['label']}: {item['used']}/{item['limit']} used"
@@ -101,9 +108,10 @@ def _get_vc_api_key() -> str:
     env_key = os.getenv("VISUAL_CROSSING_API_KEY")
     if env_key:
         return env_key
+    secrets = _get_streamlit_secrets()
     try:
-        return st.secrets["VISUAL_CROSSING_API_KEY"]
-    except (KeyError, FileNotFoundError):
+        return secrets["VISUAL_CROSSING_API_KEY"]
+    except KeyError:
         st.error(
             "⚠️ VISUAL_CROSSING_API_KEY not found in Streamlit secrets. Add it to `.streamlit/secrets.toml`."
         )
@@ -461,11 +469,12 @@ def guarded_requests_get(
     timeout: int,
     guardrail_key: str,
 ) -> requests.Response:
-    runtime = resolve_runtime_config(st.secrets, os.environ)
+    secrets = _get_streamlit_secrets()
+    runtime = resolve_runtime_config(secrets, os.environ)
     allowed, reason = check_and_record_dev_api_request(
         guardrail_key,
         runtime=runtime,
-        secrets=st.secrets,
+        secrets=secrets,
         environ=os.environ,
     )
     if not allowed:
@@ -477,7 +486,7 @@ def guarded_requests_get(
             record_dev_api_cooldown(
                 guardrail_key,
                 runtime=runtime,
-                secrets=st.secrets,
+                secrets=secrets,
                 environ=os.environ,
             )
         resp.raise_for_status()
@@ -488,7 +497,7 @@ def guarded_requests_get(
             record_dev_api_cooldown(
                 guardrail_key,
                 runtime=runtime,
-                secrets=st.secrets,
+                secrets=secrets,
                 environ=os.environ,
             )
         raise
@@ -1303,7 +1312,8 @@ def build_precip_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
 # APP
 # ---------------------------------------------------------------------------
 def run_app() -> None:
-    runtime = resolve_runtime_config(st.secrets, os.environ)
+    secrets = _get_streamlit_secrets()
+    runtime = resolve_runtime_config(secrets, os.environ)
     _is_dev = runtime["is_dev"]
     _page_title = "The Farm [DEV]" if _is_dev else "The Farm"
 
@@ -1336,7 +1346,7 @@ def run_app() -> None:
         snapshot = get_dev_guardrail_snapshot(
             runtime=runtime,
             now=now_mtn,
-            secrets=st.secrets,
+            secrets=secrets,
             environ=os.environ,
         )
         if hasattr(st.sidebar, "markdown"):
