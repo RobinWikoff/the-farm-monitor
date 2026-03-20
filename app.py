@@ -161,7 +161,6 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
             humidity = hour.get("humidity")
             snow = hour.get("snow")
             dt_str = hour.get("datetime", "")  # "HH:mm:ss"
-            # Only require temp/feelslike; optional fields get None if missing
             if dt_str and actual is not None and feelslike is not None:
                 hour_int = int(dt_str.split(":")[0])
                 rows.append(
