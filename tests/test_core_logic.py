@@ -54,6 +54,43 @@ def test_get_temp_trend_missing_prior_hour_returns_none_tuple():
     assert result == (None, None)
 
 
+def test_resolve_runtime_config_dev_safe_forces_sample_when_live_not_explicitly_allowed():
+    cfg = app.resolve_runtime_config(
+        secrets={},
+        environ={"ENV": "dev", "DEV_USE_SAMPLE_DATA": "false"},
+    )
+
+    assert cfg["profile"] == "dev-safe"
+    assert cfg["effective_data_mode"] == "sample"
+    assert cfg["live_api_enabled"] is False
+
+
+def test_resolve_runtime_config_dev_live_allows_live_when_explicitly_opted_in():
+    cfg = app.resolve_runtime_config(
+        secrets={},
+        environ={
+            "ENV": "dev",
+            "DEV_ALLOW_LIVE_API": "true",
+            "DEV_USE_SAMPLE_DATA": "false",
+        },
+    )
+
+    assert cfg["profile"] == "dev-live"
+    assert cfg["effective_data_mode"] == "live"
+    assert cfg["live_api_enabled"] is True
+
+
+def test_resolve_runtime_config_prod_uses_live_mode():
+    cfg = app.resolve_runtime_config(
+        secrets={},
+        environ={"ENV": "prod", "DEV_USE_SAMPLE_DATA": "true"},
+    )
+
+    assert cfg["profile"] == "prod"
+    assert cfg["effective_data_mode"] == "live"
+    assert cfg["live_api_enabled"] is True
+
+
 def test_fetch_forecast_and_current_keeps_hours_when_wdir_missing(monkeypatch):
     payload = {
         "days": [
