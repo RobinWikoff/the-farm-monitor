@@ -288,6 +288,7 @@ def test_format_dev_guardrail_sidebar_line_includes_remaining_and_cooldown():
         "used": 2,
         "limit": 4,
         "remaining": 2,
+        "near_limit": False,
         "blocked": 1,
         "cooldown_active": True,
         "cooldown_until": app.LOCAL_TZ.localize(datetime(2026, 3, 20, 13, 30, 0)),
@@ -299,6 +300,138 @@ def test_format_dev_guardrail_sidebar_line_includes_remaining_and_cooldown():
     assert "2 remaining" in line
     assert "1 blocked" in line
     assert "cooldown until 13:30" in line
+
+
+def test_format_dev_guardrail_sidebar_line_no_indicator_when_healthy():
+    item = {
+        "label": "VC forecast/current",
+        "used": 2,
+        "limit": 12,
+        "remaining": 10,
+        "near_limit": False,
+        "blocked": 0,
+        "cooldown_active": False,
+        "cooldown_until": None,
+    }
+    line = app._format_dev_guardrail_sidebar_line(item)
+    assert not line.startswith("⚠️")
+    assert not line.startswith("🚫")
+
+
+def test_format_dev_guardrail_sidebar_line_near_limit_shows_warning():
+    item = {
+        "label": "VC forecast/current",
+        "used": 10,
+        "limit": 12,
+        "remaining": 2,
+        "near_limit": True,
+        "blocked": 0,
+        "cooldown_active": False,
+        "cooldown_until": None,
+    }
+    line = app._format_dev_guardrail_sidebar_line(item)
+    assert line.startswith("⚠️")
+
+
+def test_format_dev_guardrail_sidebar_line_exhausted_shows_blocked_indicator():
+    item = {
+        "label": "VC forecast/current",
+        "used": 12,
+        "limit": 12,
+        "remaining": 0,
+        "near_limit": False,
+        "blocked": 1,
+        "cooldown_active": False,
+        "cooldown_until": None,
+    }
+    line = app._format_dev_guardrail_sidebar_line(item)
+    assert line.startswith("🚫")
+
+
+def test_get_dev_near_limit_pct_defaults_to_20_percent():
+    pct = app._get_dev_near_limit_pct(secrets={}, environ={})
+    assert pct == 0.20
+
+
+def test_get_dev_near_limit_pct_accepts_fractional():
+    pct = app._get_dev_near_limit_pct(secrets={}, environ={"DEV_GUARDRAIL_NEAR_LIMIT_PCT": "0.30"})
+    assert pct == 0.30
+
+
+def test_get_dev_near_limit_pct_accepts_percentage_integer():
+    pct = app._get_dev_near_limit_pct(secrets={}, environ={"DEV_GUARDRAIL_NEAR_LIMIT_PCT": "25"})
+    assert pct == 0.25
+
+
+def test_get_dev_near_limit_pct_invalid_falls_back_to_default():
+    pct = app._get_dev_near_limit_pct(secrets={}, environ={"DEV_GUARDRAIL_NEAR_LIMIT_PCT": "oops"})
+    assert pct == 0.20
+
+
+def test_snapshot_near_limit_flag_set_when_approaching_budget(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    now = app.LOCAL_TZ.localize(datetime(2026, 3, 20, 9, 0, 0))
+    date_str = now.strftime("%Y-%m-%d")
+    # VC forecast limit is 12 by default; use 11 → 1 remaining → 8.3% → below 20%
+    app._save_dev_guardrail_state(
+        {
+            "date": date_str,
+            "usage": {"visual_crossing_forecast": 11},
+            "blocked": {},
+            "cooldowns": {},
+        }
+    )
+    snapshot = app.get_dev_guardrail_snapshot(
+        runtime={"is_dev": True, "live_api_enabled": True},
+        now=now,
+        secrets={},
+        environ={"ENV": "dev", "DEV_ALLOW_LIVE_API": "true"},
+    )
+    vc_item = next(i for i in snapshot["items"] if i["key"] == "visual_crossing_forecast")
+    assert vc_item["near_limit"] is True
+    assert vc_item["remaining"] == 1
+
+
+def test_snapshot_near_limit_flag_clear_when_budget_healthy(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    now = app.LOCAL_TZ.localize(datetime(2026, 3, 20, 9, 0, 0))
+    date_str = now.strftime("%Y-%m-%d")
+    # 1 used out of 12 → 91.7% remaining → well above 20% threshold
+    app._save_dev_guardrail_state(
+        {"date": date_str, "usage": {"visual_crossing_forecast": 1}, "blocked": {}, "cooldowns": {}}
+    )
+    snapshot = app.get_dev_guardrail_snapshot(
+        runtime={"is_dev": True, "live_api_enabled": True},
+        now=now,
+        secrets={},
+        environ={"ENV": "dev", "DEV_ALLOW_LIVE_API": "true"},
+    )
+    vc_item = next(i for i in snapshot["items"] if i["key"] == "visual_crossing_forecast")
+    assert vc_item["near_limit"] is False
+
+
+def test_snapshot_near_limit_false_when_exhausted(tmp_path, monkeypatch):
+    """Exhausted budget uses 🚫 indicator, not ⚠️ — near_limit must be False."""
+    monkeypatch.chdir(tmp_path)
+    now = app.LOCAL_TZ.localize(datetime(2026, 3, 20, 9, 0, 0))
+    date_str = now.strftime("%Y-%m-%d")
+    app._save_dev_guardrail_state(
+        {
+            "date": date_str,
+            "usage": {"visual_crossing_forecast": 12},
+            "blocked": {},
+            "cooldowns": {},
+        }
+    )
+    snapshot = app.get_dev_guardrail_snapshot(
+        runtime={"is_dev": True, "live_api_enabled": True},
+        now=now,
+        secrets={},
+        environ={"ENV": "dev", "DEV_ALLOW_LIVE_API": "true"},
+    )
+    vc_item = next(i for i in snapshot["items"] if i["key"] == "visual_crossing_forecast")
+    assert vc_item["near_limit"] is False
+    assert vc_item["remaining"] == 0
 
 
 def test_format_dev_guardrail_fallback_distinguishes_budget_and_cooldown():
