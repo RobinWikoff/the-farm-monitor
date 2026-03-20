@@ -203,6 +203,74 @@ def test_guardrail_state_persists_across_reloads(tmp_path, monkeypatch):
     assert state["usage"]["open_meteo_wind"] == 2
 
 
+def test_get_dev_guardrail_snapshot_includes_remaining_and_cooldown_minutes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runtime = app.resolve_runtime_config(
+        secrets={},
+        environ={
+            "ENV": "dev",
+            "DEV_ALLOW_LIVE_API": "true",
+            "DEV_USE_SAMPLE_DATA": "false",
+            "DEV_BUDGET_VC_FORECAST": "4",
+            "DEV_API_COOLDOWN_MINUTES": "45",
+        },
+    )
+    now = app.LOCAL_TZ.localize(datetime(2026, 3, 20, 12, 0, 0))
+    environ = {
+        "ENV": "dev",
+        "DEV_ALLOW_LIVE_API": "true",
+        "DEV_USE_SAMPLE_DATA": "false",
+        "DEV_BUDGET_VC_FORECAST": "4",
+        "DEV_API_COOLDOWN_MINUTES": "45",
+    }
+
+    app.check_and_record_dev_api_request(
+        "visual_crossing_forecast", runtime=runtime, now=now, environ=environ
+    )
+
+    snapshot = app.get_dev_guardrail_snapshot(runtime=runtime, now=now, environ=environ)
+
+    assert snapshot["cooldown_minutes"] == 45
+    vc_item = next(item for item in snapshot["items"] if item["key"] == "visual_crossing_forecast")
+    assert vc_item["used"] == 1
+    assert vc_item["remaining"] == 3
+
+
+def test_format_dev_guardrail_sidebar_line_includes_remaining_and_cooldown():
+    item = {
+        "label": "VC forecast/current",
+        "used": 2,
+        "limit": 4,
+        "remaining": 2,
+        "blocked": 1,
+        "cooldown_active": True,
+        "cooldown_until": app.LOCAL_TZ.localize(datetime(2026, 3, 20, 13, 30, 0)),
+    }
+
+    line = app._format_dev_guardrail_sidebar_line(item)
+
+    assert "2/4 used" in line
+    assert "2 remaining" in line
+    assert "1 blocked" in line
+    assert "cooldown until 13:30" in line
+
+
+def test_format_dev_guardrail_fallback_distinguishes_budget_and_cooldown():
+    budget_msg = app._format_dev_guardrail_fallback(
+        "forecast",
+        app.DevAPIBlockedError("VC forecast/current dev budget exhausted (12/12)."),
+    )
+    cooldown_msg = app._format_dev_guardrail_fallback(
+        "wind",
+        app.DevAPIBlockedError("Open-Meteo wind cooling down until 14:15."),
+    )
+
+    assert "budget reached" in budget_msg
+    assert "showing last known data" in budget_msg
+    assert "cooldown active" in cooldown_msg
+    assert "cached or forecast wind data" in cooldown_msg
+
+
 def test_fetch_forecast_and_current_keeps_hours_when_wdir_missing(monkeypatch):
     payload = {
         "days": [

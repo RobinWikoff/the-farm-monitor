@@ -41,6 +41,50 @@ class DevAPIBlockedError(RuntimeError):
     """Raised when dev guardrails intentionally block a live API request."""
 
 
+def _format_dev_guardrail_sidebar_line(item: Mapping[str, Any]) -> str:
+    line = (
+        f"{item['label']}: {item['used']}/{item['limit']} used"
+        f" ({item['remaining']} remaining), {item['blocked']} blocked"
+    )
+    if item["cooldown_active"] and item["cooldown_until"] is not None:
+        line += f" | cooldown until {item['cooldown_until'].strftime('%H:%M')}"
+    return line
+
+
+def _format_dev_guardrail_fallback(kind: str, exc: Exception) -> str:
+    if not isinstance(exc, DevAPIBlockedError):
+        if kind == "forecast":
+            return "⚠️ Weather API temporarily unavailable — showing last known data."
+        if kind == "historical":
+            return "⚠️ Historical band temporarily unavailable."
+        if kind == "wind":
+            return "⚠️ Wind live refresh temporarily unavailable — showing cached or forecast wind data."
+        return "⚠️ Live weather data temporarily unavailable."
+
+    reason = str(exc)
+    if "budget exhausted" in reason:
+        if kind == "forecast":
+            return f"⚠️ Forecast live-call budget reached for this dev session — showing last known data. {reason}"
+        if kind == "historical":
+            return f"⚠️ Historical live-call budget reached for this dev session. {reason}"
+        if kind == "wind":
+            return f"⚠️ Wind live-call budget reached for this dev session — keeping cached or forecast wind data. {reason}"
+    if "cooling down until" in reason:
+        if kind == "forecast":
+            return f"⚠️ Forecast API cooldown active after rate limiting — showing last known data. {reason}"
+        if kind == "historical":
+            return f"⚠️ Historical API cooldown active after rate limiting. {reason}"
+        if kind == "wind":
+            return f"⚠️ Wind API cooldown active after rate limiting — keeping cached or forecast wind data. {reason}"
+    if kind == "forecast":
+        return f"⚠️ Forecast live API blocked by dev guardrails — showing last known data. {reason}"
+    if kind == "historical":
+        return f"⚠️ Historical live API blocked by dev guardrails. {reason}"
+    if kind == "wind":
+        return f"⚠️ Wind live API blocked by dev guardrails — keeping cached or forecast wind data. {reason}"
+    return f"⚠️ Live API blocked by dev guardrails. {reason}"
+
+
 # ---------------------------------------------------------------------------
 # HELPERS
 # ---------------------------------------------------------------------------
@@ -395,6 +439,7 @@ def get_dev_guardrail_snapshot(
                 "label": DEV_API_LABELS.get(key, key),
                 "used": int(state["usage"].get(key, 0)),
                 "limit": int(limit),
+                "remaining": max(0, int(limit) - int(state["usage"].get(key, 0))),
                 "blocked": int(state["blocked"].get(key, 0)),
                 "cooldown_until": cooldown_until,
                 "cooldown_active": cooldown_until is not None and current < cooldown_until,
@@ -404,6 +449,7 @@ def get_dev_guardrail_snapshot(
     return {
         "enabled": bool(runtime.get("is_dev") and runtime.get("live_api_enabled")),
         "date": date_str,
+        "cooldown_minutes": _get_dev_cooldown_minutes(secrets, environ),
         "items": items,
     }
 
@@ -1304,10 +1350,15 @@ def run_app() -> None:
             else:
                 st.caption(line)
         else:
+            header_line = (
+                f"Daily cooldown window: {snapshot['cooldown_minutes']} minutes after a 429."
+            )
+            if hasattr(st.sidebar, "caption"):
+                st.sidebar.caption(header_line)
+            else:
+                st.caption(header_line)
             for item in snapshot["items"]:
-                line = f"{item['label']}: {item['used']}/{item['limit']} used, {item['blocked']} blocked"
-                if item["cooldown_active"] and item["cooldown_until"] is not None:
-                    line += f" | cooldown until {item['cooldown_until'].strftime('%H:%M')}"
+                line = _format_dev_guardrail_sidebar_line(item)
                 if hasattr(st.sidebar, "caption"):
                     st.sidebar.caption(line)
                 else:
@@ -1343,7 +1394,7 @@ def run_app() -> None:
                     )
                     st.stop()
                 else:
-                    st.warning("⚠️ Weather API temporarily unavailable — showing last known data.")
+                    st.warning(_format_dev_guardrail_fallback("forecast", e))
 
             # Historical band — prefer disk cache, then API, then session fallback.
             today_str = now_mtn.strftime("%Y-%m-%d")
@@ -1372,7 +1423,7 @@ def run_app() -> None:
                     if session_date == today_str and not session_hist.empty:
                         hist_band = session_hist
                     else:
-                        st.caption("⚠️ Historical band temporarily unavailable.")
+                        st.caption(_format_dev_guardrail_fallback("historical", e))
 
         # Wind direction/gust source override from Open-Meteo with session-state fallback.
         try:
@@ -1384,6 +1435,7 @@ def run_app() -> None:
             logger.warning("Open-Meteo wind fetch failed, using cached fallback: %s", e)
             wind_df_om = st.session_state.get("wind_df_om", pd.DataFrame())
             wind_current_om = st.session_state.get("wind_current_om", {})
+            st.caption(_format_dev_guardrail_fallback("wind", e))
 
         if not wind_df_om.empty:
             wind_merge_cols = ["Hour", "WindSpeed", "WindGust", "WindDeg", "WindDir"]
