@@ -223,6 +223,10 @@ def resolve_runtime_config(
     env_raw = _get_cfg_value("ENV", secrets, environ)
     env_name = str(env_raw if env_raw is not None else "prod").strip().lower()
     is_dev = env_name == "dev"
+    is_ci = _as_bool(_get_cfg_value("CI", secrets, environ), default=False) or _as_bool(
+        _get_cfg_value("GITHUB_ACTIONS", secrets, environ), default=False
+    )
+    run_live_tests = _as_bool(_get_cfg_value("RUN_LIVE_INTEGRATION_TESTS", secrets, environ))
 
     requested_sample_raw = _get_cfg_value("DEV_USE_SAMPLE_DATA", secrets, environ)
     requested_sample_default = True if is_dev else False
@@ -231,7 +235,17 @@ def resolve_runtime_config(
     allow_live_raw = _get_cfg_value("DEV_ALLOW_LIVE_API", secrets, environ)
     dev_allow_live_api = _as_bool(allow_live_raw, default=False)
 
-    if is_dev and not dev_allow_live_api:
+    if is_ci and run_live_tests:
+        effective_data_mode = "live"
+        live_api_enabled = True
+        policy_reason = "CI live mode enabled by explicit RUN_LIVE_INTEGRATION_TESTS opt-in."
+        profile = "ci-live-manual"
+    elif is_ci:
+        effective_data_mode = "sample"
+        live_api_enabled = False
+        policy_reason = "CI non-live mode disables live APIs by default."
+        profile = "ci-non-live"
+    elif is_dev and not dev_allow_live_api:
         effective_data_mode = "sample"
         live_api_enabled = False
         policy_reason = "DEV_ALLOW_LIVE_API is false; forcing sample mode in dev."
@@ -254,6 +268,7 @@ def resolve_runtime_config(
     return {
         "env": env_name,
         "is_dev": is_dev,
+        "is_ci": is_ci,
         "profile": profile,
         "dev_allow_live_api": dev_allow_live_api,
         "dev_use_sample_requested": dev_use_sample_requested,
@@ -261,6 +276,42 @@ def resolve_runtime_config(
         "live_api_enabled": live_api_enabled,
         "policy_reason": policy_reason,
     }
+
+
+def validate_runtime_config(runtime: Mapping[str, Any]) -> list[str]:
+    issues: list[str] = []
+    profile = runtime.get("profile")
+    effective_data_mode = runtime.get("effective_data_mode")
+    live_api_enabled = runtime.get("live_api_enabled")
+
+    expected_profiles = {
+        "dev-safe",
+        "dev-live",
+        "ci-non-live",
+        "ci-live-manual",
+        "prod",
+    }
+    if profile not in expected_profiles:
+        issues.append(f"Unknown runtime profile: {profile}")
+
+    if profile == "ci-non-live":
+        if live_api_enabled:
+            issues.append("ci-non-live must not enable live APIs.")
+        if effective_data_mode != "sample":
+            issues.append("ci-non-live must use sample mode.")
+    elif profile == "ci-live-manual":
+        if not live_api_enabled:
+            issues.append("ci-live-manual must enable live APIs.")
+        if effective_data_mode != "live":
+            issues.append("ci-live-manual must use live mode.")
+    elif profile == "dev-safe":
+        if live_api_enabled or effective_data_mode != "sample":
+            issues.append("dev-safe must disable live APIs and use sample mode.")
+    elif profile == "prod":
+        if not live_api_enabled or effective_data_mode != "live":
+            issues.append("prod must enable live APIs and use live mode.")
+
+    return issues
 
 
 def _dev_guardrail_state_path() -> str:
@@ -1356,6 +1407,7 @@ def build_precip_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
 def run_app() -> None:
     secrets = _get_streamlit_secrets()
     runtime = resolve_runtime_config(secrets, os.environ)
+    runtime_issues = validate_runtime_config(runtime)
     _is_dev = runtime["is_dev"]
     _page_title = "The Farm [DEV]" if _is_dev else "The Farm"
 
@@ -1383,6 +1435,10 @@ def run_app() -> None:
         st.sidebar.caption(runtime_line)
     else:
         st.caption(runtime_line)
+
+    if runtime_issues:
+        st.error("Invalid runtime configuration: " + " | ".join(runtime_issues))
+        st.stop()
 
     if _is_dev:
         snapshot = get_dev_guardrail_snapshot(

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -90,6 +91,51 @@ def test_resolve_runtime_config_prod_uses_live_mode():
     assert cfg["profile"] == "prod"
     assert cfg["effective_data_mode"] == "live"
     assert cfg["live_api_enabled"] is True
+
+
+def test_resolve_runtime_config_ci_non_live_forces_sample_mode():
+    cfg = app.resolve_runtime_config(
+        secrets={},
+        environ={"CI": "true", "ENV": "prod", "DEV_ALLOW_LIVE_API": "true"},
+    )
+
+    assert cfg["profile"] == "ci-non-live"
+    assert cfg["effective_data_mode"] == "sample"
+    assert cfg["live_api_enabled"] is False
+
+
+def test_resolve_runtime_config_ci_live_manual_requires_explicit_flag():
+    cfg = app.resolve_runtime_config(
+        secrets={},
+        environ={
+            "CI": "true",
+            "RUN_LIVE_INTEGRATION_TESTS": "true",
+            "ENV": "dev",
+            "DEV_USE_SAMPLE_DATA": "true",
+        },
+    )
+
+    assert cfg["profile"] == "ci-live-manual"
+    assert cfg["effective_data_mode"] == "live"
+    assert cfg["live_api_enabled"] is True
+
+
+def test_validate_runtime_config_flags_invalid_ci_non_live_combinations():
+    issues = app.validate_runtime_config(
+        {
+            "profile": "ci-non-live",
+            "effective_data_mode": "live",
+            "live_api_enabled": True,
+        }
+    )
+
+    assert "ci-non-live must not enable live APIs." in issues
+    assert "ci-non-live must use sample mode." in issues
+
+
+def test_non_live_network_guard_blocks_requests():
+    with pytest.raises(AssertionError, match="External HTTP blocked in non-live tests"):
+        requests.get("https://example.com", timeout=1)
 
 
 def test_check_and_record_dev_api_request_increments_usage_and_blocks_at_cap(tmp_path, monkeypatch):

@@ -25,6 +25,10 @@ jobs:
     if: github.event_name != 'workflow_dispatch' || inputs.run_live_api_tests == false
     runs-on: ubuntu-latest
     env:
+      CI: "true"
+      ENV: "dev"
+      DEV_ALLOW_LIVE_API: "false"
+      DEV_USE_SAMPLE_DATA: "true"
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
     steps:
@@ -41,6 +45,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Log effective runtime profile
+        run: |
+          python - <<'PY'
+          import app
+          cfg = app.resolve_runtime_config({}, None)
+          print(f"profile={cfg['profile']}")
+          print(f"live_api_enabled={cfg['live_api_enabled']}")
+          print(f"effective_data_mode={cfg['effective_data_mode']}")
+          print(f"policy_reason={cfg['policy_reason']}")
+          PY
+
       - name: Run tests excluding live API marker
         run: pytest -q -m "not live_api"
 
@@ -49,6 +64,10 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.run_live_api_tests == true
     runs-on: ubuntu-latest
     env:
+      CI: "true"
+      ENV: "dev"
+      DEV_ALLOW_LIVE_API: "true"
+      DEV_USE_SAMPLE_DATA: "false"
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       RUN_LIVE_INTEGRATION_TESTS: "true"
       VISUAL_CROSSING_API_KEY: ${{ secrets.VISUAL_CROSSING_API_KEY }}
@@ -74,6 +93,17 @@ jobs:
             echo "Add repository secret VISUAL_CROSSING_API_KEY before running this job."
             exit 1
           fi
+
+      - name: Log effective runtime profile
+        run: |
+          python - <<'PY'
+          import app
+          cfg = app.resolve_runtime_config({}, None)
+          print(f"profile={cfg['profile']}")
+          print(f"live_api_enabled={cfg['live_api_enabled']}")
+          print(f"effective_data_mode={cfg['effective_data_mode']}")
+          print(f"policy_reason={cfg['policy_reason']}")
+          PY
 
       - name: Run live API tests only
         run: pytest -q -m live_api
