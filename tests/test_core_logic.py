@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -89,6 +90,117 @@ def test_resolve_runtime_config_prod_uses_live_mode():
     assert cfg["profile"] == "prod"
     assert cfg["effective_data_mode"] == "live"
     assert cfg["live_api_enabled"] is True
+
+
+def test_check_and_record_dev_api_request_increments_usage_and_blocks_at_cap(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runtime = app.resolve_runtime_config(
+        secrets={},
+        environ={
+            "ENV": "dev",
+            "DEV_ALLOW_LIVE_API": "true",
+            "DEV_USE_SAMPLE_DATA": "false",
+            "DEV_BUDGET_VC_FORECAST": "2",
+        },
+    )
+    now = app.LOCAL_TZ.localize(datetime(2026, 3, 20, 9, 0, 0))
+    environ = {
+        "ENV": "dev",
+        "DEV_ALLOW_LIVE_API": "true",
+        "DEV_USE_SAMPLE_DATA": "false",
+        "DEV_BUDGET_VC_FORECAST": "2",
+    }
+
+    assert app.check_and_record_dev_api_request(
+        "visual_crossing_forecast", runtime=runtime, now=now, environ=environ
+    ) == (True, None)
+    assert app.check_and_record_dev_api_request(
+        "visual_crossing_forecast", runtime=runtime, now=now, environ=environ
+    ) == (True, None)
+
+    allowed, reason = app.check_and_record_dev_api_request(
+        "visual_crossing_forecast", runtime=runtime, now=now, environ=environ
+    )
+    assert allowed is False
+    assert "budget exhausted" in reason
+
+    snapshot = app.get_dev_guardrail_snapshot(runtime=runtime, now=now, environ=environ)
+    vc_item = next(item for item in snapshot["items"] if item["key"] == "visual_crossing_forecast")
+    assert vc_item["used"] == 2
+    assert vc_item["blocked"] == 1
+
+
+def test_record_dev_api_cooldown_blocks_until_expiry(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runtime = app.resolve_runtime_config(
+        secrets={},
+        environ={
+            "ENV": "dev",
+            "DEV_ALLOW_LIVE_API": "true",
+            "DEV_USE_SAMPLE_DATA": "false",
+        },
+    )
+    now = app.LOCAL_TZ.localize(datetime(2026, 3, 20, 10, 0, 0))
+    environ = {
+        "ENV": "dev",
+        "DEV_ALLOW_LIVE_API": "true",
+        "DEV_USE_SAMPLE_DATA": "false",
+        "DEV_API_COOLDOWN_MINUTES": "30",
+    }
+
+    until = app.record_dev_api_cooldown(
+        "open_meteo_wind", runtime=runtime, now=now, environ=environ
+    )
+    assert until is not None
+
+    allowed, reason = app.check_and_record_dev_api_request(
+        "open_meteo_wind",
+        runtime=runtime,
+        now=now + timedelta(minutes=10),
+        environ=environ,
+    )
+    assert allowed is False
+    assert "cooling down" in reason
+
+    allowed, reason = app.check_and_record_dev_api_request(
+        "open_meteo_wind",
+        runtime=runtime,
+        now=now + timedelta(minutes=31),
+        environ=environ,
+    )
+    assert allowed is True
+    assert reason is None
+
+
+def test_guardrail_state_persists_across_reloads(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runtime = app.resolve_runtime_config(
+        secrets={},
+        environ={
+            "ENV": "dev",
+            "DEV_ALLOW_LIVE_API": "true",
+            "DEV_USE_SAMPLE_DATA": "false",
+            "DEV_BUDGET_OPEN_METEO_WIND": "5",
+        },
+    )
+    now = app.LOCAL_TZ.localize(datetime(2026, 3, 20, 11, 0, 0))
+    environ = {
+        "ENV": "dev",
+        "DEV_ALLOW_LIVE_API": "true",
+        "DEV_USE_SAMPLE_DATA": "false",
+        "DEV_BUDGET_OPEN_METEO_WIND": "5",
+    }
+
+    app.check_and_record_dev_api_request(
+        "open_meteo_wind", runtime=runtime, now=now, environ=environ
+    )
+    app.check_and_record_dev_api_request(
+        "open_meteo_wind", runtime=runtime, now=now, environ=environ
+    )
+
+    date_str = now.strftime("%Y-%m-%d")
+    state = app._load_dev_guardrail_state(date_str)
+    assert state["usage"]["open_meteo_wind"] == 2
 
 
 def test_fetch_forecast_and_current_keeps_hours_when_wdir_missing(monkeypatch):
