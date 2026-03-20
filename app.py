@@ -214,8 +214,10 @@ def resolve_runtime_config(
     environ: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Resolve deterministic app runtime mode and API-call policy."""
-    secrets = secrets or {}
-    environ = environ or os.environ
+    if secrets is None:
+        secrets = {}
+    if environ is None:
+        environ = os.environ
 
     env_raw = _get_cfg_value("ENV", secrets, environ)
     env_name = str(env_raw if env_raw is not None else "prod").strip().lower()
@@ -302,8 +304,10 @@ def _get_dev_budget_limits(
     secrets: Mapping[str, Any] | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> dict[str, int]:
-    secrets = secrets or {}
-    environ = environ or os.environ
+    if secrets is None:
+        secrets = {}
+    if environ is None:
+        environ = os.environ
     limits = DEV_API_BUDGET_DEFAULTS.copy()
     env_map = {
         "visual_crossing_forecast": "DEV_BUDGET_VC_FORECAST",
@@ -325,8 +329,10 @@ def _get_dev_cooldown_minutes(
     secrets: Mapping[str, Any] | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> int:
-    secrets = secrets or {}
-    environ = environ or os.environ
+    if secrets is None:
+        secrets = {}
+    if environ is None:
+        environ = os.environ
     raw = _get_cfg_value("DEV_API_COOLDOWN_MINUTES", secrets, environ)
     try:
         return max(1, int(raw)) if raw is not None else DEV_API_COOLDOWN_MINUTES_DEFAULT
@@ -350,7 +356,8 @@ def check_and_record_dev_api_request(
     secrets: Mapping[str, Any] | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> tuple[bool, str | None]:
-    runtime = runtime or resolve_runtime_config(secrets, environ)
+    if runtime is None:
+        runtime = resolve_runtime_config(secrets, environ)
     if not runtime.get("is_dev") or not runtime.get("live_api_enabled"):
         return True, None
 
@@ -399,7 +406,8 @@ def record_dev_api_cooldown(
     environ: Mapping[str, str] | None = None,
     minutes: int | None = None,
 ) -> datetime | None:
-    runtime = runtime or resolve_runtime_config(secrets, environ)
+    if runtime is None:
+        runtime = resolve_runtime_config(secrets, environ)
     if not runtime.get("is_dev") or not runtime.get("live_api_enabled"):
         return None
 
@@ -420,7 +428,8 @@ def get_dev_guardrail_snapshot(
     secrets: Mapping[str, Any] | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    runtime = runtime or resolve_runtime_config(secrets, environ)
+    if runtime is None:
+        runtime = resolve_runtime_config(secrets, environ)
     current = _guardrail_now(now)
     date_str = current.strftime("%Y-%m-%d")
     state = _load_dev_guardrail_state(date_str)
