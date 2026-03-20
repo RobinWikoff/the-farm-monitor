@@ -271,6 +271,88 @@ def test_format_dev_guardrail_fallback_distinguishes_budget_and_cooldown():
     assert "cached or forecast wind data" in cooldown_msg
 
 
+def test_get_dev_budget_limits_invalid_values_fall_back_to_defaults():
+    limits = app._get_dev_budget_limits(
+        secrets={},
+        environ={
+            "DEV_BUDGET_VC_FORECAST": "abc",
+            "DEV_BUDGET_VC_HISTORICAL": "",
+            "DEV_BUDGET_OPEN_METEO_WIND": "-5",
+        },
+    )
+
+    assert (
+        limits["visual_crossing_forecast"]
+        == app.DEV_API_BUDGET_DEFAULTS["visual_crossing_forecast"]
+    )
+    assert (
+        limits["visual_crossing_historical"]
+        == app.DEV_API_BUDGET_DEFAULTS["visual_crossing_historical"]
+    )
+    assert limits["open_meteo_wind"] == 0
+
+
+def test_reset_dev_guardrail_usage_and_blocked_clears_counters_only(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    now = app.LOCAL_TZ.localize(datetime(2026, 3, 20, 8, 0, 0))
+    date_str = now.strftime("%Y-%m-%d")
+    app._save_dev_guardrail_state(
+        {
+            "date": date_str,
+            "usage": {"visual_crossing_forecast": 3},
+            "blocked": {"visual_crossing_forecast": 2},
+            "cooldowns": {"visual_crossing_forecast": now.isoformat()},
+        }
+    )
+
+    state = app.reset_dev_guardrail_usage_and_blocked(now=now)
+
+    assert state["usage"] == {}
+    assert state["blocked"] == {}
+    assert "visual_crossing_forecast" in state["cooldowns"]
+
+
+def test_clear_dev_guardrail_cooldowns_keeps_usage_and_blocked(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    now = app.LOCAL_TZ.localize(datetime(2026, 3, 20, 9, 0, 0))
+    date_str = now.strftime("%Y-%m-%d")
+    app._save_dev_guardrail_state(
+        {
+            "date": date_str,
+            "usage": {"open_meteo_wind": 4},
+            "blocked": {"open_meteo_wind": 1},
+            "cooldowns": {"open_meteo_wind": now.isoformat()},
+        }
+    )
+
+    state = app.clear_dev_guardrail_cooldowns(now=now)
+
+    assert state["cooldowns"] == {}
+    assert state["usage"] == {"open_meteo_wind": 4}
+    assert state["blocked"] == {"open_meteo_wind": 1}
+
+
+def test_get_dev_guardrail_raw_state_rolls_over_to_today(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    yesterday = app.LOCAL_TZ.localize(datetime(2026, 3, 19, 23, 0, 0))
+    app._save_dev_guardrail_state(
+        {
+            "date": yesterday.strftime("%Y-%m-%d"),
+            "usage": {"visual_crossing_forecast": 99},
+            "blocked": {"visual_crossing_forecast": 10},
+            "cooldowns": {"visual_crossing_forecast": yesterday.isoformat()},
+        }
+    )
+
+    today = app.LOCAL_TZ.localize(datetime(2026, 3, 20, 7, 0, 0))
+    state = app.get_dev_guardrail_raw_state(now=today)
+
+    assert state["date"] == "2026-03-20"
+    assert state["usage"] == {}
+    assert state["blocked"] == {}
+    assert state["cooldowns"] == {}
+
+
 def test_fetch_forecast_and_current_keeps_hours_when_wdir_missing(monkeypatch):
     payload = {
         "days": [

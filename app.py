@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 import altair as alt
 from datetime import datetime, timedelta
+from contextlib import nullcontext
 import pytz
 import logging
 import math
@@ -298,6 +299,38 @@ def _save_dev_guardrail_state(state: Mapping[str, Any]) -> None:
     path = _dev_guardrail_state_path()
     with open(path, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2, sort_keys=True)
+
+
+def reset_dev_guardrail_usage_and_blocked(
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Reset usage and blocked counters for today's guardrail state."""
+    current = _guardrail_now(now)
+    date_str = current.strftime("%Y-%m-%d")
+    state = _load_dev_guardrail_state(date_str)
+    state["usage"] = {}
+    state["blocked"] = {}
+    _save_dev_guardrail_state(state)
+    return state
+
+
+def clear_dev_guardrail_cooldowns(
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Clear cooldown entries for today's guardrail state."""
+    current = _guardrail_now(now)
+    date_str = current.strftime("%Y-%m-%d")
+    state = _load_dev_guardrail_state(date_str)
+    state["cooldowns"] = {}
+    _save_dev_guardrail_state(state)
+    return state
+
+
+def get_dev_guardrail_raw_state(now: datetime | None = None) -> dict[str, Any]:
+    """Return today's persisted guardrail state for debugging."""
+    current = _guardrail_now(now)
+    date_str = current.strftime("%Y-%m-%d")
+    return _load_dev_guardrail_state(date_str)
 
 
 def _get_dev_budget_limits(
@@ -1382,6 +1415,35 @@ def run_app() -> None:
                     st.sidebar.caption(line)
                 else:
                     st.caption(line)
+
+        controls_ctx = (
+            st.sidebar.expander("Guardrail Controls", expanded=False)
+            if hasattr(st.sidebar, "expander")
+            else nullcontext()
+        )
+        with controls_ctx:
+            sidebar_button = st.sidebar.button if hasattr(st.sidebar, "button") else st.button
+            sidebar_checkbox = (
+                st.sidebar.checkbox if hasattr(st.sidebar, "checkbox") else st.checkbox
+            )
+
+            if sidebar_button("Reset usage + blocked", key="guardrail_reset_usage"):
+                reset_dev_guardrail_usage_and_blocked(now=now_mtn)
+                st.success("Dev guardrail usage and blocked counters reset.")
+                st.rerun()
+
+            if sidebar_button("Clear cooldowns", key="guardrail_clear_cooldowns"):
+                clear_dev_guardrail_cooldowns(now=now_mtn)
+                st.success("Dev guardrail cooldowns cleared.")
+                st.rerun()
+
+            if sidebar_checkbox("Show raw guardrail state", value=False, key="guardrail_show_raw"):
+                raw_state = get_dev_guardrail_raw_state(now=now_mtn)
+                raw_json = json.dumps(raw_state, indent=2, sort_keys=True)
+                if hasattr(st.sidebar, "code"):
+                    st.sidebar.code(raw_json, language="json")
+                else:
+                    st.code(raw_json, language="json")
 
     if _is_dev and not runtime["live_api_enabled"] and not runtime["dev_use_sample_requested"]:
         st.warning(
