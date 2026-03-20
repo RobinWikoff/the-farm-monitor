@@ -49,9 +49,32 @@ def _get_streamlit_secrets() -> Mapping[str, Any]:
         return {}
 
 
+def _get_dev_near_limit_pct(
+    secrets: Mapping[str, Any] | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> float:
+    """Return the fraction of budget remaining below which a near-limit warning is shown."""
+    raw = _get_cfg_value("DEV_GUARDRAIL_NEAR_LIMIT_PCT", secrets or {}, environ or os.environ)
+    if raw is None:
+        return 0.20
+    try:
+        pct = float(raw)
+        if 0.0 <= pct <= 1.0:
+            return pct
+        return pct / 100.0
+    except (ValueError, TypeError):
+        return 0.20
+
+
 def _format_dev_guardrail_sidebar_line(item: Mapping[str, Any]) -> str:
+    if item["remaining"] == 0:
+        indicator = "🚫 "
+    elif item.get("near_limit", False):
+        indicator = "⚠️ "
+    else:
+        indicator = ""
     line = (
-        f"{item['label']}: {item['used']}/{item['limit']} used"
+        f"{indicator}{item['label']}: {item['used']}/{item['limit']} used"
         f" ({item['remaining']} remaining), {item['blocked']} blocked"
     )
     if item["cooldown_active"] and item["cooldown_until"] is not None:
@@ -558,6 +581,7 @@ def get_dev_guardrail_snapshot(
     date_str = current.strftime("%Y-%m-%d")
     state = _load_dev_guardrail_state(date_str)
     limits = _get_dev_budget_limits(secrets, environ)
+    near_limit_pct = _get_dev_near_limit_pct(secrets, environ)
 
     items = []
     for key, limit in limits.items():
@@ -574,13 +598,17 @@ def get_dev_guardrail_snapshot(
                 else:
                     cooldown_until = cooldown_until.astimezone(LOCAL_TZ)
 
+        used = int(state["usage"].get(key, 0))
+        remaining = max(0, int(limit) - used)
+        near_limit = remaining > 0 and (remaining / int(limit)) <= near_limit_pct
         items.append(
             {
                 "key": key,
                 "label": DEV_API_LABELS.get(key, key),
-                "used": int(state["usage"].get(key, 0)),
+                "used": used,
                 "limit": int(limit),
-                "remaining": max(0, int(limit) - int(state["usage"].get(key, 0))),
+                "remaining": remaining,
+                "near_limit": near_limit,
                 "blocked": int(state["blocked"].get(key, 0)),
                 "cooldown_until": cooldown_until,
                 "cooldown_active": cooldown_until is not None and current < cooldown_until,
