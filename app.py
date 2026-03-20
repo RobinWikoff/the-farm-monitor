@@ -1094,6 +1094,12 @@ def run_app() -> None:
     forecast_future.loc[forecast_future["Hour"] == current_hour, "Temperature"] = selected_live_temp
     render_status_banner(selected_live_temp, threshold, forecast_future, mode)
 
+    # Temperature chart
+    st.altair_chart(
+        build_chart(df_display, selected_live_temp, threshold, current_hour, hist_band_display),
+        width="stretch",
+    )
+
     # Wind section
     for wind_col in ["WindSpeed", "WindGust", "WindDir"]:
         if wind_col not in df.columns:
@@ -1177,12 +1183,6 @@ def run_app() -> None:
         wind_hist_band = hist_band[["Hour", "WindSpeedHigh", "WindSpeedLow", "WindSpeedMean"]]
 
     st.altair_chart(build_wind_chart(wind_df, current_hour, wind_hist_band), width="stretch")
-
-    # Chart
-    st.altair_chart(
-        build_chart(df_display, selected_live_temp, threshold, current_hour, hist_band_display),
-        width="stretch",
-    )
 
     st.write("---")
 
