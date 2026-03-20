@@ -66,7 +66,7 @@ def test_ci_live_manual_warns_when_sample_requested():
 def test_non_live_workflow_pins_safe_guardrail_envs():
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
 
-    assert 'name: Unit and integration tests (non-live)' in workflow
+    assert "name: Unit and integration tests (non-live)" in workflow
     assert 'CI: "true"' in workflow
     assert 'DEV_ALLOW_LIVE_API: "false"' in workflow
     assert 'DEV_USE_SAMPLE_DATA: "true"' in workflow
@@ -75,8 +75,8 @@ def test_non_live_workflow_pins_safe_guardrail_envs():
 def test_live_workflow_pins_explicit_live_guardrail_envs_and_logging():
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
 
-    assert 'name: Live API integration tests (manual)' in workflow
+    assert "name: Live API integration tests (manual)" in workflow
     assert 'RUN_LIVE_INTEGRATION_TESTS: "true"' in workflow
     assert 'DEV_ALLOW_LIVE_API: "true"' in workflow
     assert 'DEV_USE_SAMPLE_DATA: "false"' in workflow
-    assert 'Log effective runtime profile' in workflow
+    assert "Log effective runtime profile" in workflow
