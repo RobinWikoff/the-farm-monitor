@@ -7,6 +7,7 @@ import pytz
 import logging
 import math
 import os
+from typing import Any, Mapping
 
 # ---------------------------------------------------------------------------
 # CONFIG
@@ -128,6 +129,66 @@ def _as_bool(value, default: bool = False) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "yes", "on"}
     return default
+
+
+def _get_cfg_value(name: str, secrets: Mapping[str, Any], environ: Mapping[str, str]) -> Any:
+    if name in environ and environ[name] != "":
+        return environ[name]
+    try:
+        return secrets[name]
+    except Exception:
+        return None
+
+
+def resolve_runtime_config(
+    secrets: Mapping[str, Any] | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    """Resolve deterministic app runtime mode and API-call policy."""
+    secrets = secrets or {}
+    environ = environ or os.environ
+
+    env_raw = _get_cfg_value("ENV", secrets, environ)
+    env_name = str(env_raw if env_raw is not None else "prod").strip().lower()
+    is_dev = env_name == "dev"
+
+    requested_sample_raw = _get_cfg_value("DEV_USE_SAMPLE_DATA", secrets, environ)
+    requested_sample_default = True if is_dev else False
+    dev_use_sample_requested = _as_bool(requested_sample_raw, default=requested_sample_default)
+
+    allow_live_raw = _get_cfg_value("DEV_ALLOW_LIVE_API", secrets, environ)
+    dev_allow_live_api = _as_bool(allow_live_raw, default=False)
+
+    if is_dev and not dev_allow_live_api:
+        effective_data_mode = "sample"
+        live_api_enabled = False
+        policy_reason = "DEV_ALLOW_LIVE_API is false; forcing sample mode in dev."
+        profile = "dev-safe"
+    elif is_dev and dev_allow_live_api:
+        effective_data_mode = "sample" if dev_use_sample_requested else "live"
+        live_api_enabled = not dev_use_sample_requested
+        policy_reason = (
+            "Live API enabled in dev by explicit opt-in."
+            if live_api_enabled
+            else "Using sample mode in dev by explicit setting."
+        )
+        profile = "dev-live"
+    else:
+        effective_data_mode = "live"
+        live_api_enabled = True
+        policy_reason = "Production mode uses live APIs."
+        profile = "prod"
+
+    return {
+        "env": env_name,
+        "is_dev": is_dev,
+        "profile": profile,
+        "dev_allow_live_api": dev_allow_live_api,
+        "dev_use_sample_requested": dev_use_sample_requested,
+        "effective_data_mode": effective_data_mode,
+        "live_api_enabled": live_api_enabled,
+        "policy_reason": policy_reason,
+    }
 
 
 def _hist_cache_path(date_str: str) -> str:
@@ -921,8 +982,8 @@ def build_precip_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
 # APP
 # ---------------------------------------------------------------------------
 def run_app() -> None:
-    _env = st.secrets.get("ENV", os.getenv("ENV", "prod"))
-    _is_dev = str(_env).strip().lower() == "dev"
+    runtime = resolve_runtime_config(st.secrets, os.environ)
+    _is_dev = runtime["is_dev"]
     _page_title = "The Farm [DEV]" if _is_dev else "The Farm"
 
     st.set_page_config(page_title=_page_title, page_icon="🏔️", layout="wide")
@@ -941,11 +1002,24 @@ def run_app() -> None:
     selected_temp_key = "FeelsLike" if temp_mode == "Feels Like" else "Actual"
     selected_metric_title = f"{temp_mode} Now"
 
-    dev_sample_setting = st.secrets.get("DEV_USE_SAMPLE_DATA", os.getenv("DEV_USE_SAMPLE_DATA"))
-    dev_use_sample_data = _is_dev and _as_bool(dev_sample_setting, default=True)
+    runtime_line = (
+        f"Profile: {runtime['profile']} | Data mode: {runtime['effective_data_mode']} | "
+        f"Live API: {'on' if runtime['live_api_enabled'] else 'off'}"
+    )
+    if hasattr(st.sidebar, "caption"):
+        st.sidebar.caption(runtime_line)
+    else:
+        st.caption(runtime_line)
+
+    if _is_dev and not runtime["live_api_enabled"] and not runtime["dev_use_sample_requested"]:
+        st.warning(
+            "DEV_USE_SAMPLE_DATA=false was requested, but live API is blocked in dev unless DEV_ALLOW_LIVE_API=true."
+        )
+
+    dev_use_sample_data = runtime["effective_data_mode"] == "sample"
 
     if dev_use_sample_data:
-        st.info("Using local dev sample weather data (no external API calls).")
+        st.info(f"Using local sample weather data. {runtime['policy_reason']}")
         df, live_temp, hist_band = _build_dev_sample_payload(now_mtn)
     else:
         # Fetch data
