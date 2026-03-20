@@ -2,11 +2,12 @@ import streamlit as st
 import requests
 import pandas as pd
 import altair as alt
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 import logging
 import math
 import os
+import json
 from typing import Any, Mapping
 
 # ---------------------------------------------------------------------------
@@ -21,7 +22,74 @@ THRESHOLDS = {"Winter (Warming Focus)": 65.0, "Summer (Cooling Focus)": 70.0}
 
 VC_BASE = "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline"
 
+DEV_API_BUDGET_DEFAULTS = {
+    "visual_crossing_forecast": 12,
+    "visual_crossing_historical": 3,
+    "open_meteo_wind": 24,
+}
+DEV_API_LABELS = {
+    "visual_crossing_forecast": "VC forecast/current",
+    "visual_crossing_historical": "VC historical band",
+    "open_meteo_wind": "Open-Meteo wind",
+}
+DEV_API_COOLDOWN_MINUTES_DEFAULT = 30
+
 logger = logging.getLogger(__name__)
+
+
+class DevAPIBlockedError(RuntimeError):
+    """Raised when dev guardrails intentionally block a live API request."""
+
+
+def _get_streamlit_secrets() -> Mapping[str, Any]:
+    try:
+        return st.secrets
+    except Exception:
+        return {}
+
+
+def _format_dev_guardrail_sidebar_line(item: Mapping[str, Any]) -> str:
+    line = (
+        f"{item['label']}: {item['used']}/{item['limit']} used"
+        f" ({item['remaining']} remaining), {item['blocked']} blocked"
+    )
+    if item["cooldown_active"] and item["cooldown_until"] is not None:
+        line += f" | cooldown until {item['cooldown_until'].strftime('%H:%M')}"
+    return line
+
+
+def _format_dev_guardrail_fallback(kind: str, exc: Exception) -> str:
+    if not isinstance(exc, DevAPIBlockedError):
+        if kind == "forecast":
+            return "⚠️ Weather API temporarily unavailable — showing last known data."
+        if kind == "historical":
+            return "⚠️ Historical band temporarily unavailable."
+        if kind == "wind":
+            return "⚠️ Wind live refresh temporarily unavailable — showing cached or forecast wind data."
+        return "⚠️ Live weather data temporarily unavailable."
+
+    reason = str(exc)
+    if "budget exhausted" in reason:
+        if kind == "forecast":
+            return f"⚠️ Forecast live-call budget reached for this dev session — showing last known data. {reason}"
+        if kind == "historical":
+            return f"⚠️ Historical live-call budget reached for this dev session. {reason}"
+        if kind == "wind":
+            return f"⚠️ Wind live-call budget reached for this dev session — keeping cached or forecast wind data. {reason}"
+    if "cooling down until" in reason:
+        if kind == "forecast":
+            return f"⚠️ Forecast API cooldown active after rate limiting — showing last known data. {reason}"
+        if kind == "historical":
+            return f"⚠️ Historical API cooldown active after rate limiting. {reason}"
+        if kind == "wind":
+            return f"⚠️ Wind API cooldown active after rate limiting — keeping cached or forecast wind data. {reason}"
+    if kind == "forecast":
+        return f"⚠️ Forecast live API blocked by dev guardrails — showing last known data. {reason}"
+    if kind == "historical":
+        return f"⚠️ Historical live API blocked by dev guardrails. {reason}"
+    if kind == "wind":
+        return f"⚠️ Wind live API blocked by dev guardrails — keeping cached or forecast wind data. {reason}"
+    return f"⚠️ Live API blocked by dev guardrails. {reason}"
 
 
 # ---------------------------------------------------------------------------
@@ -40,9 +108,10 @@ def _get_vc_api_key() -> str:
     env_key = os.getenv("VISUAL_CROSSING_API_KEY")
     if env_key:
         return env_key
+    secrets = _get_streamlit_secrets()
     try:
-        return st.secrets["VISUAL_CROSSING_API_KEY"]
-    except (KeyError, FileNotFoundError):
+        return secrets["VISUAL_CROSSING_API_KEY"]
+    except KeyError:
         st.error(
             "⚠️ VISUAL_CROSSING_API_KEY not found in Streamlit secrets. Add it to `.streamlit/secrets.toml`."
         )
@@ -145,8 +214,10 @@ def resolve_runtime_config(
     environ: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Resolve deterministic app runtime mode and API-call policy."""
-    secrets = secrets or {}
-    environ = environ or os.environ
+    if secrets is None:
+        secrets = {}
+    if environ is None:
+        environ = os.environ
 
     env_raw = _get_cfg_value("ENV", secrets, environ)
     env_name = str(env_raw if env_raw is not None else "prod").strip().lower()
@@ -189,6 +260,256 @@ def resolve_runtime_config(
         "live_api_enabled": live_api_enabled,
         "policy_reason": policy_reason,
     }
+
+
+def _dev_guardrail_state_path() -> str:
+    cache_dir = os.path.join(".streamlit", "guardrails")
+    os.makedirs(cache_dir, exist_ok=True)
+    return os.path.join(cache_dir, "dev_api_state.json")
+
+
+def _fresh_dev_guardrail_state(date_str: str) -> dict[str, Any]:
+    return {
+        "date": date_str,
+        "usage": {},
+        "blocked": {},
+        "cooldowns": {},
+    }
+
+
+def _load_dev_guardrail_state(date_str: str) -> dict[str, Any]:
+    path = _dev_guardrail_state_path()
+    if not os.path.exists(path):
+        return _fresh_dev_guardrail_state(date_str)
+    try:
+        with open(path, encoding="utf-8") as f:
+            state = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return _fresh_dev_guardrail_state(date_str)
+    if state.get("date") != date_str:
+        return _fresh_dev_guardrail_state(date_str)
+    state.setdefault("usage", {})
+    state.setdefault("blocked", {})
+    state.setdefault("cooldowns", {})
+    return state
+
+
+def _save_dev_guardrail_state(state: Mapping[str, Any]) -> None:
+    path = _dev_guardrail_state_path()
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2, sort_keys=True)
+
+
+def _get_dev_budget_limits(
+    secrets: Mapping[str, Any] | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> dict[str, int]:
+    if secrets is None:
+        secrets = {}
+    if environ is None:
+        environ = os.environ
+    limits = DEV_API_BUDGET_DEFAULTS.copy()
+    env_map = {
+        "visual_crossing_forecast": "DEV_BUDGET_VC_FORECAST",
+        "visual_crossing_historical": "DEV_BUDGET_VC_HISTORICAL",
+        "open_meteo_wind": "DEV_BUDGET_OPEN_METEO_WIND",
+    }
+    for key, env_name in env_map.items():
+        raw = _get_cfg_value(env_name, secrets, environ)
+        if raw is None:
+            continue
+        try:
+            limits[key] = max(0, int(raw))
+        except (TypeError, ValueError):
+            continue
+    return limits
+
+
+def _get_dev_cooldown_minutes(
+    secrets: Mapping[str, Any] | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> int:
+    if secrets is None:
+        secrets = {}
+    if environ is None:
+        environ = os.environ
+    raw = _get_cfg_value("DEV_API_COOLDOWN_MINUTES", secrets, environ)
+    try:
+        return max(1, int(raw)) if raw is not None else DEV_API_COOLDOWN_MINUTES_DEFAULT
+    except (TypeError, ValueError):
+        return DEV_API_COOLDOWN_MINUTES_DEFAULT
+
+
+def _guardrail_now(now: datetime | None = None) -> datetime:
+    if now is None:
+        return datetime.now(LOCAL_TZ)
+    if now.tzinfo is None:
+        return LOCAL_TZ.localize(now)
+    return now.astimezone(LOCAL_TZ)
+
+
+def check_and_record_dev_api_request(
+    key: str,
+    *,
+    runtime: Mapping[str, Any] | None = None,
+    now: datetime | None = None,
+    secrets: Mapping[str, Any] | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> tuple[bool, str | None]:
+    if runtime is None:
+        runtime = resolve_runtime_config(secrets, environ)
+    if not runtime.get("is_dev") or not runtime.get("live_api_enabled"):
+        return True, None
+
+    current = _guardrail_now(now)
+    date_str = current.strftime("%Y-%m-%d")
+    state = _load_dev_guardrail_state(date_str)
+    limits = _get_dev_budget_limits(secrets, environ)
+
+    cooldown_until_str = state["cooldowns"].get(key)
+    if cooldown_until_str:
+        try:
+            cooldown_until = datetime.fromisoformat(cooldown_until_str)
+        except ValueError:
+            cooldown_until = None
+        if cooldown_until is not None:
+            if cooldown_until.tzinfo is None:
+                cooldown_until = LOCAL_TZ.localize(cooldown_until)
+            else:
+                cooldown_until = cooldown_until.astimezone(LOCAL_TZ)
+            if current < cooldown_until:
+                state["blocked"][key] = int(state["blocked"].get(key, 0)) + 1
+                _save_dev_guardrail_state(state)
+                return (
+                    False,
+                    f"{DEV_API_LABELS.get(key, key)} cooling down until {cooldown_until.strftime('%H:%M')}.",
+                )
+
+    used = int(state["usage"].get(key, 0))
+    limit = int(limits.get(key, 0))
+    if used >= limit:
+        state["blocked"][key] = int(state["blocked"].get(key, 0)) + 1
+        _save_dev_guardrail_state(state)
+        return False, f"{DEV_API_LABELS.get(key, key)} dev budget exhausted ({used}/{limit})."
+
+    state["usage"][key] = used + 1
+    _save_dev_guardrail_state(state)
+    return True, None
+
+
+def record_dev_api_cooldown(
+    key: str,
+    *,
+    runtime: Mapping[str, Any] | None = None,
+    now: datetime | None = None,
+    secrets: Mapping[str, Any] | None = None,
+    environ: Mapping[str, str] | None = None,
+    minutes: int | None = None,
+) -> datetime | None:
+    if runtime is None:
+        runtime = resolve_runtime_config(secrets, environ)
+    if not runtime.get("is_dev") or not runtime.get("live_api_enabled"):
+        return None
+
+    current = _guardrail_now(now)
+    date_str = current.strftime("%Y-%m-%d")
+    state = _load_dev_guardrail_state(date_str)
+    cooldown_minutes = minutes or _get_dev_cooldown_minutes(secrets, environ)
+    until = current + timedelta(minutes=cooldown_minutes)
+    state["cooldowns"][key] = until.isoformat()
+    _save_dev_guardrail_state(state)
+    return until
+
+
+def get_dev_guardrail_snapshot(
+    *,
+    runtime: Mapping[str, Any] | None = None,
+    now: datetime | None = None,
+    secrets: Mapping[str, Any] | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
+    if runtime is None:
+        runtime = resolve_runtime_config(secrets, environ)
+    current = _guardrail_now(now)
+    date_str = current.strftime("%Y-%m-%d")
+    state = _load_dev_guardrail_state(date_str)
+    limits = _get_dev_budget_limits(secrets, environ)
+
+    items = []
+    for key, limit in limits.items():
+        cooldown_until = None
+        cooldown_str = state["cooldowns"].get(key)
+        if cooldown_str:
+            try:
+                cooldown_until = datetime.fromisoformat(cooldown_str)
+            except ValueError:
+                cooldown_until = None
+            if cooldown_until is not None:
+                if cooldown_until.tzinfo is None:
+                    cooldown_until = LOCAL_TZ.localize(cooldown_until)
+                else:
+                    cooldown_until = cooldown_until.astimezone(LOCAL_TZ)
+
+        items.append(
+            {
+                "key": key,
+                "label": DEV_API_LABELS.get(key, key),
+                "used": int(state["usage"].get(key, 0)),
+                "limit": int(limit),
+                "remaining": max(0, int(limit) - int(state["usage"].get(key, 0))),
+                "blocked": int(state["blocked"].get(key, 0)),
+                "cooldown_until": cooldown_until,
+                "cooldown_active": cooldown_until is not None and current < cooldown_until,
+            }
+        )
+
+    return {
+        "enabled": bool(runtime.get("is_dev") and runtime.get("live_api_enabled")),
+        "date": date_str,
+        "cooldown_minutes": _get_dev_cooldown_minutes(secrets, environ),
+        "items": items,
+    }
+
+
+def guarded_requests_get(
+    url: str,
+    *,
+    params: Mapping[str, Any],
+    timeout: int,
+    guardrail_key: str,
+) -> requests.Response:
+    secrets = _get_streamlit_secrets()
+    runtime = resolve_runtime_config(secrets, os.environ)
+    allowed, reason = check_and_record_dev_api_request(
+        guardrail_key,
+        runtime=runtime,
+        secrets=secrets,
+        environ=os.environ,
+    )
+    if not allowed:
+        raise DevAPIBlockedError(reason or f"{guardrail_key} blocked by dev guardrails.")
+
+    try:
+        resp = requests.get(url, params=params, timeout=timeout)
+        if getattr(resp, "status_code", None) == 429:
+            record_dev_api_cooldown(
+                guardrail_key,
+                runtime=runtime,
+                secrets=secrets,
+                environ=os.environ,
+            )
+        resp.raise_for_status()
+        return resp
+    except requests.RequestException as e:
+        status_code = getattr(getattr(e, "response", None), "status_code", None)
+        if status_code == 429:
+            record_dev_api_cooldown(
+                guardrail_key,
+                runtime=runtime,
+                secrets=secrets,
+                environ=os.environ,
+            )
+        raise
 
 
 def _hist_cache_path(date_str: str) -> str:
@@ -247,7 +568,12 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
         "contentType": "json",
         "timezone": "America/Denver",
     }
-    resp = requests.get(url, params=params, timeout=15)
+    resp = guarded_requests_get(
+        url,
+        params=params,
+        timeout=15,
+        guardrail_key="visual_crossing_forecast",
+    )
     resp.raise_for_status()
     data = resp.json()
 
@@ -357,7 +683,12 @@ def fetch_historical_band(today_str: str, vc_api_key: str) -> pd.DataFrame:
             "contentType": "json",
         }
         try:
-            resp = requests.get(url, params=params, timeout=15)
+            resp = guarded_requests_get(
+                url,
+                params=params,
+                timeout=15,
+                guardrail_key="visual_crossing_historical",
+            )
             resp.raise_for_status()
             data = resp.json()
             for day in data.get("days", []):
@@ -381,7 +712,10 @@ def fetch_historical_band(today_str: str, vc_api_key: str) -> pd.DataFrame:
                                 "WindSpeed": windspeed,
                             }
                         )
-        except requests.RequestException as e:
+        except (requests.RequestException, DevAPIBlockedError) as e:
+            if isinstance(e, DevAPIBlockedError):
+                logger.warning("Historical fetch blocked by dev guardrails on %s: %s", date_str, e)
+                break
             status_code = getattr(getattr(e, "response", None), "status_code", None)
             if status_code == 429:
                 logger.warning(
@@ -452,7 +786,12 @@ def fetch_wind_openmeteo() -> tuple[pd.DataFrame, dict]:
         "forecast_days": 1,
     }
 
-    resp = requests.get(url, params=params, timeout=15)
+    resp = guarded_requests_get(
+        url,
+        params=params,
+        timeout=15,
+        guardrail_key="open_meteo_wind",
+    )
     resp.raise_for_status()
     data = resp.json()
 
@@ -982,7 +1321,8 @@ def build_precip_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
 # APP
 # ---------------------------------------------------------------------------
 def run_app() -> None:
-    runtime = resolve_runtime_config(st.secrets, os.environ)
+    secrets = _get_streamlit_secrets()
+    runtime = resolve_runtime_config(secrets, os.environ)
     _is_dev = runtime["is_dev"]
     _page_title = "The Farm [DEV]" if _is_dev else "The Farm"
 
@@ -1011,6 +1351,38 @@ def run_app() -> None:
     else:
         st.caption(runtime_line)
 
+    if _is_dev:
+        snapshot = get_dev_guardrail_snapshot(
+            runtime=runtime,
+            now=now_mtn,
+            secrets=secrets,
+            environ=os.environ,
+        )
+        if hasattr(st.sidebar, "markdown"):
+            st.sidebar.markdown("**Dev API Guardrails**")
+        else:
+            st.markdown("**Dev API Guardrails**")
+        if not snapshot["enabled"]:
+            line = "Inactive until dev live API is explicitly enabled."
+            if hasattr(st.sidebar, "caption"):
+                st.sidebar.caption(line)
+            else:
+                st.caption(line)
+        else:
+            header_line = (
+                f"Daily cooldown window: {snapshot['cooldown_minutes']} minutes after a 429."
+            )
+            if hasattr(st.sidebar, "caption"):
+                st.sidebar.caption(header_line)
+            else:
+                st.caption(header_line)
+            for item in snapshot["items"]:
+                line = _format_dev_guardrail_sidebar_line(item)
+                if hasattr(st.sidebar, "caption"):
+                    st.sidebar.caption(line)
+                else:
+                    st.caption(line)
+
     if _is_dev and not runtime["live_api_enabled"] and not runtime["dev_use_sample_requested"]:
         st.warning(
             "DEV_USE_SAMPLE_DATA=false was requested, but live API is blocked in dev unless DEV_ALLOW_LIVE_API=true."
@@ -1031,7 +1403,7 @@ def run_app() -> None:
                 if not df.empty:
                     st.session_state["df"] = df
                     st.session_state["live_temp"] = live_temp
-            except requests.RequestException as e:
+            except (requests.RequestException, DevAPIBlockedError) as e:
                 logger.warning("Forecast fetch failed, using cached fallback: %s", e)
                 df = st.session_state.get("df", pd.DataFrame())
                 live_temp = st.session_state.get("live_temp", None)
@@ -1041,7 +1413,7 @@ def run_app() -> None:
                     )
                     st.stop()
                 else:
-                    st.warning("⚠️ Weather API temporarily unavailable — showing last known data.")
+                    st.warning(_format_dev_guardrail_fallback("forecast", e))
 
             # Historical band — prefer disk cache, then API, then session fallback.
             today_str = now_mtn.strftime("%Y-%m-%d")
@@ -1063,14 +1435,14 @@ def run_app() -> None:
                             hist_band = session_hist
                         else:
                             st.caption("⚠️ Historical band temporarily unavailable.")
-                except requests.RequestException as e:
+                except (requests.RequestException, DevAPIBlockedError) as e:
                     logger.warning("Historical band fetch failed, using cached fallback: %s", e)
                     session_date = st.session_state.get("hist_band_date")
                     session_hist = st.session_state.get("hist_band", pd.DataFrame())
                     if session_date == today_str and not session_hist.empty:
                         hist_band = session_hist
                     else:
-                        st.caption("⚠️ Historical band temporarily unavailable.")
+                        st.caption(_format_dev_guardrail_fallback("historical", e))
 
         # Wind direction/gust source override from Open-Meteo with session-state fallback.
         try:
@@ -1078,10 +1450,11 @@ def run_app() -> None:
             if not wind_df_om.empty:
                 st.session_state["wind_df_om"] = wind_df_om
             st.session_state["wind_current_om"] = wind_current_om
-        except requests.RequestException as e:
+        except (requests.RequestException, DevAPIBlockedError) as e:
             logger.warning("Open-Meteo wind fetch failed, using cached fallback: %s", e)
             wind_df_om = st.session_state.get("wind_df_om", pd.DataFrame())
             wind_current_om = st.session_state.get("wind_current_om", {})
+            st.caption(_format_dev_guardrail_fallback("wind", e))
 
         if not wind_df_om.empty:
             wind_merge_cols = ["Hour", "WindSpeed", "WindGust", "WindDeg", "WindDir"]
