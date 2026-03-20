@@ -139,7 +139,7 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
     params = {
         "unitGroup": "us",
         "include": "hours,current",
-        "elements": "datetime,temp,feelslike,windspeed,wdir",
+        "elements": "datetime,temp,feelslike,windspeed,wdir,precip,precipprob,humidity,snow",
         "key": vc_api_key,
         "contentType": "json",
         "timezone": "America/Denver",
@@ -172,10 +172,10 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
                         "WindSpeed": round(windspeed, 1) if windspeed is not None else None,
                         "WindDeg": round(winddeg, 1) if winddeg is not None else None,
                         "WindDir": wind_degree_to_cardinal(winddeg),
-                        "PrecipIn": None,
-                        "PrecipProb": None,
-                        "Humidity": None,
-                        "SnowIn": None,
+                        "PrecipIn": round(precip, 2) if precip is not None else None,
+                        "PrecipProb": round(precipprob, 1) if precipprob is not None else None,
+                        "Humidity": round(humidity, 1) if humidity is not None else None,
+                        "SnowIn": round(snow, 2) if snow is not None else None,
                     }
                 )
     forecast_df = pd.DataFrame(rows)
@@ -186,10 +186,10 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
     live_feelslike = current.get("feelslike")
     live_windspeed = current.get("windspeed")
     live_winddeg = current.get("wdir")
-    live_precip = None
-    live_precipprob = None
-    live_humidity = None
-    live_snow = None
+    live_precip = current.get("precip")
+    live_precipprob = current.get("precipprob")
+    live_humidity = current.get("humidity")
+    live_snow = current.get("snow")
     if live_actual is None and not forecast_df.empty:
         live_actual = forecast_df.iloc[-1]["Actual"]
     if live_feelslike is None and not forecast_df.empty:
@@ -198,6 +198,14 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
         live_windspeed = forecast_df.iloc[-1]["WindSpeed"]
     if live_winddeg is None and not forecast_df.empty:
         live_winddeg = forecast_df.iloc[-1]["WindDeg"]
+    if live_precip is None and not forecast_df.empty:
+        live_precip = forecast_df.iloc[-1]["PrecipIn"]
+    if live_precipprob is None and not forecast_df.empty:
+        live_precipprob = forecast_df.iloc[-1]["PrecipProb"]
+    if live_humidity is None and not forecast_df.empty:
+        live_humidity = forecast_df.iloc[-1]["Humidity"]
+    if live_snow is None and not forecast_df.empty:
+        live_snow = forecast_df.iloc[-1]["SnowIn"]
 
     live_temp = {
         "Actual": round(live_actual, 1) if live_actual is not None else None,
@@ -205,10 +213,10 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
         "WindSpeed": round(live_windspeed, 1) if live_windspeed is not None else None,
         "WindDeg": round(live_winddeg, 1) if live_winddeg is not None else None,
         "WindDir": wind_degree_to_cardinal(live_winddeg) if live_winddeg is not None else "Unknown",
-        "PrecipIn": None,
-        "PrecipProb": None,
-        "Humidity": None,
-        "SnowIn": None,
+        "PrecipIn": round(live_precip, 2) if live_precip is not None else None,
+        "PrecipProb": round(live_precipprob, 1) if live_precipprob is not None else None,
+        "Humidity": round(live_humidity, 1) if live_humidity is not None else None,
+        "SnowIn": round(live_snow, 2) if live_snow is not None else None,
     }
 
     return forecast_df, live_temp
