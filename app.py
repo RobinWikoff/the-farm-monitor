@@ -1255,15 +1255,17 @@ def kitty_comfort_status(
     rain_or_snow should be True when PrecipIn > 0 or SnowIn > 0 in the most
     recent actual hour.
     """
+    temp_details = (
+        f"Feels Like Now: {live_temp_f:.1f}°F ({KITTY_TEMP_MIN_F:.0f}°F - {KITTY_TEMP_MAX_F:.0f}°F)"
+    )
+
     # Temperature status
     if live_temp_f <= KITTY_TEMP_MIN_F:
-        temp_status = f"Brr too cold for Kitties (freezing, {live_temp_f:.0f}°F)"
+        temp_status = f"Brr too cold for Kitties (freezing) — {temp_details}"
     elif live_temp_f > KITTY_TEMP_MAX_F:
-        temp_status = f"Too hot for Kitties ({live_temp_f:.0f}°F)"
+        temp_status = f"Too hot for Kitties (85°F+) — {temp_details}"
     else:
-        temp_status = (
-            f"Good Temperature for Kitties ({KITTY_TEMP_MIN_F:.0f}°F – {KITTY_TEMP_MAX_F:.0f}°F)"
-        )
+        temp_status = f"Good Temperature for Kitties — {temp_details}"
 
     # Wind status — use the higher of speed / gust if both present
     result: dict[str, str] = {"temp": temp_status}
@@ -1273,10 +1275,11 @@ def kitty_comfort_status(
         effective_wind = max(candidates)
 
     if effective_wind is not None:
+        wind_details = f"({effective_wind:.0f} mph) (More than {KITTY_WIND_THRESHOLD_MPH:.0f} mph)"
         if effective_wind > KITTY_WIND_THRESHOLD_MPH:
-            result["wind"] = f"Too windy for Kitties ({effective_wind:.0f} mph)"
+            result["wind"] = f"Too windy for Kitties {wind_details}"
         else:
-            result["wind"] = "Not too windy for Kitties"
+            result["wind"] = f"Not too windy for Kitties {wind_details}"
 
     # Precipitation status — only shown when actively raining/snowing
     if rain_or_snow:
