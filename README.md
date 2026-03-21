@@ -62,6 +62,8 @@ In the UI:
 - Click **Generate PDF**.
 - Click **Download Memo PDF**.
 
+Date format is required as: `DD-Mon-YYYY` (example: `21-Mar-2026`).
+
 ### Example command
 
 python -m memo.cli --input memo/examples/memo_input_example.yaml --output memo_output.pdf
@@ -82,7 +84,19 @@ Optional fields:
 
 - `memo_title` (defaults to `subject`)
 - `organization_name` (defaults to `The Farm`)
-- `logo_path` (optional image path for header logo)
+- `logo_path` (defaults to `memo/assets/the_farm_logo.png`)
+
+### Logo File Recommendations
+
+- Preferred format: `PNG` with transparent background
+- Aspect ratio: `4:1` (width to height)
+- Suggested size: `1600 x 400 px`
+- High-res option: `2400 x 600 px`
+
+Design layout suggestion:
+
+- Left half (`2:1`): image mark/icon
+- Right half (`2:1`): text mark `The Farm`
 
 Generated output includes:
 

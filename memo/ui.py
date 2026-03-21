@@ -10,11 +10,11 @@ import streamlit as st
 try:
     # Package import path (e.g. `python -m memo.ui`)
     from .generator import generate_memo_pdf
-    from .schema import MemoData
+    from .schema import DATE_FORMAT, DEFAULT_LOGO_PATH, MemoData
 except ImportError:  # pragma: no cover - runtime fallback for streamlit script mode
     # Direct script path (e.g. `streamlit run memo/ui.py`)
     from memo.generator import generate_memo_pdf
-    from memo.schema import MemoData
+    from memo.schema import DATE_FORMAT, DEFAULT_LOGO_PATH, MemoData
 
 
 def build_memo_data_from_form(raw: Mapping[str, Any]) -> MemoData:
@@ -51,7 +51,11 @@ def main() -> None:
         left, right = st.columns(2)
 
         with left:
-            memo_date = st.text_input("Date", value=str(date.today()))
+            memo_date = st.text_input(
+                "Date (DD-Mon-YYYY)",
+                value=date.today().strftime(DATE_FORMAT),
+                help="Example: 21-Mar-2026",
+            )
             subject = st.text_input("Subject", placeholder="Weekly Project Update")
             recipient = st.text_input("Recipient", placeholder="Stakeholders")
             memo_title = st.text_input(
@@ -62,8 +66,9 @@ def main() -> None:
         with right:
             organization_name = st.text_input("Organization Name", value="The Farm")
             logo_path = st.text_input(
-                "Logo Path (optional)",
-                placeholder="/path/to/the_farm_logo.png",
+                "Logo Path",
+                value=DEFAULT_LOGO_PATH,
+                help="Leave as default once logo is saved there.",
             )
 
         background = st.text_area("Background", height=110)

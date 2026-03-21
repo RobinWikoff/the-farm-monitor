@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -20,6 +21,9 @@ _REQUIRED_FIELDS = (
     "additional_section_3",
 )
 
+DATE_FORMAT = "%d-%b-%Y"
+DEFAULT_LOGO_PATH = "memo/assets/the_farm_logo.png"
+
 
 @dataclass(slots=True)
 class MemoData:
@@ -34,7 +38,7 @@ class MemoData:
     additional_section_3: str
     memo_title: str = ""
     organization_name: str = "The Farm"
-    logo_path: str = ""
+    logo_path: str = DEFAULT_LOGO_PATH
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> "MemoData":
@@ -48,9 +52,16 @@ class MemoData:
 
         memo_title = str(data.get("memo_title", "")).strip() or str(data["subject"]).strip()
         org_name = str(data.get("organization_name", "The Farm")).strip() or "The Farm"
+        raw_date = str(data["date"]).strip()
+        try:
+            parsed_date = datetime.strptime(raw_date, DATE_FORMAT)
+        except ValueError as exc:
+            raise ValueError("Date must be in DD-Mon-YYYY format (example: 21-Mar-2026).") from exc
+        normalized_date = parsed_date.strftime(DATE_FORMAT)
+        logo_path = str(data.get("logo_path", "")).strip() or DEFAULT_LOGO_PATH
 
         return cls(
-            date=str(data["date"]).strip(),
+            date=normalized_date,
             subject=str(data["subject"]).strip(),
             recipient=str(data["recipient"]).strip(),
             background=str(data["background"]).strip(),
@@ -61,7 +72,7 @@ class MemoData:
             additional_section_3=str(data["additional_section_3"]).strip(),
             memo_title=memo_title,
             organization_name=org_name,
-            logo_path=str(data.get("logo_path", "")).strip(),
+            logo_path=logo_path,
         )
 
 

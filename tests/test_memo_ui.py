@@ -4,7 +4,7 @@ from memo.ui import build_memo_data_from_form, _suggested_filename
 
 def _raw_form_data(**overrides):
     data = {
-        "date": "2026-03-21",
+        "date": "21-Mar-2026",
         "subject": "Weekly Project Update",
         "recipient": "Stakeholders",
         "background": "Background section",
@@ -26,6 +26,7 @@ def test_build_memo_data_from_form_returns_memo_data():
 
     assert isinstance(memo, MemoData)
     assert memo.memo_title == "Weekly Project Update"
+    assert memo.logo_path == "memo/assets/the_farm_logo.png"
 
 
 def test_suggested_filename_sanitizes_subject():

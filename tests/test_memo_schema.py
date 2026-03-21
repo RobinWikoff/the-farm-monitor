@@ -7,7 +7,7 @@ from memo.schema import MemoData, load_memo_data
 
 def _valid_mapping():
     return {
-        "date": "2026-03-21",
+        "date": "21-Mar-2026",
         "subject": "Status Update",
         "recipient": "Stakeholders",
         "background": "Background text",
@@ -25,6 +25,7 @@ def test_memo_data_from_mapping_accepts_valid_input():
     assert memo.subject == "Status Update"
     assert memo.memo_title == "Status Update"
     assert memo.organization_name == "The Farm"
+    assert memo.logo_path == "memo/assets/the_farm_logo.png"
 
 
 def test_memo_data_from_mapping_rejects_missing_required_field():
@@ -43,12 +44,20 @@ def test_memo_data_from_mapping_rejects_blank_required_field():
         MemoData.from_mapping(raw)
 
 
+def test_memo_data_from_mapping_rejects_invalid_date_format():
+    raw = _valid_mapping()
+    raw["date"] = "2026-03-21"
+
+    with pytest.raises(ValueError, match="Date must be in DD-Mon-YYYY format"):
+        MemoData.from_mapping(raw)
+
+
 def test_load_memo_data_yaml(tmp_path: Path):
     file_path = tmp_path / "memo.yaml"
     file_path.write_text(
         "\n".join(
             [
-                "date: '2026-03-21'",
+                "date: '21-Mar-2026'",
                 "subject: 'Weekly Update'",
                 "recipient: 'Leadership Team'",
                 "background: 'Background'",
@@ -66,3 +75,5 @@ def test_load_memo_data_yaml(tmp_path: Path):
 
     assert memo.subject == "Weekly Update"
     assert memo.recipient == "Leadership Team"
+    assert memo.date == "21-Mar-2026"
+    assert memo.logo_path == "memo/assets/the_farm_logo.png"

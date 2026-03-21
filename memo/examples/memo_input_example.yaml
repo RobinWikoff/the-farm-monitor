@@ -1,4 +1,4 @@
-date: "2026-03-21"
+date: "21-Mar-2026"
 subject: "Weekly Project Update"
 recipient: "Project Stakeholders"
 background: "The Farm weather monitor now includes several recent guardrail and UI updates."
@@ -18,4 +18,4 @@ additional_section_3: |
   - Confirm standard memo distribution list.
 memo_title: "The Farm Project Update Memo"
 organization_name: "The Farm"
-logo_path: ""
+logo_path: "memo/assets/the_farm_logo.png"
