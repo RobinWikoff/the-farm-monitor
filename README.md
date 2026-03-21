@@ -46,6 +46,37 @@ Run the test suite locally:
 
 python -m pytest -q
 
+## Memo PDF Template Generation (Issue #62)
+
+Generate a branded memo PDF from structured YAML/JSON input.
+
+### Example command
+
+python -m memo.cli --input memo/examples/memo_input_example.yaml --output memo_output.pdf
+
+### Required input fields
+
+- `date`
+- `subject`
+- `recipient`
+- `background`
+- `problem_statement`
+- `updates_information`
+- `additional_section_1`
+- `additional_section_2`
+- `additional_section_3`
+
+Optional fields:
+
+- `memo_title` (defaults to `subject`)
+- `organization_name` (defaults to `The Farm`)
+- `logo_path` (optional image path for header logo)
+
+Generated output includes:
+
+- Header with organization branding (`The Farm`) and optional logo
+- Footer with memo title, organization name, and `Page X of Y`
+
 ## Dev API Guardrails
 
 Issue #50 introduced development-time API guardrails to reduce accidental quota burn while still allowing live verification when explicitly enabled.
