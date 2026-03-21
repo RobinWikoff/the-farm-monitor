@@ -50,6 +50,18 @@ python -m pytest -q
 
 Generate a branded memo PDF from structured YAML/JSON input.
 
+### Interactive UI (Streamlit)
+
+Open a form-based UI where you can type memo content and download the PDF:
+
+python -m streamlit run memo/ui.py
+
+In the UI:
+
+- Fill in all required fields.
+- Click **Generate PDF**.
+- Click **Download Memo PDF**.
+
 ### Example command
 
 python -m memo.cli --input memo/examples/memo_input_example.yaml --output memo_output.pdf
