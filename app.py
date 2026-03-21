@@ -1310,10 +1310,13 @@ def render_kitty_comfort_banner(
 
     body = "  \n".join(lines)
 
+    overall_status = "Yes" if all_good else "No"
+    heading = f"**Kitty Comfort Threshold: [{overall_status}]**"
+
     if all_good:
-        st.success(f"**Kitty Comfort Threshold:**  \n{body}")
+        st.success(f"{heading}  \n{body}")
     else:
-        st.warning(f"**Kitty Comfort Threshold:**  \n{body}")
+        st.error(f"{heading}  \n{body}")
 
 
 def build_wind_chart(

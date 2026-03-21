@@ -1144,9 +1144,7 @@ def test_render_kitty_comfort_banner_all_good_uses_success(monkeypatch):
     monkeypatch.setattr(
         app.st, "success", lambda msg: captured.update({"type": "success", "msg": msg})
     )
-    monkeypatch.setattr(
-        app.st, "warning", lambda msg: captured.update({"type": "warning", "msg": msg})
-    )
+    monkeypatch.setattr(app.st, "error", lambda msg: captured.update({"type": "error", "msg": msg}))
 
     app.render_kitty_comfort_banner(
         live_temp_f=65.0,
@@ -1156,19 +1154,17 @@ def test_render_kitty_comfort_banner_all_good_uses_success(monkeypatch):
     )
 
     assert captured["type"] == "success"
-    assert "Kitty Comfort Threshold:" in captured["msg"]
+    assert "Kitty Comfort Threshold: [Yes]" in captured["msg"]
     assert "Good Temperature" in captured["msg"]
     assert "Not too windy" in captured["msg"]
 
 
-def test_render_kitty_comfort_banner_bad_conditions_uses_warning(monkeypatch):
+def test_render_kitty_comfort_banner_bad_conditions_uses_error(monkeypatch):
     captured = {}
     monkeypatch.setattr(
         app.st, "success", lambda msg: captured.update({"type": "success", "msg": msg})
     )
-    monkeypatch.setattr(
-        app.st, "warning", lambda msg: captured.update({"type": "warning", "msg": msg})
-    )
+    monkeypatch.setattr(app.st, "error", lambda msg: captured.update({"type": "error", "msg": msg}))
 
     app.render_kitty_comfort_banner(
         live_temp_f=28.0,
@@ -1177,8 +1173,8 @@ def test_render_kitty_comfort_banner_bad_conditions_uses_warning(monkeypatch):
         rain_or_snow=True,
     )
 
-    assert captured["type"] == "warning"
-    assert "Kitty Comfort Threshold:" in captured["msg"]
+    assert captured["type"] == "error"
+    assert "Kitty Comfort Threshold: [No]" in captured["msg"]
     assert "too cold" in captured["msg"].lower()
     assert "Too windy" in captured["msg"]
     assert "rain or snow" in captured["msg"].lower()
@@ -1187,7 +1183,7 @@ def test_render_kitty_comfort_banner_bad_conditions_uses_warning(monkeypatch):
 def test_render_kitty_comfort_banner_heading_always_present(monkeypatch):
     captured = {}
     monkeypatch.setattr(app.st, "success", lambda msg: captured.update({"msg": msg}))
-    monkeypatch.setattr(app.st, "warning", lambda msg: captured.update({"msg": msg}))
+    monkeypatch.setattr(app.st, "error", lambda msg: captured.update({"msg": msg}))
 
     app.render_kitty_comfort_banner(
         live_temp_f=50.0,
@@ -1197,3 +1193,25 @@ def test_render_kitty_comfort_banner_heading_always_present(monkeypatch):
     )
 
     assert "Kitty Comfort Threshold:" in captured["msg"]
+
+
+def test_render_kitty_comfort_banner_heading_includes_yes_no_status(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(app.st, "success", lambda msg: captured.update({"good": msg}))
+    monkeypatch.setattr(app.st, "error", lambda msg: captured.update({"bad": msg}))
+
+    app.render_kitty_comfort_banner(
+        live_temp_f=65.0,
+        wind_speed=2.0,
+        wind_gust=2.0,
+        rain_or_snow=False,
+    )
+    app.render_kitty_comfort_banner(
+        live_temp_f=28.0,
+        wind_speed=10.0,
+        wind_gust=12.0,
+        rain_or_snow=True,
+    )
+
+    assert "Kitty Comfort Threshold: [Yes]" in captured["good"]
+    assert "Kitty Comfort Threshold: [No]" in captured["bad"]
