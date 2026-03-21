@@ -7,8 +7,14 @@ from typing import Any, Mapping
 
 import streamlit as st
 
-from .generator import generate_memo_pdf
-from .schema import MemoData
+try:
+    # Package import path (e.g. `python -m memo.ui`)
+    from .generator import generate_memo_pdf
+    from .schema import MemoData
+except ImportError:  # pragma: no cover - runtime fallback for streamlit script mode
+    # Direct script path (e.g. `streamlit run memo/ui.py`)
+    from memo.generator import generate_memo_pdf
+    from memo.schema import MemoData
 
 
 def build_memo_data_from_form(raw: Mapping[str, Any]) -> MemoData:
