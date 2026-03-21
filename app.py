@@ -1234,6 +1234,103 @@ def render_wind_banner(
     )
 
 
+# ---------------------------------------------------------------------------
+# KITTY COMFORT
+# ---------------------------------------------------------------------------
+KITTY_TEMP_MIN_F: float = 32.0
+KITTY_TEMP_MAX_F: float = 85.0
+KITTY_WIND_THRESHOLD_MPH: float = 5.0
+
+
+def kitty_comfort_status(
+    live_temp_f: float,
+    wind_speed: float | None,
+    wind_gust: float | None,
+    rain_or_snow: bool,
+) -> dict[str, str]:
+    """Return a dict with 'temp', 'wind', and optionally 'precip' status strings.
+
+    All inputs are the current live values.  wind_speed and wind_gust may be
+    None when data is unavailable — in that case wind status is omitted.
+    rain_or_snow should be True when PrecipIn > 0 or SnowIn > 0 in the most
+    recent actual hour.
+    """
+    # Temperature status
+    if live_temp_f <= KITTY_TEMP_MIN_F:
+        temp_status = (
+            f"Brr too cold for Kitties: {live_temp_f:.1f}°F "
+            f"-- (At or below {KITTY_TEMP_MIN_F:.0f}°F, freezing)"
+        )
+    elif live_temp_f > KITTY_TEMP_MAX_F:
+        temp_status = (
+            f"Too hot for Kitties: {live_temp_f:.1f}°F -- (More than {KITTY_TEMP_MAX_F:.0f}°F)"
+        )
+    else:
+        temp_status = (
+            f"Good Temperature for Kitties: {live_temp_f:.1f}°F "
+            f"-- ({KITTY_TEMP_MIN_F:.0f}°F - {KITTY_TEMP_MAX_F:.0f}°F)"
+        )
+
+    # Wind status — use the higher of speed / gust if both present
+    result: dict[str, str] = {"temp": temp_status}
+    effective_wind: float | None = None
+    if wind_speed is not None or wind_gust is not None:
+        candidates = [v for v in (wind_speed, wind_gust) if v is not None]
+        effective_wind = max(candidates)
+
+    if effective_wind is not None:
+        if effective_wind > KITTY_WIND_THRESHOLD_MPH:
+            result["wind"] = (
+                f"Too windy for Kitties: {effective_wind:.0f} mph "
+                f"-- (More than {KITTY_WIND_THRESHOLD_MPH:.0f} mph)"
+            )
+        else:
+            result["wind"] = (
+                f"Not too windy for Kitties: {effective_wind:.0f} mph "
+                f"-- ({KITTY_WIND_THRESHOLD_MPH:.0f} mph or less)"
+            )
+
+    # Precipitation status — only shown when actively raining/snowing
+    if rain_or_snow:
+        result["precip"] = "Kitties don't like rain or snow: Yes -- (Rain or snow detected)"
+
+    return result
+
+
+def render_kitty_comfort_banner(
+    live_temp_f: float,
+    wind_speed: float | None,
+    wind_gust: float | None,
+    rain_or_snow: bool,
+) -> None:
+    """Render the Kitty Comfort Threshold section above the temperature area."""
+    status = kitty_comfort_status(live_temp_f, wind_speed, wind_gust, rain_or_snow)
+
+    temp_ok = KITTY_TEMP_MIN_F < live_temp_f <= KITTY_TEMP_MAX_F
+    wind_ok = "wind" not in status or status["wind"].startswith("Not too windy")
+    precip_ok = "precip" not in status
+
+    all_good = temp_ok and wind_ok and precip_ok
+
+    lines = [
+        f"🌡️ {status['temp']}",
+    ]
+    if "wind" in status:
+        lines.append(f"💨 {status['wind']}")
+    if "precip" in status:
+        lines.append(f"🌧️ {status['precip']}")
+
+    body = "  \n".join(lines)
+
+    overall_status = "Yes" if all_good else "No"
+    heading = f"**Kitty Comfort Threshold: {overall_status}**"
+
+    if all_good:
+        st.success(f"{heading}  \n{body}")
+    else:
+        st.error(f"{heading}  \n{body}")
+
+
 def build_wind_chart(
     df: pd.DataFrame, current_hour: int, hist_band: pd.DataFrame
 ) -> alt.LayerChart:
@@ -1698,6 +1795,22 @@ def run_app() -> None:
             )
 
     current_hour = now_mtn.hour
+
+    # Kitty Comfort banner — above temperature section
+    _kc_rain_or_snow = False
+    if "PrecipIn" in df.columns or "SnowIn" in df.columns:
+        _kc_actuals = df[df["Hour"] <= current_hour].copy()
+        if not _kc_actuals.empty:
+            _kc_latest = _kc_actuals.sort_values("Hour").iloc[-1]
+            _kc_rain_or_snow = (_kc_latest.get("PrecipIn") or 0) > 0 or (
+                _kc_latest.get("SnowIn") or 0
+            ) > 0
+    render_kitty_comfort_banner(
+        live_temp_f=selected_live_temp,
+        wind_speed=live_temp.get("WindSpeed"),
+        wind_gust=live_temp.get("WindGust"),
+        rain_or_snow=_kc_rain_or_snow,
+    )
 
     # Metrics
     actuals = df_display[df_display["Hour"] <= current_hour].copy()

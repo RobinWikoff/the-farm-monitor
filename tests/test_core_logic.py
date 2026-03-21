@@ -973,3 +973,251 @@ def test_render_status_banner_summer_info_uses_first_qualifying_forecast_hour_in
     )
 
     assert "by 15:00" in captured["msg"]
+
+
+# ---------------------------------------------------------------------------
+# Kitty Comfort (issue-3)
+# ---------------------------------------------------------------------------
+
+
+def test_kitty_comfort_good_temp_no_wind_no_precip():
+    status = app.kitty_comfort_status(
+        live_temp_f=65.0,
+        wind_speed=2.0,
+        wind_gust=3.0,
+        rain_or_snow=False,
+    )
+    assert "Good Temperature" in status["temp"]
+    assert ": 65.0°F --" in status["temp"]
+    assert "(32°F - 85°F)" in status["temp"]
+    assert "Not too windy" in status["wind"]
+    assert ": 3 mph --" in status["wind"]
+    assert "(5 mph or less)" in status["wind"]
+    assert "precip" not in status
+
+
+def test_kitty_comfort_too_cold():
+    status = app.kitty_comfort_status(
+        live_temp_f=32.0,
+        wind_speed=1.0,
+        wind_gust=1.5,
+        rain_or_snow=False,
+    )
+    assert "too cold" in status["temp"].lower()
+    assert "freezing" in status["temp"].lower()
+
+
+def test_kitty_comfort_exactly_32_is_too_cold():
+    status = app.kitty_comfort_status(
+        live_temp_f=32.0,
+        wind_speed=None,
+        wind_gust=None,
+        rain_or_snow=False,
+    )
+    assert "too cold" in status["temp"].lower()
+
+
+def test_kitty_comfort_above_33_is_good():
+    status = app.kitty_comfort_status(
+        live_temp_f=33.0,
+        wind_speed=None,
+        wind_gust=None,
+        rain_or_snow=False,
+    )
+    assert "Good Temperature" in status["temp"]
+
+
+def test_kitty_comfort_too_hot():
+    status = app.kitty_comfort_status(
+        live_temp_f=90.0,
+        wind_speed=2.0,
+        wind_gust=2.0,
+        rain_or_snow=False,
+    )
+    assert "Too hot" in status["temp"]
+
+
+def test_kitty_comfort_exactly_85_is_still_good():
+    """85°F is the top of range — 'above 85' means > 85, so 85 itself is good."""
+    status = app.kitty_comfort_status(
+        live_temp_f=85.0,
+        wind_speed=None,
+        wind_gust=None,
+        rain_or_snow=False,
+    )
+    assert "Good Temperature" in status["temp"]
+
+
+def test_kitty_comfort_84_is_good():
+    status = app.kitty_comfort_status(
+        live_temp_f=84.9,
+        wind_speed=None,
+        wind_gust=None,
+        rain_or_snow=False,
+    )
+    assert "Good Temperature" in status["temp"]
+
+
+def test_kitty_comfort_too_windy_by_speed():
+    status = app.kitty_comfort_status(
+        live_temp_f=65.0,
+        wind_speed=6.0,
+        wind_gust=4.0,
+        rain_or_snow=False,
+    )
+    assert "Too windy" in status["wind"]
+    assert ": 6 mph --" in status["wind"]
+    assert "(More than 5 mph)" in status["wind"]
+
+
+def test_kitty_comfort_too_windy_by_gust():
+    """Gust alone above threshold should flag too windy even if speed is low."""
+    status = app.kitty_comfort_status(
+        live_temp_f=65.0,
+        wind_speed=3.0,
+        wind_gust=8.0,
+        rain_or_snow=False,
+    )
+    assert "Too windy" in status["wind"]
+
+
+def test_kitty_comfort_exactly_5mph_is_not_too_windy():
+    """5 mph is the boundary — not above threshold, so should be 'not too windy'."""
+    status = app.kitty_comfort_status(
+        live_temp_f=65.0,
+        wind_speed=5.0,
+        wind_gust=5.0,
+        rain_or_snow=False,
+    )
+    assert "Not too windy" in status["wind"]
+
+
+def test_kitty_comfort_wind_unavailable_omits_wind_key():
+    status = app.kitty_comfort_status(
+        live_temp_f=65.0,
+        wind_speed=None,
+        wind_gust=None,
+        rain_or_snow=False,
+    )
+    assert "wind" not in status
+
+
+def test_kitty_comfort_wind_speed_only_no_gust():
+    status = app.kitty_comfort_status(
+        live_temp_f=65.0,
+        wind_speed=7.0,
+        wind_gust=None,
+        rain_or_snow=False,
+    )
+    assert "Too windy" in status["wind"]
+
+
+def test_kitty_comfort_rain_adds_precip_status():
+    status = app.kitty_comfort_status(
+        live_temp_f=65.0,
+        wind_speed=2.0,
+        wind_gust=2.0,
+        rain_or_snow=True,
+    )
+    assert "precip" in status
+    assert status["precip"] == "Kitties don't like rain or snow: Yes -- (Rain or snow detected)"
+
+
+def test_kitty_comfort_no_rain_omits_precip_key():
+    status = app.kitty_comfort_status(
+        live_temp_f=65.0,
+        wind_speed=2.0,
+        wind_gust=2.0,
+        rain_or_snow=False,
+    )
+    assert "precip" not in status
+
+
+def test_kitty_comfort_all_bad_conditions():
+    status = app.kitty_comfort_status(
+        live_temp_f=28.0,
+        wind_speed=15.0,
+        wind_gust=20.0,
+        rain_or_snow=True,
+    )
+    assert "too cold" in status["temp"].lower()
+    assert "Too windy" in status["wind"]
+    assert "rain or snow" in status["precip"].lower()
+
+
+def test_render_kitty_comfort_banner_all_good_uses_success(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        app.st, "success", lambda msg: captured.update({"type": "success", "msg": msg})
+    )
+    monkeypatch.setattr(app.st, "error", lambda msg: captured.update({"type": "error", "msg": msg}))
+
+    app.render_kitty_comfort_banner(
+        live_temp_f=65.0,
+        wind_speed=2.0,
+        wind_gust=2.0,
+        rain_or_snow=False,
+    )
+
+    assert captured["type"] == "success"
+    assert "Kitty Comfort Threshold: Yes" in captured["msg"]
+    assert "Good Temperature" in captured["msg"]
+    assert "Not too windy" in captured["msg"]
+
+
+def test_render_kitty_comfort_banner_bad_conditions_uses_error(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        app.st, "success", lambda msg: captured.update({"type": "success", "msg": msg})
+    )
+    monkeypatch.setattr(app.st, "error", lambda msg: captured.update({"type": "error", "msg": msg}))
+
+    app.render_kitty_comfort_banner(
+        live_temp_f=28.0,
+        wind_speed=10.0,
+        wind_gust=12.0,
+        rain_or_snow=True,
+    )
+
+    assert captured["type"] == "error"
+    assert "Kitty Comfort Threshold: No" in captured["msg"]
+    assert "too cold" in captured["msg"].lower()
+    assert "Too windy" in captured["msg"]
+    assert "rain or snow" in captured["msg"].lower()
+
+
+def test_render_kitty_comfort_banner_heading_always_present(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(app.st, "success", lambda msg: captured.update({"msg": msg}))
+    monkeypatch.setattr(app.st, "error", lambda msg: captured.update({"msg": msg}))
+
+    app.render_kitty_comfort_banner(
+        live_temp_f=50.0,
+        wind_speed=None,
+        wind_gust=None,
+        rain_or_snow=False,
+    )
+
+    assert "Kitty Comfort Threshold:" in captured["msg"]
+
+
+def test_render_kitty_comfort_banner_heading_includes_yes_no_status(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(app.st, "success", lambda msg: captured.update({"good": msg}))
+    monkeypatch.setattr(app.st, "error", lambda msg: captured.update({"bad": msg}))
+
+    app.render_kitty_comfort_banner(
+        live_temp_f=65.0,
+        wind_speed=2.0,
+        wind_gust=2.0,
+        rain_or_snow=False,
+    )
+    app.render_kitty_comfort_banner(
+        live_temp_f=28.0,
+        wind_speed=10.0,
+        wind_gust=12.0,
+        rain_or_snow=True,
+    )
+
+    assert "Kitty Comfort Threshold: Yes" in captured["good"]
+    assert "Kitty Comfort Threshold: No" in captured["bad"]
