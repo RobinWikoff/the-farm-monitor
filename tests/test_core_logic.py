@@ -1154,7 +1154,7 @@ def test_render_kitty_comfort_banner_all_good_uses_success(monkeypatch):
     )
 
     assert captured["type"] == "success"
-    assert "Kitty Comfort Threshold: [Yes]" in captured["msg"]
+    assert "Kitty Comfort Threshold: Yes" in captured["msg"]
     assert "Good Temperature" in captured["msg"]
     assert "Not too windy" in captured["msg"]
 
@@ -1174,7 +1174,7 @@ def test_render_kitty_comfort_banner_bad_conditions_uses_error(monkeypatch):
     )
 
     assert captured["type"] == "error"
-    assert "Kitty Comfort Threshold: [No]" in captured["msg"]
+    assert "Kitty Comfort Threshold: No" in captured["msg"]
     assert "too cold" in captured["msg"].lower()
     assert "Too windy" in captured["msg"]
     assert "rain or snow" in captured["msg"].lower()
@@ -1213,5 +1213,5 @@ def test_render_kitty_comfort_banner_heading_includes_yes_no_status(monkeypatch)
         rain_or_snow=True,
     )
 
-    assert "Kitty Comfort Threshold: [Yes]" in captured["good"]
-    assert "Kitty Comfort Threshold: [No]" in captured["bad"]
+    assert "Kitty Comfort Threshold: Yes" in captured["good"]
+    assert "Kitty Comfort Threshold: No" in captured["bad"]

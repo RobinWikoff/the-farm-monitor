@@ -1311,7 +1311,7 @@ def render_kitty_comfort_banner(
     body = "  \n".join(lines)
 
     overall_status = "Yes" if all_good else "No"
-    heading = f"**Kitty Comfort Threshold: [{overall_status}]**"
+    heading = f"**Kitty Comfort Threshold: {overall_status}**"
 
     if all_good:
         st.success(f"{heading}  \n{body}")
