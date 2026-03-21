@@ -988,11 +988,11 @@ def test_kitty_comfort_good_temp_no_wind_no_precip():
         rain_or_snow=False,
     )
     assert "Good Temperature" in status["temp"]
-    assert "Feels Like Now:" in status["temp"]
+    assert ": 65.0°F --" in status["temp"]
     assert "(32°F - 85°F)" in status["temp"]
     assert "Not too windy" in status["wind"]
-    assert "(3 mph)" in status["wind"]
-    assert "(More than 5 mph)" in status["wind"]
+    assert ": 3 mph --" in status["wind"]
+    assert "(5 mph or less)" in status["wind"]
     assert "precip" not in status
 
 
@@ -1066,7 +1066,7 @@ def test_kitty_comfort_too_windy_by_speed():
         rain_or_snow=False,
     )
     assert "Too windy" in status["wind"]
-    assert "(6 mph)" in status["wind"]
+    assert ": 6 mph --" in status["wind"]
     assert "(More than 5 mph)" in status["wind"]
 
 
@@ -1120,7 +1120,7 @@ def test_kitty_comfort_rain_adds_precip_status():
         rain_or_snow=True,
     )
     assert "precip" in status
-    assert "rain or snow" in status["precip"].lower()
+    assert status["precip"] == "Kitties don't like rain or snow: Yes -- (Rain or snow detected)"
 
 
 def test_kitty_comfort_no_rain_omits_precip_key():

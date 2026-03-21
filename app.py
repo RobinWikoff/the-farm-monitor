@@ -1255,17 +1255,21 @@ def kitty_comfort_status(
     rain_or_snow should be True when PrecipIn > 0 or SnowIn > 0 in the most
     recent actual hour.
     """
-    temp_details = (
-        f"Feels Like Now: {live_temp_f:.1f}°F ({KITTY_TEMP_MIN_F:.0f}°F - {KITTY_TEMP_MAX_F:.0f}°F)"
-    )
-
     # Temperature status
     if live_temp_f <= KITTY_TEMP_MIN_F:
-        temp_status = f"Brr too cold for Kitties (freezing) — {temp_details}"
+        temp_status = (
+            f"Brr too cold for Kitties: {live_temp_f:.1f}°F "
+            f"-- (At or below {KITTY_TEMP_MIN_F:.0f}°F, freezing)"
+        )
     elif live_temp_f > KITTY_TEMP_MAX_F:
-        temp_status = f"Too hot for Kitties (85°F+) — {temp_details}"
+        temp_status = (
+            f"Too hot for Kitties: {live_temp_f:.1f}°F -- (More than {KITTY_TEMP_MAX_F:.0f}°F)"
+        )
     else:
-        temp_status = f"Good Temperature for Kitties — {temp_details}"
+        temp_status = (
+            f"Good Temperature for Kitties: {live_temp_f:.1f}°F "
+            f"-- ({KITTY_TEMP_MIN_F:.0f}°F - {KITTY_TEMP_MAX_F:.0f}°F)"
+        )
 
     # Wind status — use the higher of speed / gust if both present
     result: dict[str, str] = {"temp": temp_status}
@@ -1275,15 +1279,20 @@ def kitty_comfort_status(
         effective_wind = max(candidates)
 
     if effective_wind is not None:
-        wind_details = f"({effective_wind:.0f} mph) (More than {KITTY_WIND_THRESHOLD_MPH:.0f} mph)"
         if effective_wind > KITTY_WIND_THRESHOLD_MPH:
-            result["wind"] = f"Too windy for Kitties {wind_details}"
+            result["wind"] = (
+                f"Too windy for Kitties: {effective_wind:.0f} mph "
+                f"-- (More than {KITTY_WIND_THRESHOLD_MPH:.0f} mph)"
+            )
         else:
-            result["wind"] = f"Not too windy for Kitties {wind_details}"
+            result["wind"] = (
+                f"Not too windy for Kitties: {effective_wind:.0f} mph "
+                f"-- ({KITTY_WIND_THRESHOLD_MPH:.0f} mph or less)"
+            )
 
     # Precipitation status — only shown when actively raining/snowing
     if rain_or_snow:
-        result["precip"] = "Kitties don't like rain or snow"
+        result["precip"] = "Kitties don't like rain or snow: Yes -- (Rain or snow detected)"
 
     return result
 
