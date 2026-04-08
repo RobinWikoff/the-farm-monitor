@@ -10,12 +10,15 @@ updates_information: |
 additional_section_1: |
   Risks:
   - Upcoming memo generation feature needs logo asset finalization.
+additional_section_1_title: "Risks"
 additional_section_2: |
   Next Steps:
   - Implement Issue #62 Python memo PDF generator.
+additional_section_2_title: "Next Steps"
 additional_section_3: |
   Decisions Needed:
   - Confirm standard memo distribution list.
+additional_section_3_title: "Decisions Needed"
 memo_title: "The Farm Project Update Memo"
 organization_name: "The Farm"
 logo_path: "memo/assets/the_farm_logo.png"

@@ -59,8 +59,9 @@ def main() -> None:
             subject = st.text_input("Subject", placeholder="Weekly Project Update")
             recipient = st.text_input("Recipient", placeholder="Stakeholders")
             memo_title = st.text_input(
-                "Memo Title (optional)",
-                placeholder="Defaults to Subject",
+                "Memo Title",
+                placeholder="Weekly Project Update Memo",
+                help="Required.",
             )
 
         with right:
@@ -74,9 +75,18 @@ def main() -> None:
         background = st.text_area("Background", height=110)
         problem_statement = st.text_area("Problem Statement", height=110)
         updates_information = st.text_area("Updates / Information", height=140)
-        additional_section_1 = st.text_area("Additional Section 1", height=110)
-        additional_section_2 = st.text_area("Additional Section 2", height=110)
-        additional_section_3 = st.text_area("Additional Section 3", height=110)
+
+        st.divider()
+        st.markdown("**Additional Sections**")
+
+        additional_section_1_title = st.text_input("Section 1 Title", value="Additional Section 1")
+        additional_section_1 = st.text_area("Section 1 Content", height=110)
+
+        additional_section_2_title = st.text_input("Section 2 Title", value="Additional Section 2")
+        additional_section_2 = st.text_area("Section 2 Content", height=110)
+
+        additional_section_3_title = st.text_input("Section 3 Title", value="Additional Section 3")
+        additional_section_3 = st.text_area("Section 3 Content", height=110)
 
         submitted = st.form_submit_button("Generate PDF")
 
@@ -91,6 +101,9 @@ def main() -> None:
             "additional_section_1": additional_section_1,
             "additional_section_2": additional_section_2,
             "additional_section_3": additional_section_3,
+            "additional_section_1_title": additional_section_1_title,
+            "additional_section_2_title": additional_section_2_title,
+            "additional_section_3_title": additional_section_3_title,
             "memo_title": memo_title,
             "organization_name": organization_name,
             "logo_path": logo_path,
