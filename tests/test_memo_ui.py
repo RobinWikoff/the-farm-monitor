@@ -13,7 +13,7 @@ def _raw_form_data(**overrides):
         "additional_section_1": "A1",
         "additional_section_2": "A2",
         "additional_section_3": "A3",
-        "memo_title": "",
+        "memo_title": "Weekly Project Update Memo",
         "organization_name": "The Farm",
         "logo_path": "",
     }
@@ -25,7 +25,7 @@ def test_build_memo_data_from_form_returns_memo_data():
     memo = build_memo_data_from_form(_raw_form_data())
 
     assert isinstance(memo, MemoData)
-    assert memo.memo_title == "Weekly Project Update"
+    assert memo.memo_title == "Weekly Project Update Memo"
     assert memo.logo_path == "memo/assets/the_farm_logo.png"
 
 

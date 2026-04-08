@@ -13,14 +13,14 @@ def build_memo_story(memo: MemoData):
     title_style = ParagraphStyle(
         "MemoTitle",
         parent=styles["Title"],
-        fontName="Helvetica-Bold",
+        fontName="Times-Bold",
         fontSize=18,
         spaceAfter=12,
     )
     section_header_style = ParagraphStyle(
         "SectionHeader",
         parent=styles["Heading3"],
-        fontName="Helvetica-Bold",
+        fontName="Times-Bold",
         fontSize=12,
         spaceBefore=8,
         spaceAfter=4,
@@ -28,7 +28,7 @@ def build_memo_story(memo: MemoData):
     body_style = ParagraphStyle(
         "Body",
         parent=styles["BodyText"],
-        fontName="Helvetica",
+        fontName="Times-Roman",
         fontSize=10.5,
         leading=14,
         spaceAfter=8,
@@ -47,8 +47,8 @@ def build_memo_story(memo: MemoData):
     meta_table.setStyle(
         TableStyle(
             [
-                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-                ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+                ("FONTNAME", (0, 0), (0, -1), "Times-Bold"),
+                ("FONTNAME", (1, 0), (1, -1), "Times-Roman"),
                 ("FONTSIZE", (0, 0), (-1, -1), 10.5),
                 ("LINEBELOW", (0, 0), (-1, -1), 0.25, colors.lightgrey),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
@@ -62,14 +62,17 @@ def build_memo_story(memo: MemoData):
         ("Background", memo.background),
         ("Problem Statement", memo.problem_statement),
         ("Updates / Information", memo.updates_information),
-        ("Additional Section 1", memo.additional_section_1),
-        ("Additional Section 2", memo.additional_section_2),
-        ("Additional Section 3", memo.additional_section_3),
+        (memo.additional_section_1_title, memo.additional_section_1),
+        (memo.additional_section_2_title, memo.additional_section_2),
+        (memo.additional_section_3_title, memo.additional_section_3),
     ]
 
     for heading, content in sections:
-        story.append(Paragraph(heading, section_header_style))
-        for block in str(content).split("\n\n"):
-            story.append(Paragraph(block.replace("\n", "<br/>"), body_style))
+        # Only show section heading and content if there is text entered
+        if content and str(content).strip():
+            story.append(Paragraph(heading, section_header_style))
+            for block in str(content).split("\n\n"):
+                if block.strip():
+                    story.append(Paragraph(block.replace("\n", "<br/>"), body_style))
 
     return story
