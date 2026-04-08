@@ -11,14 +11,7 @@ import yaml
 
 _REQUIRED_FIELDS = (
     "date",
-    "subject",
-    "recipient",
-    "background",
-    "problem_statement",
-    "updates_information",
-    "additional_section_1",
-    "additional_section_2",
-    "additional_section_3",
+    "memo_title",
 )
 
 DATE_FORMAT = "%d-%b-%Y"
@@ -28,17 +21,20 @@ DEFAULT_LOGO_PATH = "memo/assets/the_farm_logo.png"
 @dataclass(slots=True)
 class MemoData:
     date: str
-    subject: str
-    recipient: str
-    background: str
-    problem_statement: str
-    updates_information: str
-    additional_section_1: str
-    additional_section_2: str
-    additional_section_3: str
+    subject: str = ""
+    recipient: str = ""
+    background: str = ""
+    problem_statement: str = ""
+    updates_information: str = ""
+    additional_section_1: str = ""
+    additional_section_2: str = ""
+    additional_section_3: str = ""
     memo_title: str = ""
     organization_name: str = "The Farm"
     logo_path: str = DEFAULT_LOGO_PATH
+    additional_section_1_title: str = "Additional Section 1"
+    additional_section_2_title: str = "Additional Section 2"
+    additional_section_3_title: str = "Additional Section 3"
 
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> "MemoData":
@@ -50,7 +46,7 @@ class MemoData:
         if blank:
             raise ValueError(f"Blank required memo fields: {', '.join(blank)}")
 
-        memo_title = str(data.get("memo_title", "")).strip() or str(data["subject"]).strip()
+        memo_title = str(data.get("memo_title", "")).strip()
         org_name = str(data.get("organization_name", "The Farm")).strip() or "The Farm"
         raw_date = str(data["date"]).strip()
         try:
@@ -62,17 +58,29 @@ class MemoData:
 
         return cls(
             date=normalized_date,
-            subject=str(data["subject"]).strip(),
-            recipient=str(data["recipient"]).strip(),
-            background=str(data["background"]).strip(),
-            problem_statement=str(data["problem_statement"]).strip(),
-            updates_information=str(data["updates_information"]).strip(),
-            additional_section_1=str(data["additional_section_1"]).strip(),
-            additional_section_2=str(data["additional_section_2"]).strip(),
-            additional_section_3=str(data["additional_section_3"]).strip(),
+            subject=str(data.get("subject", "")).strip(),
+            recipient=str(data.get("recipient", "")).strip(),
+            background=str(data.get("background", "")).strip(),
+            problem_statement=str(data.get("problem_statement", "")).strip(),
+            updates_information=str(data.get("updates_information", "")).strip(),
+            additional_section_1=str(data.get("additional_section_1", "")).strip(),
+            additional_section_2=str(data.get("additional_section_2", "")).strip(),
+            additional_section_3=str(data.get("additional_section_3", "")).strip(),
             memo_title=memo_title,
             organization_name=org_name,
             logo_path=logo_path,
+            additional_section_1_title=(
+                str(data.get("additional_section_1_title", "Additional Section 1")).strip()
+                or "Additional Section 1"
+            ),
+            additional_section_2_title=(
+                str(data.get("additional_section_2_title", "Additional Section 2")).strip()
+                or "Additional Section 2"
+            ),
+            additional_section_3_title=(
+                str(data.get("additional_section_3_title", "Additional Section 3")).strip()
+                or "Additional Section 3"
+            ),
         )
 
 

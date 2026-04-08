@@ -8,6 +8,7 @@ from memo.schema import MemoData, load_memo_data
 def _valid_mapping():
     return {
         "date": "21-Mar-2026",
+        "memo_title": "Status Update Memo",
         "subject": "Status Update",
         "recipient": "Stakeholders",
         "background": "Background text",
@@ -23,14 +24,14 @@ def test_memo_data_from_mapping_accepts_valid_input():
     memo = MemoData.from_mapping(_valid_mapping())
 
     assert memo.subject == "Status Update"
-    assert memo.memo_title == "Status Update"
+    assert memo.memo_title == "Status Update Memo"
     assert memo.organization_name == "The Farm"
     assert memo.logo_path == "memo/assets/the_farm_logo.png"
 
 
 def test_memo_data_from_mapping_rejects_missing_required_field():
     raw = _valid_mapping()
-    raw.pop("recipient")
+    raw.pop("memo_title")
 
     with pytest.raises(ValueError, match="Missing required memo fields"):
         MemoData.from_mapping(raw)
@@ -38,10 +39,27 @@ def test_memo_data_from_mapping_rejects_missing_required_field():
 
 def test_memo_data_from_mapping_rejects_blank_required_field():
     raw = _valid_mapping()
-    raw["problem_statement"] = "   "
+    raw["memo_title"] = "   "
 
     with pytest.raises(ValueError, match="Blank required memo fields"):
         MemoData.from_mapping(raw)
+
+
+def test_memo_data_from_mapping_accepts_blank_optional_fields():
+    raw = _valid_mapping()
+    raw["subject"] = ""
+    raw["recipient"] = ""
+    raw["background"] = ""
+    raw["problem_statement"] = ""
+    raw["updates_information"] = ""
+    raw["additional_section_1"] = ""
+    raw["additional_section_2"] = ""
+    raw["additional_section_3"] = ""
+
+    memo = MemoData.from_mapping(raw)
+
+    assert memo.subject == ""
+    assert memo.additional_section_1 == ""
 
 
 def test_memo_data_from_mapping_rejects_invalid_date_format():
@@ -58,6 +76,7 @@ def test_load_memo_data_yaml(tmp_path: Path):
         "\n".join(
             [
                 "date: '21-Mar-2026'",
+                "memo_title: 'Weekly Update Memo'",
                 "subject: 'Weekly Update'",
                 "recipient: 'Leadership Team'",
                 "background: 'Background'",
