@@ -1671,11 +1671,13 @@ def build_aqi_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
     # Bridge point to visually connect actual and forecast
     bridge = pd.DataFrame()
     if not actual.empty and not forecast.empty:
-        bridge = pd.DataFrame({
-            "Hour": [current_hour],
-            "AQI": [actual[actual["Hour"] == current_hour]["AQI"].iloc[0]],
-            "Series": ["Forecast AQI"],
-        })
+        bridge = pd.DataFrame(
+            {
+                "Hour": [current_hour],
+                "AQI": [actual[actual["Hour"] == current_hour]["AQI"].iloc[0]],
+                "Series": ["Forecast AQI"],
+            }
+        )
 
     actual_line = (
         alt.Chart(actual.assign(Series="Observed AQI"))
@@ -1743,10 +1745,12 @@ def build_aqi_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
 
     callouts = pd.DataFrame()
     if hi is not None and lo is not None:
-        callouts = pd.DataFrame([
-            {"Hour": hi_hour, "AQI": hi, "Label": f"High: {int(hi)}"},
-            {"Hour": lo_hour, "AQI": lo, "Label": f"Low: {int(lo)}"},
-        ])
+        callouts = pd.DataFrame(
+            [
+                {"Hour": hi_hour, "AQI": hi, "Label": f"High: {int(hi)}"},
+                {"Hour": lo_hour, "AQI": lo, "Label": f"Low: {int(lo)}"},
+            ]
+        )
 
     hi_lbl = (
         alt.Chart(callouts[callouts["Label"].str.startswith("High")])
@@ -2209,7 +2213,6 @@ def run_app() -> None:
     else:
         current_aqi = float(live_aqi)
 
-
     if air_actual_values.empty:
         highest_aqi = None
         lowest_aqi = None
@@ -2218,8 +2221,16 @@ def run_app() -> None:
     else:
         highest_aqi = int(round(float(air_actual_values.max())))
         lowest_aqi = int(round(float(air_actual_values.min())))
-        hi_hour = int(air_actual.loc[air_actual["AQI"] == highest_aqi, "Hour"].iloc[0]) if highest_aqi is not None else None
-        lo_hour = int(air_actual.loc[air_actual["AQI"] == lowest_aqi, "Hour"].iloc[0]) if lowest_aqi is not None else None
+        hi_hour = (
+            int(air_actual.loc[air_actual["AQI"] == highest_aqi, "Hour"].iloc[0])
+            if highest_aqi is not None
+            else None
+        )
+        lo_hour = (
+            int(air_actual.loc[air_actual["AQI"] == lowest_aqi, "Hour"].iloc[0])
+            if lowest_aqi is not None
+            else None
+        )
 
     a1, a2, a3 = st.columns(3)
     a1.metric(
@@ -2278,7 +2289,9 @@ def run_app() -> None:
     table_col, _ = st.columns([1, 2])
     with table_col:
         st.table(pollutant_table)
-    st.caption("Some pollutant fields may be unavailable from the live provider at certain times; unavailable values are shown as 'Not reported by source'.")
+    st.caption(
+        "Some pollutant fields may be unavailable from the live provider at certain times; unavailable values are shown as 'Not reported by source'."
+    )
 
     # Data Sources
     st.write("---")
