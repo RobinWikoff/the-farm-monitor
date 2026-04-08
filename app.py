@@ -159,6 +159,10 @@ def _build_dev_sample_payload(
         humidity = max(10.0, min(100.0, 62.0 + 22.0 * math.sin((h + 1) * math.pi / 10.0)))
         snow = precip if base <= 32.0 else 0.0
         wind_deg = (h * 15) % 360
+        aqi = max(
+            18.0,
+            min(185.0, 72.0 + 38.0 * math.sin((h - 4) * math.pi / 10.0) + 16.0 * math.sin(h)),
+        )
 
         rows.append(
             {
@@ -173,6 +177,14 @@ def _build_dev_sample_payload(
                 "PrecipProb": round(precip_prob, 1),
                 "Humidity": round(humidity, 1),
                 "SnowIn": round(snow, 2),
+                "AQI": int(round(aqi)),
+                "PM2_5": 0,
+                "PM10": 0,
+                "O3": 0,
+                "NO2": 0,
+                "SO2": 0,
+                "CO": 0,
+                "MainUS": 0,
             }
         )
 
@@ -207,6 +219,14 @@ def _build_dev_sample_payload(
         "PrecipProb": float(live_row["PrecipProb"]),
         "Humidity": float(live_row["Humidity"]),
         "SnowIn": float(live_row["SnowIn"]),
+        "AQI": int(live_row["AQI"]),
+        "PM2_5": 0,
+        "PM10": 0,
+        "O3": 0,
+        "NO2": 0,
+        "SO2": 0,
+        "CO": 0,
+        "MainUS": 0,
     }
 
     return df, live_temp, hist_band
@@ -715,7 +735,7 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
     params = {
         "unitGroup": "us",
         "include": "hours,current",
-        "elements": "datetime,temp,feelslike,windspeed,windgust,wdir,precip,precipprob,humidity,snow",
+        "elements": "datetime,temp,feelslike,windspeed,windgust,wdir,precip,precipprob,humidity,snow,aqius,aqieur,pm25,pm10,o3,no2,so2,co,mainus",
         "key": vc_api_key,
         "contentType": "json",
         "timezone": "America/Denver",
@@ -742,6 +762,18 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
             precipprob = hour.get("precipprob")
             humidity = hour.get("humidity")
             snow = hour.get("snow")
+            aqi = hour.get("aqius")
+            if aqi is None:
+                aqi = hour.get("aqieur")
+            if aqi is None:
+                aqi = hour.get("aqi")
+            pm25 = hour.get("pm25")
+            pm10 = hour.get("pm10")
+            o3 = hour.get("o3")
+            no2 = hour.get("no2")
+            so2 = hour.get("so2")
+            co = hour.get("co")
+            mainus = hour.get("mainus")
             dt_str = hour.get("datetime", "")  # "HH:mm:ss"
             if dt_str and actual is not None and feelslike is not None:
                 hour_int = int(dt_str.split(":")[0])
@@ -758,6 +790,14 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
                         "PrecipProb": round(precipprob, 1) if precipprob is not None else None,
                         "Humidity": round(humidity, 1) if humidity is not None else None,
                         "SnowIn": round(snow, 2) if snow is not None else None,
+                        "AQI": int(round(aqi)) if aqi is not None else None,
+                        "PM2_5": pm25,
+                        "PM10": pm10,
+                        "O3": o3,
+                        "NO2": no2,
+                        "SO2": so2,
+                        "CO": co,
+                        "MainUS": mainus,
                     }
                 )
     forecast_df = pd.DataFrame(rows)
@@ -773,6 +813,18 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
     live_precipprob = current.get("precipprob")
     live_humidity = current.get("humidity")
     live_snow = current.get("snow")
+    live_aqi = current.get("aqius")
+    if live_aqi is None:
+        live_aqi = current.get("aqieur")
+    if live_aqi is None:
+        live_aqi = current.get("aqi")
+    live_pm25 = current.get("pm25")
+    live_pm10 = current.get("pm10")
+    live_o3 = current.get("o3")
+    live_no2 = current.get("no2")
+    live_so2 = current.get("so2")
+    live_co = current.get("co")
+    live_mainus = current.get("mainus")
     if live_actual is None and not forecast_df.empty:
         live_actual = forecast_df.iloc[-1]["Actual"]
     if live_feelslike is None and not forecast_df.empty:
@@ -791,6 +843,22 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
         live_humidity = forecast_df.iloc[-1]["Humidity"]
     if live_snow is None and not forecast_df.empty:
         live_snow = forecast_df.iloc[-1]["SnowIn"]
+    if live_aqi is None and not forecast_df.empty and "AQI" in forecast_df.columns:
+        live_aqi = forecast_df.iloc[-1]["AQI"]
+    if live_pm25 is None and not forecast_df.empty and "PM2_5" in forecast_df.columns:
+        live_pm25 = forecast_df.iloc[-1]["PM2_5"]
+    if live_pm10 is None and not forecast_df.empty and "PM10" in forecast_df.columns:
+        live_pm10 = forecast_df.iloc[-1]["PM10"]
+    if live_o3 is None and not forecast_df.empty and "O3" in forecast_df.columns:
+        live_o3 = forecast_df.iloc[-1]["O3"]
+    if live_no2 is None and not forecast_df.empty and "NO2" in forecast_df.columns:
+        live_no2 = forecast_df.iloc[-1]["NO2"]
+    if live_so2 is None and not forecast_df.empty and "SO2" in forecast_df.columns:
+        live_so2 = forecast_df.iloc[-1]["SO2"]
+    if live_co is None and not forecast_df.empty and "CO" in forecast_df.columns:
+        live_co = forecast_df.iloc[-1]["CO"]
+    if live_mainus is None and not forecast_df.empty and "MainUS" in forecast_df.columns:
+        live_mainus = forecast_df.iloc[-1]["MainUS"]
 
     live_temp = {
         "Actual": round(live_actual, 1) if live_actual is not None else None,
@@ -803,9 +871,34 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
         "PrecipProb": round(live_precipprob, 1) if live_precipprob is not None else None,
         "Humidity": round(live_humidity, 1) if live_humidity is not None else None,
         "SnowIn": round(live_snow, 2) if live_snow is not None else None,
+        "AQI": int(round(live_aqi)) if live_aqi is not None else None,
+        "PM2_5": live_pm25,
+        "PM10": live_pm10,
+        "O3": live_o3,
+        "NO2": live_no2,
+        "SO2": live_so2,
+        "CO": live_co,
+        "MainUS": live_mainus,
     }
 
     return forecast_df, live_temp
+
+
+def aqi_interpretation(aqi: float | int | None) -> str:
+    if aqi is None:
+        return "Unavailable"
+    value = float(aqi)
+    if value <= 50:
+        return "Good"
+    if value <= 100:
+        return "Moderate"
+    if value <= 150:
+        return "Unhealthy for sensitive groups"
+    if value <= 200:
+        return "Unhealthy"
+    if value <= 300:
+        return "Very unhealthy"
+    return "Hazardous"
 
 
 @st.cache_data(ttl=604800)  # 7-day TTL — historical data barely changes
@@ -855,7 +948,7 @@ def fetch_historical_band(today_str: str, vc_api_key: str) -> pd.DataFrame:
                         and windspeed is not None
                         and dt_str
                     ):
-                        hour_int = int(dt_str.split(":")[0])
+                        hour_int = int(dt_str.split("T")[1].split(":")[0])
                         all_rows.append(
                             {
                                 "Hour": hour_int,
@@ -1566,6 +1659,113 @@ def build_precip_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
     )
 
 
+def build_aqi_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
+    """Build AQI trend chart with actual vs forecast segments and high/low callouts."""
+    aqi_df = df.copy()
+    aqi_df["AQI"] = pd.to_numeric(aqi_df["AQI"], errors="coerce")
+
+    # Actual and forecast segments
+    actual = aqi_df[(aqi_df["Hour"] <= current_hour) & (aqi_df["AQI"].notna())].copy()
+    forecast = aqi_df[(aqi_df["Hour"] > current_hour) & (aqi_df["AQI"].notna())].copy()
+
+    # Bridge point to visually connect actual and forecast
+    bridge = pd.DataFrame()
+    if not actual.empty and not forecast.empty:
+        bridge = pd.DataFrame({
+            "Hour": [current_hour],
+            "AQI": [actual[actual["Hour"] == current_hour]["AQI"].iloc[0]],
+            "Series": ["Forecast AQI"],
+        })
+
+    actual_line = (
+        alt.Chart(actual.assign(Series="Observed AQI"))
+        .mark_line(strokeWidth=4, color="#9ad162")
+        .encode(
+            x=alt.X(
+                "Hour:Q",
+                axis=alt.Axis(
+                    values=list(range(24)),
+                    labelAngle=-45,
+                    labelFontSize=11,
+                    labelExpr="datum.value + ':00'",
+                ),
+            ),
+            y=alt.Y(
+                "AQI:Q",
+                axis=alt.Axis(title="AQI", labelFontSize=11, titleFontSize=14),
+                scale=alt.Scale(domain=[0, max(120.0, aqi_df["AQI"].max() + 15.0)]),
+            ),
+            tooltip=[
+                alt.Tooltip("Hour:Q", title="Hour"),
+                alt.Tooltip("AQI:Q", title="AQI"),
+                alt.Tooltip("Series:N", title="Type"),
+            ],
+        )
+    )
+
+    forecast_line = (
+        alt.Chart(pd.concat([forecast, bridge], ignore_index=True).assign(Series="Forecast AQI"))
+        .mark_line(strokeWidth=4, color="#ffb347", strokeDash=[8, 5])
+        .encode(
+            x=alt.X(
+                "Hour:Q",
+                axis=alt.Axis(
+                    values=list(range(24)),
+                    labelAngle=-45,
+                    labelFontSize=11,
+                    labelExpr="datum.value + ':00'",
+                ),
+            ),
+            y=alt.Y(
+                "AQI:Q",
+                axis=alt.Axis(title="AQI", labelFontSize=11, titleFontSize=14),
+                scale=alt.Scale(domain=[0, max(120.0, aqi_df["AQI"].max() + 15.0)]),
+            ),
+            tooltip=[
+                alt.Tooltip("Hour:Q", title="Hour"),
+                alt.Tooltip("AQI:Q", title="AQI"),
+                alt.Tooltip("Series:N", title="Type"),
+            ],
+        )
+    )
+
+    now_dot = (
+        alt.Chart(actual[actual["Hour"] == current_hour])
+        .mark_circle(size=260, color="#00f2ff")
+        .encode(x="Hour:Q", y="AQI:Q")
+    )
+
+    # High/low callouts
+    hi = actual["AQI"].max() if not actual.empty else None
+    lo = actual["AQI"].min() if not actual.empty else None
+    hi_hour = actual.loc[actual["AQI"] == hi, "Hour"].iloc[0] if hi is not None else None
+    lo_hour = actual.loc[actual["AQI"] == lo, "Hour"].iloc[0] if lo is not None else None
+
+    callouts = pd.DataFrame()
+    if hi is not None and lo is not None:
+        callouts = pd.DataFrame([
+            {"Hour": hi_hour, "AQI": hi, "Label": f"High: {int(hi)}"},
+            {"Hour": lo_hour, "AQI": lo, "Label": f"Low: {int(lo)}"},
+        ])
+
+    hi_lbl = (
+        alt.Chart(callouts[callouts["Label"].str.startswith("High")])
+        .mark_text(dy=-18, fontSize=13, fontWeight="bold", color="#ffb347")
+        .encode(x="Hour:Q", y="AQI:Q", text="Label")
+    )
+    lo_lbl = (
+        alt.Chart(callouts[callouts["Label"].str.startswith("Low")])
+        .mark_text(dy=18, fontSize=13, fontWeight="bold", color="#9ad162", baseline="top")
+        .encode(x="Hour:Q", y="AQI:Q", text="Label")
+    )
+
+    return (
+        (actual_line + forecast_line + now_dot + hi_lbl + lo_lbl)
+        .properties(height=280)
+        .configure_legend(fillColor="#1e1e1e", padding=10)
+    )
+
+
 # ---------------------------------------------------------------------------
 # APP
 # ---------------------------------------------------------------------------
@@ -1987,6 +2187,99 @@ def run_app() -> None:
     st.altair_chart(build_precip_chart(precip_df, current_hour), width="stretch")
     st.caption("💧 Precipitation chart shows hourly actual precipitation amount in inches.")
 
+    st.write("---")
+
+    # Air Quality section (below Rain)
+    if "AQI" not in df.columns:
+        df["AQI"] = None
+
+    air_df = df[["Hour", "AQI"]].copy()
+    live_aqi = live_temp.get("AQI")
+
+    if not air_df.empty and current_hour in air_df["Hour"].values and live_aqi is not None:
+        air_df.loc[air_df["Hour"] == current_hour, "AQI"] = live_aqi
+
+    air_actual = air_df[air_df["Hour"] <= current_hour].copy()
+    air_actual_values = air_actual["AQI"].dropna()
+
+    if live_aqi is None and not air_actual_values.empty:
+        current_aqi = float(air_actual.sort_values("Hour").iloc[-1]["AQI"])
+    elif live_aqi is None:
+        current_aqi = None
+    else:
+        current_aqi = float(live_aqi)
+
+
+    if air_actual_values.empty:
+        highest_aqi = None
+        lowest_aqi = None
+        hi_hour = None
+        lo_hour = None
+    else:
+        highest_aqi = int(round(float(air_actual_values.max())))
+        lowest_aqi = int(round(float(air_actual_values.min())))
+        hi_hour = int(air_actual.loc[air_actual["AQI"] == highest_aqi, "Hour"].iloc[0]) if highest_aqi is not None else None
+        lo_hour = int(air_actual.loc[air_actual["AQI"] == lowest_aqi, "Hour"].iloc[0]) if lowest_aqi is not None else None
+
+    a1, a2, a3 = st.columns(3)
+    a1.metric(
+        "Current AQI",
+        (
+            f"{int(round(current_aqi))} ({aqi_interpretation(current_aqi)})"
+            if current_aqi is not None
+            else "N/A"
+        ),
+    )
+    a2.metric("Highest AQI Today", f"{highest_aqi}" if highest_aqi is not None else "N/A")
+    if highest_aqi is not None and hi_hour is not None:
+        a2.caption(f"Hour: {hi_hour:02d}:00")
+    a3.metric("Lowest AQI Today", f"{lowest_aqi}" if lowest_aqi is not None else "N/A")
+    if lowest_aqi is not None and lo_hour is not None:
+        a3.caption(f"Hour: {lo_hour:02d}:00")
+
+    st.altair_chart(build_aqi_chart(air_df, current_hour), width="stretch")
+    st.caption(
+        "🌫️ Air quality chart shows AQI over time (solid = observed, dashed = forecast for the rest of today)."
+    )
+
+    pollutant_rows = [
+        ("PM2.5", live_temp.get("PM2_5"), "ug/m3"),
+        ("PM10", live_temp.get("PM10"), "ug/m3"),
+        ("O3", live_temp.get("O3"), "ppb"),
+        ("NO2", live_temp.get("NO2"), "ppb"),
+        ("SO2", live_temp.get("SO2"), "ppb"),
+        ("CO", live_temp.get("CO"), "ppm"),
+        ("Main Pollutant (US)", live_temp.get("MainUS"), "code"),
+    ]
+
+    def _format_pollutant_value(value: Any) -> str:
+        if value is None:
+            return "Not reported by source"
+        if isinstance(value, float):
+            if pd.isna(value):
+                return "Not reported by source"
+            if value.is_integer():
+                return str(int(value))
+            return f"{value:.4f}".rstrip("0").rstrip(".")
+        return str(value)
+
+    pollutant_table = pd.DataFrame(
+        [
+            {
+                "Pollutant": label,
+                "Value": _format_pollutant_value(value),
+                "Units": unit,
+            }
+            for label, value, unit in pollutant_rows
+        ]
+    )
+
+    st.markdown("#### Pollutant Breakdown")
+    table_col, _ = st.columns([1, 2])
+    with table_col:
+        st.table(pollutant_table)
+    st.caption("Some pollutant fields may be unavailable from the live provider at certain times; unavailable values are shown as 'Not reported by source'.")
+
     # Data Sources
     st.write("---")
     with st.expander("📡 About the Data Sources"):
@@ -2022,6 +2315,7 @@ def run_app() -> None:
             - **Precipitation probability** (`precipprob`, %)
             - **Relative humidity** (`humidity`, %)
             - **Snow amount** (`snow`, inches)
+            - **Air quality index** (`aqius` / `aqieur`)
 
             Live conditions and today's hourly forecast refresh every **5 minutes**.
             The 5-year historical band refreshes once daily.
