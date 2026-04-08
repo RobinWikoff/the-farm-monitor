@@ -318,6 +318,22 @@ def test_format_dev_guardrail_sidebar_line_no_indicator_when_healthy():
     assert not line.startswith("🚫")
 
 
+@pytest.mark.parametrize(
+    ("aqi", "expected"),
+    [
+        (None, "Unavailable"),
+        (25, "Good"),
+        (75, "Moderate"),
+        (125, "Unhealthy for sensitive groups"),
+        (175, "Unhealthy"),
+        (250, "Very unhealthy"),
+        (325, "Hazardous"),
+    ],
+)
+def test_aqi_interpretation_thresholds(aqi, expected):
+    assert app.aqi_interpretation(aqi) == expected
+
+
 def test_format_dev_guardrail_sidebar_line_near_limit_shows_warning():
     item = {
         "label": "VC forecast/current",
