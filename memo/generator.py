@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from reportlab.lib.pagesizes import LETTER
@@ -10,6 +11,9 @@ from reportlab.platypus import SimpleDocTemplate
 
 from .schema import MemoData
 from .template import build_memo_story
+
+
+logger = logging.getLogger(__name__)
 
 
 class NumberedCanvas(canvas.Canvas):
@@ -73,9 +77,12 @@ class NumberedCanvas(canvas.Canvas):
                         mask="auto",
                     )
                     text_x = 0.72 * inch + logo_width + 0.06 * inch
-            except Exception:
-                # Ignore logo rendering errors and continue generating the PDF.
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "Logo rendering failed for '%s'; generating PDF without logo. Error: %s",
+                    self.logo_path,
+                    exc,
+                )
 
         self.setFont("Times-Bold", 11)
         self.drawString(text_x, header_line_y + 0.52 * inch, self.organization_name)
