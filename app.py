@@ -2243,10 +2243,16 @@ def run_app() -> None:
     )
     a2.metric("Highest AQI Today", f"{highest_aqi}" if highest_aqi is not None else "N/A")
     if highest_aqi is not None and hi_hour is not None:
-        a2.caption(f"Hour: {hi_hour:02d}:00")
+        if hasattr(a2, "caption"):
+            a2.caption(f"Hour: {hi_hour:02d}:00")
+        else:
+            st.caption(f"Hour: {hi_hour:02d}:00")
     a3.metric("Lowest AQI Today", f"{lowest_aqi}" if lowest_aqi is not None else "N/A")
     if lowest_aqi is not None and lo_hour is not None:
-        a3.caption(f"Hour: {lo_hour:02d}:00")
+        if hasattr(a3, "caption"):
+            a3.caption(f"Hour: {lo_hour:02d}:00")
+        else:
+            st.caption(f"Hour: {lo_hour:02d}:00")
 
     st.altair_chart(build_aqi_chart(air_df, current_hour), width="stretch")
     st.caption(
