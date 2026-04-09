@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://the-farm-monitor.local/schemas/uor-prism-request.schema.json",
+  "title": "UOR PRISM Request",
+  "type": "object",
+  "required": ["version", "query_type", "input_payload"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^v[0-9]+$",
+      "description": "Contract version, for example v1"
+    },
+    "query_type": {
+      "type": "string",
+      "description": "Resolver query category used by backend routing"
+    },
+    "input_payload": {
+      "type": "object",
+      "description": "Domain-specific request data"
+    },
+    "policy_flags": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "number", "integer", "boolean"]
+      },
+      "description": "Optional execution policy flags"
+    },
+    "request_id": {
+      "type": "string",
+      "description": "Optional caller-supplied correlation id"
+    }
+  },
+  "additionalProperties": false
+}
