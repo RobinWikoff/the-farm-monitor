@@ -1892,6 +1892,7 @@ def run_app() -> None:
     else:
         # Fetch data
         vc_api_key = _get_vc_api_key()
+        using_emergency_sample_fallback = False
         with st.spinner("Fetching latest weather data…"):
             # Forecast + current — fall back to session state if API is rate limited
             try:
@@ -1904,63 +1905,67 @@ def run_app() -> None:
                 df = st.session_state.get("df", pd.DataFrame())
                 live_temp = st.session_state.get("live_temp", None)
                 if df.empty or live_temp is None:
-                    st.error(
-                        "Could not reach the weather API and no cached data is available. Please try again in a few minutes."
+                    st.warning(
+                        "Could not reach the weather API and no cached data is available. "
+                        "Showing temporary local sample data."
                     )
-                    st.stop()
+                    df, live_temp, hist_band = _build_dev_sample_payload(now_mtn)
+                    using_emergency_sample_fallback = True
                 else:
                     st.warning(_format_dev_guardrail_fallback("forecast", e))
 
-            # Historical band — prefer disk cache, then API, then session fallback.
-            today_str = now_mtn.strftime("%Y-%m-%d")
-            hist_band = _load_hist_band_from_disk(today_str)
-            if not hist_band.empty:
-                st.session_state["hist_band"] = hist_band
-                st.session_state["hist_band_date"] = today_str
-            else:
-                try:
-                    hist_band = fetch_historical_band(today_str, vc_api_key)
-                    if not hist_band.empty:
-                        st.session_state["hist_band"] = hist_band
-                        st.session_state["hist_band_date"] = today_str
-                        _save_hist_band_to_disk(today_str, hist_band)
-                    else:
+            if not using_emergency_sample_fallback:
+                # Historical band — prefer disk cache, then API, then session fallback.
+                today_str = now_mtn.strftime("%Y-%m-%d")
+                hist_band = _load_hist_band_from_disk(today_str)
+                if not hist_band.empty:
+                    st.session_state["hist_band"] = hist_band
+                    st.session_state["hist_band_date"] = today_str
+                else:
+                    try:
+                        hist_band = fetch_historical_band(today_str, vc_api_key)
+                        if not hist_band.empty:
+                            st.session_state["hist_band"] = hist_band
+                            st.session_state["hist_band_date"] = today_str
+                            _save_hist_band_to_disk(today_str, hist_band)
+                        else:
+                            session_date = st.session_state.get("hist_band_date")
+                            session_hist = st.session_state.get("hist_band", pd.DataFrame())
+                            if session_date == today_str and not session_hist.empty:
+                                hist_band = session_hist
+                            else:
+                                st.caption("⚠️ Historical band temporarily unavailable.")
+                    except (requests.RequestException, DevAPIBlockedError) as e:
+                        logger.warning("Historical band fetch failed, using cached fallback: %s", e)
                         session_date = st.session_state.get("hist_band_date")
                         session_hist = st.session_state.get("hist_band", pd.DataFrame())
                         if session_date == today_str and not session_hist.empty:
                             hist_band = session_hist
                         else:
-                            st.caption("⚠️ Historical band temporarily unavailable.")
-                except (requests.RequestException, DevAPIBlockedError) as e:
-                    logger.warning("Historical band fetch failed, using cached fallback: %s", e)
-                    session_date = st.session_state.get("hist_band_date")
-                    session_hist = st.session_state.get("hist_band", pd.DataFrame())
-                    if session_date == today_str and not session_hist.empty:
-                        hist_band = session_hist
-                    else:
-                        st.caption(_format_dev_guardrail_fallback("historical", e))
+                            st.caption(_format_dev_guardrail_fallback("historical", e))
 
-        # Wind direction/gust source override from Open-Meteo with session-state fallback.
-        try:
-            wind_df_om, wind_current_om = fetch_wind_openmeteo()
+        if not using_emergency_sample_fallback:
+            # Wind direction/gust source override from Open-Meteo with session-state fallback.
+            try:
+                wind_df_om, wind_current_om = fetch_wind_openmeteo()
+                if not wind_df_om.empty:
+                    st.session_state["wind_df_om"] = wind_df_om
+                st.session_state["wind_current_om"] = wind_current_om
+            except (requests.RequestException, DevAPIBlockedError) as e:
+                logger.warning("Open-Meteo wind fetch failed, using cached fallback: %s", e)
+                wind_df_om = st.session_state.get("wind_df_om", pd.DataFrame())
+                wind_current_om = st.session_state.get("wind_current_om", {})
+                st.caption(_format_dev_guardrail_fallback("wind", e))
+
             if not wind_df_om.empty:
-                st.session_state["wind_df_om"] = wind_df_om
-            st.session_state["wind_current_om"] = wind_current_om
-        except (requests.RequestException, DevAPIBlockedError) as e:
-            logger.warning("Open-Meteo wind fetch failed, using cached fallback: %s", e)
-            wind_df_om = st.session_state.get("wind_df_om", pd.DataFrame())
-            wind_current_om = st.session_state.get("wind_current_om", {})
-            st.caption(_format_dev_guardrail_fallback("wind", e))
+                wind_merge_cols = ["Hour", "WindSpeed", "WindGust", "WindDeg", "WindDir"]
+                df = df.drop(columns=["WindSpeed", "WindGust", "WindDeg", "WindDir"], errors="ignore")
+                df = df.merge(wind_df_om[wind_merge_cols], on="Hour", how="left")
 
-        if not wind_df_om.empty:
-            wind_merge_cols = ["Hour", "WindSpeed", "WindGust", "WindDeg", "WindDir"]
-            df = df.drop(columns=["WindSpeed", "WindGust", "WindDeg", "WindDir"], errors="ignore")
-            df = df.merge(wind_df_om[wind_merge_cols], on="Hour", how="left")
-
-        if wind_current_om:
-            for key in ["WindSpeed", "WindGust", "WindDeg", "WindDir"]:
-                if wind_current_om.get(key) is not None:
-                    live_temp[key] = wind_current_om.get(key)
+            if wind_current_om:
+                for key in ["WindSpeed", "WindGust", "WindDeg", "WindDir"]:
+                    if wind_current_om.get(key) is not None:
+                        live_temp[key] = wind_current_om.get(key)
 
     if df.empty:
         st.warning("No forecast data available for today.")

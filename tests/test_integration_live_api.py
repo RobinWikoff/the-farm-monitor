@@ -221,3 +221,59 @@ def test_app_loads_without_error_in_ci_non_live_mode(monkeypatch):
     monkeypatch.setattr(app.requests, "get", fail_if_called)
 
     app.run_app()
+
+
+@pytest.mark.integration
+def test_app_falls_back_to_sample_when_live_forecast_unavailable(monkeypatch):
+    monkeypatch.setenv("ENV", "prod")
+
+    monkeypatch.setattr(app.st, "secrets", {}, raising=False)
+    monkeypatch.setattr(app.st, "session_state", {}, raising=False)
+    monkeypatch.setattr(app.st, "sidebar", _DummySidebar(), raising=False)
+
+    monkeypatch.setattr(app.st, "set_page_config", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app.st, "title", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app.st, "markdown", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app.st, "info", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app.st, "error", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app.st, "warning", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app.st, "success", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app.st, "caption", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app.st, "write", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app.st, "table", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app.st, "button", lambda *args, **kwargs: False)
+    monkeypatch.setattr(app.st, "checkbox", lambda *args, **kwargs: False)
+    monkeypatch.setattr(app.st, "code", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app.st, "rerun", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app.st, "altair_chart", lambda *args, **kwargs: None)
+    monkeypatch.setattr(app.st, "spinner", lambda *args, **kwargs: _DummyContext())
+    monkeypatch.setattr(app.st, "expander", lambda *args, **kwargs: _DummyContext())
+    monkeypatch.setattr(
+        app.st,
+        "stop",
+        lambda: (_ for _ in ()).throw(AssertionError("st.stop() should not be called")),
+    )
+
+    def fake_columns(count):
+        return tuple(_DummyMetricColumn() for _ in range(count))
+
+    monkeypatch.setattr(app.st, "columns", fake_columns)
+
+    monkeypatch.setattr(app, "_get_vc_api_key", lambda: "dummy-key")
+
+    def fail_forecast(*args, **kwargs):
+        raise app.requests.RequestException("quota exceeded")
+
+    monkeypatch.setattr(app, "fetch_forecast_and_current", fail_forecast)
+    monkeypatch.setattr(
+        app,
+        "fetch_historical_band",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("historical should be skipped")),
+    )
+    monkeypatch.setattr(
+        app,
+        "fetch_wind_openmeteo",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("wind should be skipped")),
+    )
+
+    app.run_app()
