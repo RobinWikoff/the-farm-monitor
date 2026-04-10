@@ -948,7 +948,12 @@ def fetch_historical_band(today_str: str, vc_api_key: str) -> pd.DataFrame:
                         and windspeed is not None
                         and dt_str
                     ):
-                        hour_int = int(dt_str.split("T")[1].split(":")[0])
+                        # Visual Crossing may return either "HH:MM:SS" or full ISO timestamps.
+                        time_part = str(dt_str).split("T")[-1]
+                        try:
+                            hour_int = int(time_part.split(":")[0])
+                        except (ValueError, IndexError):
+                            continue
                         all_rows.append(
                             {
                                 "Hour": hour_int,
@@ -2292,7 +2297,7 @@ def run_app() -> None:
     )
 
     st.markdown("#### Pollutant Breakdown")
-    table_col, _ = st.columns([1, 2])
+    table_col, _ = st.columns(2)
     with table_col:
         st.table(pollutant_table)
     st.caption(
