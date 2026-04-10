@@ -2297,7 +2297,7 @@ def run_app() -> None:
     )
 
     st.markdown("#### Pollutant Breakdown")
-    table_col, _ = st.columns([1, 2])
+    table_col, _ = st.columns(2)
     with table_col:
         st.table(pollutant_table)
     st.caption(
