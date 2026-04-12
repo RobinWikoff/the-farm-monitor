@@ -7,6 +7,9 @@ Provide a complete code-level view of all public and internal components in `app
 ## Runtime + Guardrail + Weather Fetch Flow
 
 ```mermaid
+---
+title: "Code-Level Diagram | Generated %%RENDER_DATE%%"
+---
 classDiagram
     class run_app {
       +run_app()

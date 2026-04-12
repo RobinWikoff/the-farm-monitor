@@ -8,7 +8,7 @@ Show major components inside the main weather container.
 
 ```mermaid
 C4Component
-    title Weather Dashboard - Component Diagram
+    title Component Diagram | Generated %%RENDER_DATE%%
 
     Container_Boundary(weather_app, "Weather Dashboard (app.py)") {
         Component(runtime_cfg, "Runtime Config Resolver", "Functions", "Resolves profile/data mode and validates env constraints")
