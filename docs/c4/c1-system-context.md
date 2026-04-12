@@ -6,7 +6,7 @@ Show The Farm Monitor as a system and its relationships with users and external 
 
 ```mermaid
 C4Context
-    title The Farm Monitor - System Context
+    title The Farm Monitor – System Context | Generated %%RENDER_DATE%%
 
     Person(user, "Farm Operator", "Views weather risk dashboards")
     Person(dev, "Developer/Maintainer", "Runs dev-safe/dev-live profiles and integration tests")

@@ -7,6 +7,9 @@ Show how each user-visible UI section connects to backend data sources, analytic
 ## High-Level Overview
 
 ```mermaid
+---
+title: UI Feature Map – High-Level Overview | Generated %%RENDER_DATE%%
+---
 flowchart TD
     subgraph EXT["External Systems"]
         direction LR
@@ -64,6 +67,9 @@ flowchart TD
 ## Domain Detail: Temperature
 
 ```mermaid
+---
+title: UI Feature Map – Temperature Domain | Generated %%RENDER_DATE%%
+---
 flowchart LR
     subgraph EXT["External"]
         vc_api(["Visual Crossing"])
@@ -111,6 +117,9 @@ flowchart LR
 ## Domain Detail: Wind & Comfort
 
 ```mermaid
+---
+title: UI Feature Map – Wind & Comfort Domain | Generated %%RENDER_DATE%%
+---
 flowchart LR
     subgraph EXT["External"]
         vc_api(["Visual Crossing"])
@@ -157,6 +166,9 @@ flowchart LR
 ## Domain Detail: Precipitation
 
 ```mermaid
+---
+title: UI Feature Map – Precipitation Domain | Generated %%RENDER_DATE%%
+---
 flowchart LR
     subgraph EXT["External"]
         vc_api(["Visual Crossing"])
@@ -189,6 +201,9 @@ flowchart LR
 ## Domain Detail: Air Quality
 
 ```mermaid
+---
+title: UI Feature Map – Air Quality Domain | Generated %%RENDER_DATE%%
+---
 flowchart LR
     subgraph EXT["External"]
         vc_api(["Visual Crossing"])
@@ -225,6 +240,9 @@ flowchart LR
 ## Guardrail & Config Flow
 
 ```mermaid
+---
+title: UI Feature Map – Guardrail & Config Flow | Generated %%RENDER_DATE%%
+---
 flowchart TD
     subgraph UI["Dev Controls"]
         sidebar["Sidebar Settings"]
@@ -296,6 +314,9 @@ flowchart TD
 ## Fallback Cascade
 
 ```mermaid
+---
+title: UI Feature Map – Fallback Cascade | Generated %%RENDER_DATE%%
+---
 flowchart LR
     subgraph FC["Forecast Path"]
         direction TB

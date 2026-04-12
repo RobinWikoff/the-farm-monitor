@@ -13,6 +13,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 C4_DIR="$REPO_ROOT/docs/c4"
 OUT_DIR="$C4_DIR/rendered"
 PUPPETEER_CFG=$(mktemp /tmp/puppeteer_cfg_XXXXXX.json)
+RENDER_DATE=$(date +%Y-%m-%d)
 
 mkdir -p "$OUT_DIR"
 
@@ -62,6 +63,9 @@ for md_file in "${!FILES[@]}"; do
         fi
         if $in_block && [[ "$line" =~ ^\`\`\` ]]; then
             in_block=false
+
+            # Inject render date into placeholder
+            sed -i "s/%%RENDER_DATE%%/$RENDER_DATE/g" "$tmp_mmd"
 
             # Determine output name
             if [[ $block_idx -eq 1 ]]; then
