@@ -5,3 +5,5 @@ __pycache__/
 .env
 .env.*
 !.env.example
+.streamlit/guardrails/
+.streamlit/hist_cache/

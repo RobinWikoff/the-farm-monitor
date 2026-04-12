@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://the-farm-monitor.local/schemas/uor-prism-response.schema.json",
+  "title": "UOR PRISM Response",
+  "type": "object",
+  "required": ["version", "resolver_result", "diagnostics"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^v[0-9]+$",
+      "description": "Contract version, for example v1"
+    },
+    "resolver_result": {
+      "type": "object",
+      "description": "Backend resolution output"
+    },
+    "certificate": {
+      "type": ["object", "null"],
+      "description": "Optional backend certificate payload"
+    },
+    "trace": {
+      "type": ["object", "null"],
+      "description": "Optional backend execution trace"
+    },
+    "diagnostics": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "degraded", "error"]
+        },
+        "messages": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "backend_version": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
