@@ -268,7 +268,9 @@ def test_app_falls_back_to_sample_when_live_forecast_unavailable(monkeypatch):
     monkeypatch.setattr(
         app,
         "fetch_historical_band",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("historical should be skipped")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("historical should be skipped")
+        ),
     )
     monkeypatch.setattr(
         app,

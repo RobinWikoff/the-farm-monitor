@@ -1959,7 +1959,9 @@ def run_app() -> None:
 
             if not wind_df_om.empty:
                 wind_merge_cols = ["Hour", "WindSpeed", "WindGust", "WindDeg", "WindDir"]
-                df = df.drop(columns=["WindSpeed", "WindGust", "WindDeg", "WindDir"], errors="ignore")
+                df = df.drop(
+                    columns=["WindSpeed", "WindGust", "WindDeg", "WindDir"], errors="ignore"
+                )
                 df = df.merge(wind_df_om[wind_merge_cols], on="Hour", how="left")
 
             if wind_current_om:
