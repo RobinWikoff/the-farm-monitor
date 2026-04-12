@@ -6,7 +6,7 @@ Show deployable/runtime containers and data flow between them.
 
 ```mermaid
 C4Container
-    title The Farm Monitor – Container Diagram | Generated %%RENDER_DATE%%
+    title Container Diagram | Generated %%RENDER_DATE%%
 
     Person(user, "Farm Operator")
     Person(dev, "Developer")

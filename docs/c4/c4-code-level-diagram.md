@@ -8,7 +8,7 @@ Provide a complete code-level view of all public and internal components in `app
 
 ```mermaid
 ---
-title: C4 Code-Level Diagram | Generated %%RENDER_DATE%%
+title: "Code-Level Diagram | Generated %%RENDER_DATE%%"
 ---
 classDiagram
     class run_app {
