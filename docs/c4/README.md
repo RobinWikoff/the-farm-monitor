@@ -12,7 +12,6 @@ This section documents The Farm Monitor architecture using the C4 model.
 ## Scope Covered
 
 - Weather monitoring application runtime in `app.py`
-- Memo generation subsystem in `memo/`
 - External weather providers and local persistence boundaries
 - Runtime profile, guardrail, and fallback behavior
 
