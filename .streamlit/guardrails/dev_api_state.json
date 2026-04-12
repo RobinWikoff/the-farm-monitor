@@ -1,0 +1,12 @@
+{
+  "blocked": {
+    "visual_crossing_historical": 1
+  },
+  "cooldowns": {},
+  "date": "2026-04-08",
+  "usage": {
+    "open_meteo_wind": 3,
+    "visual_crossing_forecast": 3,
+    "visual_crossing_historical": 3
+  }
+}

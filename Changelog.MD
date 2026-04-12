@@ -1,6 +1,11 @@
 # The Farm: Comfort Temperature Monitor — Changelog
 
 ## [Unreleased] - 2026-03-16
+### Added
+- Feature documentation: added `docs/feature-requirements.md` with requirements and logic for weather and memo features.
+- Documentation maintenance policy: README now links feature docs and requires same-PR updates when feature behavior changes.
+- Architecture documentation: added C4 model docs under `docs/c4/` (context, container, component, and code-level diagrams + narrative).
+
 ### Fixed
 - Issue #30: Historical API rate limit handling — stop fetching further yearly data on first 429 response; fall back to cached band or a single caption instead of showing an error.
 - Forecast data disappearing when Visual Crossing returns `wdir: null` — relaxed hourly row filter to only require `temp` and `feelslike`; wind speed and direction now stored as `None` when absent rather than rejecting the row. Added regression test to prevent recurrence.
