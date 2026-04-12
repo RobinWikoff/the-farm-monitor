@@ -8,11 +8,11 @@ Show The Farm Monitor as a system and its relationships with users and external 
 C4Context
     title The Farm Monitor - System Context
 
-    Person(user, "Farm Operator", "Views weather risk and generates memo PDFs")
+    Person(user, "Farm Operator", "Views weather risk dashboards")
     Person(dev, "Developer/Maintainer", "Runs dev-safe/dev-live profiles and integration tests")
 
     System_Boundary(farm_boundary, "The Farm Monitor") {
-        System(farm_monitor, "The Farm Monitor", "Streamlit weather dashboard + memo PDF tooling")
+        System(farm_monitor, "The Farm Monitor", "Streamlit weather monitoring dashboard")
     }
 
     System_Ext(vc_api, "Visual Crossing API", "Forecast/current weather and historical weather data")
@@ -20,8 +20,8 @@ C4Context
     System_Ext(local_fs, "Local File System", "Guardrail state and historical cache")
     System_Ext(ci_runner, "GitHub Actions", "CI profiles for non-live and manual live test workflows")
 
-    Rel(user, farm_monitor, "Uses weather dashboard and memo UI", "Browser")
-    Rel(dev, farm_monitor, "Runs app, memo CLI, and tests", "Python/Streamlit")
+    Rel(user, farm_monitor, "Uses weather dashboard", "Browser")
+    Rel(dev, farm_monitor, "Runs app and tests", "Python/Streamlit")
     Rel(farm_monitor, vc_api, "Fetches forecast/current + historical bands", "HTTPS JSON")
     Rel(farm_monitor, om_api, "Fetches wind forecast/current", "HTTPS JSON")
     Rel(farm_monitor, local_fs, "Reads/writes guardrail + historical cache", "JSON/CSV")

@@ -5,6 +5,3 @@ altair<5
 pytz
 pytest
 ruff>=0.11,<1
-PyYAML>=6.0
-reportlab>=4.0
-pypdf>=5.0

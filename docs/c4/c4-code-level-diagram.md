@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Provide code-level views for implementation-critical components.
+Provide a complete code-level view of all public and internal components in `app.py`.
 
-## C4A - Runtime + Guardrail + Weather Fetch Flow
+## Runtime + Guardrail + Weather Fetch Flow
 
 ```mermaid
 classDiagram
@@ -12,119 +12,102 @@ classDiagram
       +run_app()
     }
 
-    class resolve_runtime_config {
+    class RuntimeConfig {
       +resolve_runtime_config(secrets, environ) dict
+      +inspect_runtime_config(runtime) dict
       +validate_runtime_config(runtime) list
       +get_runtime_config_warnings(runtime) list
+      -_as_bool(value, default) bool
+      -_get_cfg_value(name, secrets, environ) Any
+      -_get_streamlit_secrets() Mapping
+    }
+
+    class DevAPIBlockedError {
+      <<exception>>
     }
 
     class Guardrails {
       +check_and_record_dev_api_request(key, runtime, now, ...)
       +record_dev_api_cooldown(key, runtime, now, ...)
       +get_dev_guardrail_snapshot(...)
-      +_load_dev_guardrail_state(date)
-      +_save_dev_guardrail_state(state)
+      +reset_dev_guardrail_usage_and_blocked(...)
+      +clear_dev_guardrail_cooldowns(...)
+      +get_dev_guardrail_raw_state(now) dict
+      -_load_dev_guardrail_state(date) dict
+      -_save_dev_guardrail_state(state)
+      -_fresh_dev_guardrail_state(date_str) dict
+      -_dev_guardrail_state_path() str
+      -_get_dev_budget_limits(secrets, environ) dict
+      -_get_dev_cooldown_minutes(secrets, environ) int
+      -_guardrail_now(now) datetime
+      -_get_dev_near_limit_pct(secrets, environ) float
+      -_format_dev_guardrail_sidebar_line(item) str
+      -_format_dev_guardrail_fallback(kind, exc) str
     }
 
     class WeatherIngestion {
-      +guarded_requests_get(url, params, timeout, guardrail_key)
-      +fetch_forecast_and_current(vc_api_key)
-      +fetch_historical_band(today_str, vc_api_key)
-      +fetch_wind_openmeteo()
-      +_build_dev_sample_payload(now_mtn)
+      +guarded_requests_get(url, params, timeout, guardrail_key) Response
+      +fetch_forecast_and_current(vc_api_key) tuple
+      +fetch_historical_band(today_str, vc_api_key) DataFrame
+      +fetch_wind_openmeteo() tuple
+      -_build_dev_sample_payload(now_mtn) dict
+      -_get_vc_api_key() str
+    }
+
+    class HistoricalCache {
+      -_hist_cache_path(date_str) str
+      -_load_hist_band_from_disk(date_str) DataFrame
+      -_save_hist_band_to_disk(date_str, hist_band)
     }
 
     class Analytics {
-      +get_temp_trend(df, live_temp, current_hour)
-      +get_wind_trend(df, live_wind_speed, current_hour)
-      +kitty_comfort_status(...)
-      +aqi_interpretation(aqi)
-      +render_status_banner(...)
-      +render_kitty_comfort_banner(...)
+      +get_temp_trend(df, live_temp, current_hour) float
+      +get_wind_trend(df, live_wind_speed, current_hour) float
+      +kitty_comfort_status(live_temp_f, wind_speed, wind_gust, rain_or_snow) dict
+      +aqi_interpretation(aqi) str
+      +wind_degree_to_cardinal(degrees) str
+    }
+
+    class StatusBanners {
+      +render_status_banner(live_temp, threshold, forecast_future, mode)
+      +render_wind_banner(fastest_wind_speed, fastest_wind_hour)
+      +render_kitty_comfort_banner(status)
     }
 
     class Visualization {
       +build_chart(...)
       +build_wind_chart(...)
-      +build_precip_chart(...)
-      +build_aqi_chart(...)
+      +build_precip_chart(df, current_hour) LayerChart
+      +build_aqi_chart(df, current_hour) LayerChart
     }
 
-    run_app --> resolve_runtime_config : resolve + validate profile
+    run_app --> RuntimeConfig : resolve + validate profile
     run_app --> WeatherIngestion : acquire live/sample data
+    run_app --> HistoricalCache : disk fallback for historical band
     WeatherIngestion --> Guardrails : enforce dev limits
+    Guardrails --> DevAPIBlockedError : raises on blocked call
     run_app --> Analytics : derive metrics + status
+    run_app --> StatusBanners : render weather/wind/kitty banners
     run_app --> Visualization : render charts
+    WeatherIngestion --> HistoricalCache : cache historical band to disk
 ```
 
-### Code-Level Notes (Weather)
+### Code-Level Notes
 
-- `guarded_requests_get` centralizes guardrail enforcement for all live HTTP calls.
-- `fetch_historical_band` includes leap-day handling and 429 early-stop behavior.
-- `run_app` coordinates fallback order, then passes normalized datasets to analytics + chart builders.
-
-## C4B - Memo Data-to-PDF Flow
-
-```mermaid
-classDiagram
-    class MemoData {
-      +date: str
-      +memo_title: str
-      +organization_name: str
-      +logo_path: str
-      +from_mapping(data) MemoData
-    }
-
-    class load_memo_data {
-      +load_memo_data(input_path) MemoData
-    }
-
-    class build_memo_story {
-      +build_memo_story(memo)
-    }
-
-    class NumberedCanvas {
-      +showPage()
-      +save()
-      +_draw_header()
-      +_draw_footer(page_number, page_count)
-    }
-
-    class generate_memo_pdf {
-      +generate_memo_pdf(memo, output_path)
-    }
-
-    class memo_ui {
-      +build_memo_data_from_form(raw) MemoData
-      +_generate_pdf_bytes(memo) bytes
-      +main()
-    }
-
-    class memo_cli {
-      +parse_args()
-      +main()
-    }
-
-    load_memo_data --> MemoData : construct validated model
-    memo_ui --> MemoData : construct from form mapping
-    memo_ui --> generate_memo_pdf : generate bytes
-    memo_cli --> load_memo_data : load input file
-    memo_cli --> generate_memo_pdf : generate output PDF
-    generate_memo_pdf --> build_memo_story : build content flowables
-    generate_memo_pdf --> NumberedCanvas : page header/footer + numbering
-```
-
-### Code-Level Notes (Memo)
-
-- `MemoData.from_mapping` is the contract gate for required fields and date format.
-- `NumberedCanvas` performs post-page buffering so footer can render `Page X of Y` accurately.
-- UI and CLI share the same schema + generator path, reducing behavior drift.
+- `DevAPIBlockedError` is a custom exception raised by guardrails when a live API call is blocked (budget exhausted, cooldown active).
+- `guarded_requests_get` centralizes guardrail enforcement for all live HTTP calls and records 429 cooldowns.
+- `fetch_historical_band` includes leap-day handling, 429 early-stop, and 7-day `@st.cache_data` TTL.
+- `HistoricalCache` manages the disk-based CSV cache for historical band data, providing fallback when live fetch is unavailable.
+- `_format_dev_guardrail_fallback` generates user-facing messages that distinguish budget exhaustion, cooldown, and general outage.
+- `run_app` coordinates fallback order (live → session → disk cache → sample), then passes normalized datasets to analytics, banners, and chart builders.
+- `RuntimeConfig` includes `inspect_runtime_config` which returns both errors and warnings in a single call, used internally by the convenience wrappers.
 
 ## Traceability To Requirements
 
 Primary requirement trace file: [../feature-requirements.md](../feature-requirements.md)
 
 Mapping guidance:
-- Runtime profile and guardrail requirements map to C4A classes `resolve_runtime_config` and `Guardrails`.
-- Weather fallback and chart behavior map to `run_app`, `WeatherIngestion`, `Analytics`, and `Visualization`.
-- Memo requirements map to C4B classes `MemoData`, `generate_memo_pdf`, `memo_ui`, and `memo_cli`.
+- Runtime profile and guardrail requirements map to `RuntimeConfig` and `Guardrails`.
+- Weather fallback and cache behavior map to `run_app`, `WeatherIngestion`, and `HistoricalCache`.
+- Analytics and threshold logic map to `Analytics` and `StatusBanners`.
+- Chart rendering maps to `Visualization`.

@@ -5,7 +5,6 @@ This document defines product features, implementation requirements, and behavio
 ## Scope
 
 - Weather dashboard in Streamlit.
-- Memo PDF generator (Streamlit UI + CLI).
 
 ## Weather Dashboard
 
@@ -159,64 +158,13 @@ Requirements:
 Logic:
 - Explains provider/source roles and blended-model caveats.
 
-## Memo PDF Generator
-
-### 14) Input schema and validation
-
-Requirements:
-- Input file must be YAML or JSON mapping.
-- Required fields in implementation: `date`, `memo_title`.
-- Date format: `DD-Mon-YYYY`.
-
-Logic:
-- Rejects missing or blank required fields.
-- Normalizes date format.
-- Applies defaults for optional fields (`organization_name`, `logo_path`, section titles).
-
-### 15) PDF rendering
-
-Requirements:
-- Valid memo data object.
-- ReportLab dependencies available.
-
-Logic:
-- Builds title, metadata, and content sections.
-- Draws header with organization + optional logo.
-- Draws footer with memo title, organization name, and page numbering.
-- Supports multi-page output.
-
-### 16) Streamlit memo UI
-
-Requirements:
-- Streamlit runtime.
-
-Logic:
-- Form entry -> schema validation -> temporary PDF generation -> download button.
-- Download filename is sanitized from memo title.
-
-### 17) CLI memo generation
-
-Requirements:
-- Required CLI args: `--input`, `--output`.
-
-Logic:
-- Parse args -> load and validate memo data -> generate PDF -> print output path.
-
 ## Maintenance Plan (Keep This Updated)
 
 This file should be updated whenever behavior changes in any of these files:
 - `app.py`
-- `memo/schema.py`
-- `memo/generator.py`
-- `memo/template.py`
-- `memo/ui.py`
-- `memo/cli.py`
 - `tests/test_core_logic.py`
 - `tests/test_guardrail_config_sanity.py`
 - `tests/test_integration_live_api.py`
-- `tests/test_memo_schema.py`
-- `tests/test_memo_generator.py`
-- `tests/test_memo_ui.py`
 
 Update checklist for each feature change:
 1. Update the relevant section in this document (Requirements and Logic).

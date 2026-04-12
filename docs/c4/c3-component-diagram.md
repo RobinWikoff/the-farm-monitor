@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Show major components inside the main weather container and memo subsystem.
+Show major components inside the main weather container.
 
-## C3A - Weather Dashboard Components
+## Weather Dashboard Components
 
 ```mermaid
 C4Component
@@ -56,35 +56,3 @@ C4Component
   - Encodes observed/forecast bridges and historical overlays.
 - UI Composition:
   - Renders final user-visible dashboard state.
-
-## C3B - Memo Subsystem Components
-
-```mermaid
-C4Component
-    title Memo Subsystem - Component Diagram
-
-    Container_Boundary(memo_system, "Memo Subsystem (memo/)") {
-        Component(memo_ui, "Memo UI", "memo/ui.py", "Form input, validation, PDF byte generation, download")
-        Component(memo_cli, "Memo CLI", "memo/cli.py", "Argument parsing and batch generation")
-        Component(schema, "Memo Schema", "memo/schema.py", "Input loading, validation, defaults, normalization")
-        Component(template, "Memo Template", "memo/template.py", "Story layout and section rendering")
-        Component(generator, "PDF Generator", "memo/generator.py", "Header/footer canvas and document build")
-    }
-
-    System_Ext(local_files, "Local Files", "YAML/JSON input and PDF output")
-
-    Rel(memo_ui, schema, "Builds validated memo object")
-    Rel(memo_ui, generator, "Generates PDF bytes")
-    Rel(memo_cli, schema, "Loads and validates input")
-    Rel(memo_cli, generator, "Generates output PDF")
-    Rel(generator, template, "Builds memo story")
-    Rel(schema, local_files, "Reads YAML/JSON")
-    Rel(generator, local_files, "Writes PDF")
-```
-
-### Memo Component Responsibilities
-
-- `schema`: data contract and canonical normalization point.
-- `template`: content structure and section-level rendering rules.
-- `generator`: document framing (header/footer/page numbering).
-- `ui` and `cli`: input channels that share domain and rendering logic.
