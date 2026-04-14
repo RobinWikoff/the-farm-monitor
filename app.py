@@ -1856,28 +1856,19 @@ def run_app() -> None:
             else nullcontext()
         )
         with controls_ctx:
-            sidebar_button = st.sidebar.button if hasattr(st.sidebar, "button") else st.button
-            sidebar_checkbox = (
-                st.sidebar.checkbox if hasattr(st.sidebar, "checkbox") else st.checkbox
-            )
-
-            if sidebar_button("Reset usage + blocked", key="guardrail_reset_usage"):
+            if st.button("Reset usage + blocked", key="guardrail_reset_usage"):
                 reset_dev_guardrail_usage_and_blocked(now=now_mtn)
                 st.success("Dev guardrail usage and blocked counters reset.")
                 st.rerun()
 
-            if sidebar_button("Clear cooldowns", key="guardrail_clear_cooldowns"):
+            if st.button("Clear cooldowns", key="guardrail_clear_cooldowns"):
                 clear_dev_guardrail_cooldowns(now=now_mtn)
                 st.success("Dev guardrail cooldowns cleared.")
                 st.rerun()
 
-            if sidebar_checkbox("Show raw guardrail state", value=False, key="guardrail_show_raw"):
+            if st.checkbox("Show raw guardrail state", value=False, key="guardrail_show_raw"):
                 raw_state = get_dev_guardrail_raw_state(now=now_mtn)
-                raw_json = json.dumps(raw_state, indent=2, sort_keys=True)
-                if hasattr(st.sidebar, "code"):
-                    st.sidebar.code(raw_json, language="json")
-                else:
-                    st.code(raw_json, language="json")
+                st.code(json.dumps(raw_state, indent=2, sort_keys=True), language="json")
 
     if _is_dev and not runtime["live_api_enabled"] and not runtime["dev_use_sample_requested"]:
         st.warning(
