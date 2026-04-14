@@ -1,0 +1,32 @@
+name: Repo Bundle Backup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  bundle:
+    name: Generate git bundle
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Generate bundle
+        run: |
+          DATE=$(date -u +%Y-%m-%d)
+          BUNDLE_FILE="the-farm-monitor-${DATE}.bundle"
+          git bundle create "$BUNDLE_FILE" --all
+          sha256sum "$BUNDLE_FILE" > "${BUNDLE_FILE}.sha256"
+          echo "BUNDLE_FILE=$BUNDLE_FILE" >> "$GITHUB_ENV"
+
+      - name: Upload bundle as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo-bundle-${{ github.run_id }}
+          path: |
+            the-farm-monitor-*.bundle
+            the-farm-monitor-*.bundle.sha256
+          retention-days: 90
