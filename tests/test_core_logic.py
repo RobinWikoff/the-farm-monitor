@@ -751,6 +751,53 @@ def test_fetch_historical_band_partial_failure_still_aggregates(monkeypatch):
     assert row_h0["WindSpeedMean"] == 5.0
 
 
+def test_fetch_historical_band_accepts_iso_and_hhmmss_and_skips_malformed(monkeypatch):
+    def fake_get(url, params, timeout):
+        return _MockResponse(
+            {
+                "days": [
+                    {
+                        "hours": [
+                            {
+                                "datetime": "00:00:00",
+                                "temp": 30.0,
+                                "feelslike": 28.0,
+                                "windspeed": 5.0,
+                            },
+                            {
+                                "datetime": "2025-03-10T01:00:00-07:00",
+                                "temp": 31.0,
+                                "feelslike": 29.0,
+                                "windspeed": 6.0,
+                            },
+                            {
+                                "datetime": "not-a-time",
+                                "temp": 99.0,
+                                "feelslike": 99.0,
+                                "windspeed": 99.0,
+                            },
+                        ]
+                    }
+                ]
+            }
+        )
+
+    monkeypatch.setattr(app, "HISTORY_YEARS", 1)
+    monkeypatch.setattr(app.requests, "get", fake_get)
+
+    band = app.fetch_historical_band.__wrapped__("2025-03-10", "fake-key")
+
+    # Valid HH:MM:SS and ISO datetime rows should parse; malformed datetime row should be skipped.
+    assert sorted(band["Hour"].tolist()) == [0, 1]
+    assert 99 not in band["Hour"].tolist()
+
+    row_h0 = band[band["Hour"] == 0].iloc[0]
+    assert row_h0["ActualMean"] == 30.0
+
+    row_h1 = band[band["Hour"] == 1].iloc[0]
+    assert row_h1["ActualMean"] == 31.0
+
+
 def test_fetch_historical_band_stops_after_first_429(monkeypatch):
     call_count = 0
 
