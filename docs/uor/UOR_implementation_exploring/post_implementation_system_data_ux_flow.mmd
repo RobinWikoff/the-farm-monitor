@@ -1,0 +1,89 @@
+flowchart TB
+    %% UX lane
+    subgraph UX[User Experience]
+      U1[User opens dashboard]
+      U2[User selects location/time range]
+      U3[User sees loading state]
+      U4[User sees data cards + charts]
+      U5[User can inspect certificate/trace status]
+      U6[If backend degraded: sees fallback notice]
+    end
+
+    %% App/System lane
+    subgraph APP[Farm Monitor App Layer]
+      A1[Streamlit UI Controller]
+      A2[Feature Flag Check\nUse UOR Path?]
+      A3[Local Domain Input Model\nweather/aqi context]
+      A4[Render Layer\ncharts, metrics, tables]
+    end
+
+    subgraph PRISM[PRISM Integration Layer in Repo]
+      P1[Request Mapper\nquery_type + input_payload + policy_flags]
+      P2[Request Schema Validator]
+      P3[Transport Client\ntimeout/retry/circuit policy]
+      P4[Response Schema Validator]
+      P5[Response Normalizer\nresolver_result + diagnostics]
+      P6[Fallback Orchestrator]
+    end
+
+    subgraph UOR[UOR Backend Core]
+      B1[Resolver Execution]
+      B2[Certificate Generation]
+      B3[Trace Generation]
+      B4[Diagnostics + status]
+    end
+
+    subgraph DATA[Data & Ops]
+      D1[Artifact Store\nresult.json, certificate.json, trace.json]
+      D2[App Telemetry\nlatency, error rate, fallback count]
+      D3[UI Status Model\nok/degraded/error]
+    end
+
+    %% UX to App
+    U1 --> U2 --> U3 --> A1
+
+    %% App to PRISM
+    A1 --> A2
+    A2 -->|enabled| A3 --> P1
+    A2 -->|disabled| A4
+
+    %% PRISM request path
+    P1 --> P2 --> P3 --> B1
+
+    %% Backend production
+    B1 --> B2
+    B1 --> B3
+    B1 --> B4
+
+    %% Response path
+    B1 --> P4
+    B2 --> P4
+    B3 --> P4
+    B4 --> P4
+    P4 --> P5
+
+    %% Data sinks
+    P5 --> D1
+    P5 --> D2
+    P5 --> D3
+
+    %% UX/render outcomes
+    P5 --> A4
+    A4 --> U4 --> U5
+
+    %% Degraded/fallback path
+    P3 -. timeout/error .-> P6
+    P4 -. invalid response .-> P6
+    P6 --> D2
+    P6 --> D3
+    P6 --> A4
+    A4 --> U6
+
+    %% Legend-ish styles
+    classDef ux fill:#eef7ff,stroke:#3a6ea5,stroke-width:1px;
+    classDef sys fill:#f7f7f7,stroke:#666,stroke-width:1px;
+    classDef data fill:#eefaf0,stroke:#4a7d5a,stroke-width:1px;
+
+    class U1,U2,U3,U4,U5,U6 ux;
+    class A1,A2,A3,A4,P1,P2,P3,P4,P5,P6,B1,B2,B3,B4 sys;
+    class D1,D2,D3 data;

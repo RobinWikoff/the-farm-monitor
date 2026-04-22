@@ -8,11 +8,11 @@ This section documents The Farm Monitor architecture using the C4 model.
 2. [C2 - Container Diagram](c2-container-diagram.md)
 3. [C3 - Component Diagram](c3-component-diagram.md)
 4. [C4 - Code-Level Diagram](c4-code-level-diagram.md)
-5. [UI Feature → Backend Map](c4-ui-feature-map.md) *(supplementary)*
 
 ## Scope Covered
 
 - Weather monitoring application runtime in `app.py`
+- Memo generation subsystem in `memo/`
 - External weather providers and local persistence boundaries
 - Runtime profile, guardrail, and fallback behavior
 
