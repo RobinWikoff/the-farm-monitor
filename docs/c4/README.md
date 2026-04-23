@@ -24,7 +24,15 @@ This section documents The Farm Monitor architecture using the C4 model.
 
 ## How To Keep This Updated
 
-1. Update the corresponding C4 page whenever a feature changes behavior or dependencies.
-2. Keep `docs/feature-requirements.md` and C4 docs aligned in the same PR.
-3. If architecture changed, include a short note in `Changelog.MD`.
-4. If no architecture changed, add `No C4 changes required` in the PR description.
+1. Run the single C4 maintenance workflow script:
+	- `./scripts/c4_docs_workflow.sh --range HEAD~1..HEAD`
+2. If architecture-relevant files changed, update the corresponding C4 page(s) in `docs/c4/`.
+3. Keep `docs/feature-requirements.md` and C4 docs aligned in the same PR when behavior/architecture changed.
+4. If architecture changed, include a short note in `Changelog.MD`.
+5. If no architecture changed, add `No C4 changes required` in the PR description.
+
+## Current Process Boundary
+
+- Active process: `scripts/c4_docs_workflow.sh`
+- Wiki sync: manual update flow in the wiki repo (`Model-Architecture-and-Behavior.md` and related pages)
+- Legacy diagram rendering scripts are archived under `scripts/archive/legacy-c4-rendering/` and are not part of the current maintenance process.
