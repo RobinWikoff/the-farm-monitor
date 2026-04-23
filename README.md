@@ -19,7 +19,9 @@ Operations reference (secrets management, restore procedure, repo access policy)
 ### Documentation Maintenance Policy
 
 - Update [docs/feature-requirements.md](docs/feature-requirements.md) in the same PR whenever behavior changes in weather or memo features.
-- Update [docs/c4/README.md](docs/c4/README.md) (and impacted C4 pages) when architecture/components/dependencies change.
+- Run `./scripts/c4_docs_workflow.sh --range HEAD~1..HEAD` and follow the generated report when architecture/components/dependencies change.
+- Update [docs/c4/README.md](docs/c4/README.md) (and impacted C4 pages) when the workflow indicates C4 updates are required.
+- Manually sync architecture narrative updates into the wiki repo page `Model-Architecture-and-Behavior.md`.
 - If no feature behavior changed, include: `No feature-doc changes required` in the PR description.
 - If no architecture changed, include: `No C4 changes required` in the PR description.
 - Keep changelog and tests aligned with any feature logic changes.
