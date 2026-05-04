@@ -690,6 +690,53 @@ def _hist_cache_path(date_str: str) -> str:
     return os.path.join(cache_dir, f"hist_{date_str}.csv")
 
 
+def _get_hist_cache_retention_days(
+    secrets: Mapping[str, Any] | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> int:
+    if secrets is None:
+        secrets = {}
+    if environ is None:
+        environ = os.environ
+    raw = _get_cfg_value("DEV_HIST_CACHE_RETENTION_DAYS", secrets, environ)
+    default_days = 14
+    if raw is None:
+        return default_days
+    try:
+        return max(1, int(raw))
+    except (TypeError, ValueError):
+        return default_days
+
+
+def _prune_hist_cache(
+    now: datetime | None = None,
+    secrets: Mapping[str, Any] | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> None:
+    cache_dir = os.path.join(".streamlit", "hist_cache")
+    if not os.path.isdir(cache_dir):
+        return
+
+    retention_days = _get_hist_cache_retention_days(secrets, environ)
+    current = _guardrail_now(now)
+    cutoff_date = (current - timedelta(days=retention_days)).date()
+
+    for file_name in os.listdir(cache_dir):
+        if not (file_name.startswith("hist_") and file_name.endswith(".csv")):
+            continue
+        date_part = file_name[len("hist_") : -len(".csv")]
+        try:
+            file_date = datetime.strptime(date_part, "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        if file_date < cutoff_date:
+            file_path = os.path.join(cache_dir, file_name)
+            try:
+                os.remove(file_path)
+            except OSError:
+                continue
+
+
 def _load_hist_band_from_disk(date_str: str) -> pd.DataFrame:
     path = _hist_cache_path(date_str)
     if not os.path.exists(path):
@@ -719,6 +766,7 @@ def _load_hist_band_from_disk(date_str: str) -> pd.DataFrame:
 def _save_hist_band_to_disk(date_str: str, hist_band: pd.DataFrame) -> None:
     if hist_band is None or hist_band.empty:
         return
+    _prune_hist_cache()
     path = _hist_cache_path(date_str)
     hist_band.to_csv(path, index=False)
 
