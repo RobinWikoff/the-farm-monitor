@@ -8,3 +8,6 @@ __pycache__/
 !.env.example
 .streamlit/guardrails/
 .streamlit/hist_cache/
+
+# Local wiki checkout (separate git repo)
+the-farm-monitor.wiki/
