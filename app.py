@@ -694,7 +694,9 @@ def _precip_occurred_today(actuals: pd.DataFrame) -> bool:
     """Return True if any actual hour in *actuals* recorded precipitation or snow > 0."""
     if actuals.empty:
         return False
-    precip_any = (actuals["PrecipIn"].fillna(0) > 0).any() if "PrecipIn" in actuals.columns else False
+    precip_any = (
+        (actuals["PrecipIn"].fillna(0) > 0).any() if "PrecipIn" in actuals.columns else False
+    )
     snow_any = (actuals["SnowIn"].fillna(0) > 0).any() if "SnowIn" in actuals.columns else False
     return bool(precip_any or snow_any)
 
