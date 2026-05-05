@@ -128,6 +128,15 @@ class _DummySidebar:
     def radio(self, *args, **kwargs):
         return "Feels Like"
 
+    def slider(self, label, min_value=0, max_value=100, value=0, step=1, **kwargs):
+        return value
+
+    def caption(self, *args, **kwargs):
+        return None
+
+    def markdown(self, *args, **kwargs):
+        return None
+
     def expander(self, *args, **kwargs):
         return _DummyContext()
 
