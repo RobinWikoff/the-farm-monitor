@@ -1119,6 +1119,7 @@ def test_kitty_comfort_good_temp_no_wind_no_precip():
         wind_speed=2.0,
         wind_gust=3.0,
         rain_or_snow=False,
+        wind_threshold=5.0,
     )
     assert "Good Temperature" in status["temp"]
     assert ": 65.0°F --" in status["temp"]
@@ -1197,6 +1198,7 @@ def test_kitty_comfort_too_windy_by_speed():
         wind_speed=6.0,
         wind_gust=4.0,
         rain_or_snow=False,
+        wind_threshold=5.0,
     )
     assert "Too windy" in status["wind"]
     assert ": 6 mph --" in status["wind"]
@@ -1210,6 +1212,7 @@ def test_kitty_comfort_too_windy_by_gust():
         wind_speed=3.0,
         wind_gust=8.0,
         rain_or_snow=False,
+        wind_threshold=5.0,
     )
     assert "Too windy" in status["wind"]
 
@@ -1221,6 +1224,7 @@ def test_kitty_comfort_exactly_5mph_is_not_too_windy():
         wind_speed=5.0,
         wind_gust=5.0,
         rain_or_snow=False,
+        wind_threshold=5.0,
     )
     assert "Not too windy" in status["wind"]
 
@@ -1235,12 +1239,26 @@ def test_kitty_comfort_wind_unavailable_omits_wind_key():
     assert "wind" not in status
 
 
+def test_kitty_comfort_custom_wind_threshold_respected():
+    """Wind that would be fine at default 20 mph is flagged at a custom 10 mph cutoff."""
+    status = app.kitty_comfort_status(
+        live_temp_f=65.0,
+        wind_speed=15.0,
+        wind_gust=None,
+        rain_or_snow=False,
+        wind_threshold=10.0,
+    )
+    assert "Too windy" in status["wind"]
+    assert "(More than 10 mph)" in status["wind"]
+
+
 def test_kitty_comfort_wind_speed_only_no_gust():
     status = app.kitty_comfort_status(
         live_temp_f=65.0,
         wind_speed=7.0,
         wind_gust=None,
         rain_or_snow=False,
+        wind_threshold=5.0,
     )
     assert "Too windy" in status["wind"]
 
@@ -1272,6 +1290,7 @@ def test_kitty_comfort_all_bad_conditions():
         wind_speed=15.0,
         wind_gust=20.0,
         rain_or_snow=True,
+        wind_threshold=5.0,
     )
     assert "too cold" in status["temp"].lower()
     assert "Too windy" in status["wind"]
@@ -1310,6 +1329,7 @@ def test_render_kitty_comfort_banner_bad_conditions_uses_error(monkeypatch):
         wind_speed=10.0,
         wind_gust=12.0,
         rain_or_snow=True,
+        wind_threshold=5.0,
     )
 
     assert captured["type"] == "error"

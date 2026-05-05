@@ -1378,25 +1378,28 @@ def render_status_banner(
                 )
 
 
-def render_wind_banner(
-    fastest_wind_speed: float | None,
-    fastest_wind_hour: int | None,
-) -> None:
-    """Show summary banner for today's fastest forecasted wind."""
-    if fastest_wind_speed is None or fastest_wind_hour is None:
-        st.warning("💨 Wind information is currently unavailable.")
-        return
-    st.info(
-        f"💨 Today's Fastest Wind Forecasted: {fastest_wind_speed} mph at {fastest_wind_hour:02d}:00."
-    )
-
-
 # ---------------------------------------------------------------------------
 # KITTY COMFORT
 # ---------------------------------------------------------------------------
 KITTY_TEMP_MIN_F: float = 32.0
 KITTY_TEMP_MAX_F: float = 85.0
-KITTY_WIND_THRESHOLD_MPH: float = 5.0
+KITTY_WIND_THRESHOLD_MPH: float = 20.0
+
+
+def render_wind_banner(
+    fastest_wind_speed: float | None,
+    fastest_wind_hour: int | None,
+    wind_threshold: float = KITTY_WIND_THRESHOLD_MPH,
+) -> None:
+    """Show summary banner for today's fastest forecasted wind."""
+    if fastest_wind_speed is None or fastest_wind_hour is None:
+        st.warning("💨 Wind information is currently unavailable.")
+        return
+    base = f"💨 Today's Fastest Wind Forecasted: {fastest_wind_speed} mph at {fastest_wind_hour:02d}:00."
+    if fastest_wind_speed > wind_threshold:
+        st.warning(base + f" ⚠️ Exceeds kitty wind cutoff ({wind_threshold:.0f} mph).")
+    else:
+        st.info(base)
 
 
 def kitty_comfort_status(
@@ -1404,6 +1407,7 @@ def kitty_comfort_status(
     wind_speed: float | None,
     wind_gust: float | None,
     rain_or_snow: bool,
+    wind_threshold: float = KITTY_WIND_THRESHOLD_MPH,
 ) -> dict[str, str]:
     """Return a dict with 'temp', 'wind', and optionally 'precip' status strings.
 
@@ -1436,15 +1440,15 @@ def kitty_comfort_status(
         effective_wind = max(candidates)
 
     if effective_wind is not None:
-        if effective_wind > KITTY_WIND_THRESHOLD_MPH:
+        if effective_wind > wind_threshold:
             result["wind"] = (
                 f"Too windy for Kitties: {effective_wind:.0f} mph "
-                f"-- (More than {KITTY_WIND_THRESHOLD_MPH:.0f} mph)"
+                f"-- (More than {wind_threshold:.0f} mph)"
             )
         else:
             result["wind"] = (
                 f"Not too windy for Kitties: {effective_wind:.0f} mph "
-                f"-- ({KITTY_WIND_THRESHOLD_MPH:.0f} mph or less)"
+                f"-- ({wind_threshold:.0f} mph or less)"
             )
 
     # Precipitation status — only shown when actively raining/snowing
@@ -1459,9 +1463,10 @@ def render_kitty_comfort_banner(
     wind_speed: float | None,
     wind_gust: float | None,
     rain_or_snow: bool,
+    wind_threshold: float = KITTY_WIND_THRESHOLD_MPH,
 ) -> None:
     """Render the Kitty Comfort Threshold section above the temperature area."""
-    status = kitty_comfort_status(live_temp_f, wind_speed, wind_gust, rain_or_snow)
+    status = kitty_comfort_status(live_temp_f, wind_speed, wind_gust, rain_or_snow, wind_threshold)
 
     temp_ok = KITTY_TEMP_MIN_F < live_temp_f <= KITTY_TEMP_MAX_F
     wind_ok = "wind" not in status or status["wind"].startswith("Not too windy")
@@ -1909,6 +1914,14 @@ def run_app() -> None:
     selected_temp_key = "FeelsLike" if temp_mode == "Feels Like" else "Actual"
     selected_metric_title = f"{temp_mode} Now"
 
+    kitty_wind_cutoff = st.sidebar.slider(
+        "Kitty Wind Cutoff (mph)",
+        min_value=0,
+        max_value=40,
+        value=int(KITTY_WIND_THRESHOLD_MPH),
+        step=5,
+    )
+
     runtime_line = (
         f"Profile: {runtime['profile']} | Data mode: {runtime['effective_data_mode']} | "
         f"Live API: {'on' if runtime['live_api_enabled'] else 'off'}"
@@ -2120,6 +2133,7 @@ def run_app() -> None:
         wind_speed=live_temp.get("WindSpeed"),
         wind_gust=live_temp.get("WindGust"),
         rain_or_snow=_kc_rain_or_snow,
+        wind_threshold=kitty_wind_cutoff,
     )
 
     # Metrics
@@ -2201,7 +2215,7 @@ def run_app() -> None:
     else:
         strongest_gust = float(wind_actuals["WindGust"].max())
 
-    render_wind_banner(fastest_wind_speed, fastest_wind_hour)
+    render_wind_banner(fastest_wind_speed, fastest_wind_hour, wind_threshold=kitty_wind_cutoff)
 
     if current_hour == 0:
         wind_delta_str = None
