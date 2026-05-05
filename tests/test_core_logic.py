@@ -957,7 +957,7 @@ def test_build_precip_chart_layers():
     spec = chart.to_dict()
 
     assert "layer" in spec
-    assert len(spec["layer"]) == 3
+    assert len(spec["layer"]) == 5  # legend + actual + forecast + dot + label
 
 
 def test_build_precip_chart_x_axis_domain_is_full_day():
