@@ -163,6 +163,11 @@ def _build_dev_sample_payload(
             18.0,
             min(185.0, 72.0 + 38.0 * math.sin((h - 4) * math.pi / 10.0) + 16.0 * math.sin(h)),
         )
+        # UV peaks midday (~12:00), 0 at night; cloud cover varies throughout day
+        uv_raw = 8.0 * math.sin((h - 6) * math.pi / 12.0) if 6 <= h <= 18 else 0.0
+        uv = max(0.0, uv_raw)
+        cloud = max(0.0, min(100.0, 38.0 + 28.0 * math.sin(h * math.pi / 7.0)))
+        solar = max(0.0, 720.0 * math.sin((h - 6) * math.pi / 12.0)) if 6 <= h <= 18 else 0.0
 
         rows.append(
             {
@@ -185,6 +190,9 @@ def _build_dev_sample_payload(
                 "SO2": 0,
                 "CO": 0,
                 "MainUS": 0,
+                "UVIndex": int(round(uv)),
+                "CloudCover": round(cloud, 1),
+                "SolarRadiation": round(solar, 1),
             }
         )
 
@@ -227,6 +235,12 @@ def _build_dev_sample_payload(
         "SO2": 0,
         "CO": 0,
         "MainUS": 0,
+        "UVIndex": int(live_row["UVIndex"]),
+        "CloudCover": float(live_row["CloudCover"]),
+        "SolarRadiation": float(live_row["SolarRadiation"]),
+        "Sunrise": "06:15:00",
+        "Sunset": "20:10:00",
+        "UVIndexMax": 8,
     }
 
     return df, live_temp, hist_band
@@ -794,7 +808,7 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
     params = {
         "unitGroup": "us",
         "include": "hours,current",
-        "elements": "datetime,temp,feelslike,windspeed,windgust,wdir,precip,precipprob,humidity,snow,aqius,aqieur,pm25,pm10,o3,no2,so2,co,mainus",
+        "elements": "datetime,temp,feelslike,windspeed,windgust,wdir,precip,precipprob,humidity,snow,aqius,aqieur,pm25,pm10,o3,no2,so2,co,mainus,uvindex,cloudcover,solarradiation,sunrise,sunset",
         "key": vc_api_key,
         "contentType": "json",
         "timezone": "America/Denver",
@@ -808,9 +822,15 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
     resp.raise_for_status()
     data = resp.json()
 
+    # Day-level fields (sunrise, sunset, peak UV)
+    days = data.get("days", [])
+    today_sunrise: str | None = days[0].get("sunrise") if days else None
+    today_sunset: str | None = days[0].get("sunset") if days else None
+    today_uvindex_max: int | None = days[0].get("uvindex") if days else None
+
     # Hourly forecast
     rows = []
-    for day in data.get("days", []):
+    for day in days:
         for hour in day.get("hours", []):
             actual = hour.get("temp")
             feelslike = hour.get("feelslike")
@@ -833,6 +853,9 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
             so2 = hour.get("so2")
             co = hour.get("co")
             mainus = hour.get("mainus")
+            uvindex = hour.get("uvindex")
+            cloudcover = hour.get("cloudcover")
+            solarradiation = hour.get("solarradiation")
             dt_str = hour.get("datetime", "")  # "HH:mm:ss"
             if dt_str and actual is not None and feelslike is not None:
                 hour_int = int(dt_str.split(":")[0])
@@ -857,6 +880,9 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
                         "SO2": so2,
                         "CO": co,
                         "MainUS": mainus,
+                        "UVIndex": int(round(uvindex)) if uvindex is not None else None,
+                        "CloudCover": round(cloudcover, 1) if cloudcover is not None else None,
+                        "SolarRadiation": round(solarradiation, 1) if solarradiation is not None else None,
                     }
                 )
     forecast_df = pd.DataFrame(rows)
@@ -884,6 +910,9 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
     live_so2 = current.get("so2")
     live_co = current.get("co")
     live_mainus = current.get("mainus")
+    live_uvindex = current.get("uvindex")
+    live_cloudcover = current.get("cloudcover")
+    live_solarradiation = current.get("solarradiation")
     if live_actual is None and not forecast_df.empty:
         live_actual = forecast_df.iloc[-1]["Actual"]
     if live_feelslike is None and not forecast_df.empty:
@@ -918,6 +947,12 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
         live_co = forecast_df.iloc[-1]["CO"]
     if live_mainus is None and not forecast_df.empty and "MainUS" in forecast_df.columns:
         live_mainus = forecast_df.iloc[-1]["MainUS"]
+    if live_uvindex is None and not forecast_df.empty and "UVIndex" in forecast_df.columns:
+        live_uvindex = forecast_df.iloc[-1]["UVIndex"]
+    if live_cloudcover is None and not forecast_df.empty and "CloudCover" in forecast_df.columns:
+        live_cloudcover = forecast_df.iloc[-1]["CloudCover"]
+    if live_solarradiation is None and not forecast_df.empty and "SolarRadiation" in forecast_df.columns:
+        live_solarradiation = forecast_df.iloc[-1]["SolarRadiation"]
 
     live_temp = {
         "Actual": round(live_actual, 1) if live_actual is not None else None,
@@ -938,6 +973,12 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
         "SO2": live_so2,
         "CO": live_co,
         "MainUS": live_mainus,
+        "UVIndex": int(round(live_uvindex)) if live_uvindex is not None else None,
+        "CloudCover": round(live_cloudcover, 1) if live_cloudcover is not None else None,
+        "SolarRadiation": round(live_solarradiation, 1) if live_solarradiation is not None else None,
+        "Sunrise": today_sunrise,
+        "Sunset": today_sunset,
+        "UVIndexMax": int(round(today_uvindex_max)) if today_uvindex_max is not None else None,
     }
 
     return forecast_df, live_temp
@@ -958,6 +999,95 @@ def aqi_interpretation(aqi: float | int | None) -> str:
     if value <= 300:
         return "Very unhealthy"
     return "Hazardous"
+
+
+def uv_interpretation(uv: float | int | None) -> str:
+    """Return a plain-English UV exposure category."""
+    if uv is None:
+        return "Unavailable"
+    v = float(uv)
+    if v <= 2:
+        return "Low"
+    if v <= 5:
+        return "Moderate"
+    if v <= 7:
+        return "High"
+    if v <= 10:
+        return "Very High"
+    return "Extreme"
+
+
+def _parse_solar_time(t: str | None) -> str | None:
+    """Convert VC solar time 'HH:MM:SS' to '12-hour H:MM AM/PM'."""
+    if not t:
+        return None
+    try:
+        parts = t.split(":")
+        h = int(parts[0])
+        m = int(parts[1])
+        period = "AM" if h < 12 else "PM"
+        h12 = h % 12 or 12
+        return f"{h12}:{m:02d} {period}"
+    except (ValueError, IndexError):
+        return None
+
+
+def _solar_time_delta_minutes(today_t: str | None, yesterday_t: str | None) -> int | None:
+    """Return delta in whole minutes: today - yesterday (positive = today is later)."""
+    if not today_t or not yesterday_t:
+        return None
+    try:
+        def _to_min(t: str) -> int:
+            p = t.split(":")
+            return int(p[0]) * 60 + int(p[1])
+
+        return _to_min(today_t) - _to_min(yesterday_t)
+    except (ValueError, IndexError):
+        return None
+
+
+def _format_solar_delta(delta_min: int | None) -> str | None:
+    """Format a minute delta as e.g. '+2 min later', '-1 min earlier', or 'same as yesterday'."""
+    if delta_min is None:
+        return None
+    abs_min = abs(delta_min)
+    if delta_min > 0:
+        return f"+{abs_min} min later"
+    if delta_min < 0:
+        return f"-{abs_min} min earlier"
+    return "same as yesterday"
+
+
+@st.cache_data(ttl=86400)
+def fetch_yesterday_solar_times(yesterday_str: str, vc_api_key: str) -> dict:
+    """Fetch sunrise and sunset for yesterday from Visual Crossing (day-level only, cached 24 h)."""
+    location = f"{LAT},{LON}"
+    url = f"{VC_BASE}/{location}/{yesterday_str}/{yesterday_str}"
+    params = {
+        "unitGroup": "us",
+        "include": "days",
+        "elements": "datetime,sunrise,sunset",
+        "key": vc_api_key,
+        "contentType": "json",
+        "timezone": "America/Denver",
+    }
+    try:
+        resp = guarded_requests_get(
+            url,
+            params=params,
+            timeout=10,
+            guardrail_key="visual_crossing_forecast",
+        )
+        resp.raise_for_status()
+        days = resp.json().get("days", [])
+        if days:
+            return {
+                "Sunrise": days[0].get("sunrise"),
+                "Sunset": days[0].get("sunset"),
+            }
+    except Exception:
+        pass
+    return {}
 
 
 @st.cache_data(ttl=604800)  # 7-day TTL — historical data barely changes
@@ -1887,6 +2017,125 @@ def build_aqi_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
     )
 
 
+def build_brightness_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
+    """Build UV Index (line) + Cloud Cover (area) chart with dual Y axes."""
+    b_df = df.copy()
+    b_df["UVIndex"] = pd.to_numeric(b_df.get("UVIndex", 0), errors="coerce").fillna(0)
+    b_df["CloudCover"] = pd.to_numeric(b_df.get("CloudCover", 0), errors="coerce").fillna(0)
+
+    actual = b_df[b_df["Hour"] <= current_hour].copy()
+    forecast = b_df[b_df["Hour"] > current_hour].copy()
+
+    # Bridge point so UV forecast line connects smoothly to observed line
+    bridge = pd.DataFrame()
+    if not actual.empty and not forecast.empty:
+        bridge = pd.DataFrame(
+            {
+                "Hour": [current_hour],
+                "UVIndex": [actual[actual["Hour"] == current_hour]["UVIndex"].iloc[0]],
+                "CloudCover": [actual[actual["Hour"] == current_hour]["CloudCover"].iloc[0]],
+            }
+        )
+
+    x_axis = alt.Axis(
+        values=list(range(24)),
+        labelAngle=-45,
+        labelFontSize=11,
+        labelExpr="datum.value + ':00'",
+    )
+    uv_max = max(11.0, float(b_df["UVIndex"].max()) + 1.0)
+
+    # Cloud cover area — full day, secondary Y axis (right)
+    cloud_area = (
+        alt.Chart(b_df)
+        .mark_area(opacity=0.22, color="#7ec8e3")
+        .encode(
+            x=alt.X("Hour:Q", axis=x_axis),
+            y=alt.Y(
+                "CloudCover:Q",
+                axis=alt.Axis(title="Cloud Cover (%)", labelFontSize=11, titleFontSize=13),
+                scale=alt.Scale(domain=[0, 100]),
+            ),
+            tooltip=[
+                alt.Tooltip("Hour:Q", title="Hour"),
+                alt.Tooltip("CloudCover:Q", title="Cloud Cover (%)"),
+            ],
+        )
+    )
+
+    # UV observed line — primary Y axis (left)
+    uv_actual_line = (
+        alt.Chart(actual.assign(Series="Observed UV"))
+        .mark_line(strokeWidth=4, color="#f5b800")
+        .encode(
+            x=alt.X("Hour:Q", axis=x_axis),
+            y=alt.Y(
+                "UVIndex:Q",
+                axis=alt.Axis(title="UV Index", labelFontSize=11, titleFontSize=13),
+                scale=alt.Scale(domain=[0, uv_max]),
+            ),
+            tooltip=[
+                alt.Tooltip("Hour:Q", title="Hour"),
+                alt.Tooltip("UVIndex:Q", title="UV Index"),
+                alt.Tooltip("Series:N", title="Type"),
+            ],
+        )
+    )
+
+    # UV forecast line (dashed)
+    uv_forecast_line = (
+        alt.Chart(
+            pd.concat([forecast, bridge], ignore_index=True).assign(Series="Forecast UV")
+        )
+        .mark_line(strokeWidth=4, color="#ffd966", strokeDash=[8, 5])
+        .encode(
+            x=alt.X("Hour:Q", axis=x_axis),
+            y=alt.Y(
+                "UVIndex:Q",
+                scale=alt.Scale(domain=[0, uv_max]),
+            ),
+            tooltip=[
+                alt.Tooltip("Hour:Q", title="Hour"),
+                alt.Tooltip("UVIndex:Q", title="UV Index"),
+                alt.Tooltip("Series:N", title="Type"),
+            ],
+        )
+    )
+
+    # Current-hour dot on the UV line
+    now_dot = (
+        alt.Chart(actual[actual["Hour"] == current_hour])
+        .mark_circle(size=260, color="#00f2ff")
+        .encode(x="Hour:Q", y="UVIndex:Q")
+    )
+
+    # Peak UV label on observed segment
+    peak_uv = actual["UVIndex"].max() if not actual.empty else None
+    peak_uv_hour = (
+        actual.loc[actual["UVIndex"] == peak_uv, "Hour"].iloc[0]
+        if peak_uv is not None and peak_uv > 0
+        else None
+    )
+    peak_lbl_layer = alt.Chart(pd.DataFrame()).mark_text()  # empty fallback
+    if peak_uv is not None and peak_uv_hour is not None and peak_uv > 0:
+        peak_data = pd.DataFrame(
+            [{"Hour": peak_uv_hour, "UVIndex": peak_uv, "Label": f"Peak: {int(peak_uv)}"}]
+        )
+        peak_lbl_layer = (
+            alt.Chart(peak_data)
+            .mark_text(dy=-18, fontSize=13, fontWeight="bold", color="#f5b800")
+            .encode(x="Hour:Q", y="UVIndex:Q", text="Label")
+        )
+
+    uv_layers = uv_actual_line + uv_forecast_line + now_dot + peak_lbl_layer
+
+    return (
+        alt.layer(cloud_area, uv_layers)
+        .resolve_scale(y="independent")
+        .properties(height=280)
+    )
+
+
 # ---------------------------------------------------------------------------
 # APP
 # ---------------------------------------------------------------------------
@@ -2000,6 +2249,7 @@ def run_app() -> None:
     if dev_use_sample_data:
         st.info(f"Using local sample weather data. {runtime['policy_reason']}")
         df, live_temp, hist_band = _build_dev_sample_payload(now_mtn)
+        yesterday_solar: dict = {"Sunrise": "06:17:00", "Sunset": "20:08:00"}
     else:
         # Fetch data
         vc_api_key = _get_vc_api_key()
@@ -2079,6 +2329,13 @@ def run_app() -> None:
                 for key in ["WindSpeed", "WindGust", "WindDeg", "WindDir"]:
                     if wind_current_om.get(key) is not None:
                         live_temp[key] = wind_current_om.get(key)
+
+        # Yesterday sunrise/sunset for delta display (cached 24 h, lightweight call)
+        yesterday_str = (now_mtn - timedelta(days=1)).strftime("%Y-%m-%d")
+        try:
+            yesterday_solar = fetch_yesterday_solar_times(yesterday_str, vc_api_key)
+        except Exception:
+            yesterday_solar = {}
 
     if df.empty:
         st.warning("No forecast data available for today.")
@@ -2413,6 +2670,114 @@ def run_app() -> None:
         "Some pollutant fields may be unavailable from the live provider at certain times; unavailable values are shown as 'Not reported by source'."
     )
 
+    # Sunrise / Sunset / Brightness section
+    st.write("---")
+
+    sunrise_today = live_temp.get("Sunrise")
+    sunset_today = live_temp.get("Sunset")
+    sunrise_yesterday = yesterday_solar.get("Sunrise")
+    sunset_yesterday = yesterday_solar.get("Sunset")
+
+    sunrise_display = _parse_solar_time(sunrise_today)
+    sunset_display = _parse_solar_time(sunset_today)
+    sunrise_delta = _solar_time_delta_minutes(sunrise_today, sunrise_yesterday)
+    sunset_delta = _solar_time_delta_minutes(sunset_today, sunset_yesterday)
+
+    # Daylight duration (minutes) for today and yesterday
+    def _solar_to_min(t: str | None) -> int | None:
+        if not t:
+            return None
+        try:
+            p = t.split(":")
+            return int(p[0]) * 60 + int(p[1])
+        except (ValueError, IndexError):
+            return None
+
+    rise_min_today = _solar_to_min(sunrise_today)
+    set_min_today = _solar_to_min(sunset_today)
+    daylight_min_today = (
+        set_min_today - rise_min_today
+        if rise_min_today is not None and set_min_today is not None
+        else None
+    )
+    rise_min_yest = _solar_to_min(sunrise_yesterday)
+    set_min_yest = _solar_to_min(sunset_yesterday)
+    daylight_min_yest = (
+        set_min_yest - rise_min_yest
+        if rise_min_yest is not None and set_min_yest is not None
+        else None
+    )
+    daylight_display = (
+        f"{daylight_min_today // 60}h {daylight_min_today % 60}m"
+        if daylight_min_today is not None
+        else None
+    )
+    daylight_delta = (
+        daylight_min_today - daylight_min_yest
+        if daylight_min_today is not None and daylight_min_yest is not None
+        else None
+    )
+
+    # Peak UV from observed hours today
+    uv_df = df[["Hour", "UVIndex"]].copy() if "UVIndex" in df.columns else pd.DataFrame()
+    if not uv_df.empty:
+        uv_df["UVIndex"] = pd.to_numeric(uv_df["UVIndex"], errors="coerce")
+    uv_actual_obs = (
+        uv_df[uv_df["Hour"] <= current_hour].copy() if not uv_df.empty else pd.DataFrame()
+    )
+    peak_uv: int | None = None
+    peak_uv_hour: int | None = None
+    if not uv_actual_obs.empty:
+        uv_vals = uv_actual_obs["UVIndex"].dropna()
+        if not uv_vals.empty and uv_vals.max() > 0:
+            peak_uv = int(uv_vals.max())
+            peak_uv_hour = int(
+                uv_actual_obs.loc[uv_actual_obs["UVIndex"] == peak_uv, "Hour"].iloc[0]
+            )
+    if peak_uv is None:
+        day_max = live_temp.get("UVIndexMax")
+        if day_max is not None:
+            peak_uv = int(day_max)
+
+    b1, b2, b3, b4 = st.columns(4)
+    b1.metric(
+        "Sunrise",
+        sunrise_display or "N/A",
+        delta=_format_solar_delta(sunrise_delta),
+        delta_color="off",
+    )
+    b2.metric(
+        "Sunset",
+        sunset_display or "N/A",
+        delta=_format_solar_delta(sunset_delta),
+        delta_color="off",
+    )
+    b3.metric(
+        "Daylight Today",
+        daylight_display or "N/A",
+        delta=_format_solar_delta(daylight_delta),
+        delta_color="off",
+    )
+    b4.metric(
+        "Peak UV Index Today",
+        f"{peak_uv} ({uv_interpretation(peak_uv)})" if peak_uv is not None else "N/A",
+    )
+    if peak_uv_hour is not None:
+        if hasattr(b4, "caption"):
+            b4.caption(f"Hour: {peak_uv_hour:02d}:00")
+        else:
+            st.caption(f"Peak UV at {peak_uv_hour:02d}:00")
+
+    if "UVIndex" in df.columns and "CloudCover" in df.columns:
+        st.altair_chart(
+            build_brightness_chart(df[["Hour", "UVIndex", "CloudCover"]], current_hour),
+            width="stretch",
+        )
+    st.caption(
+        "☀️ UV Index (yellow line, left axis) and cloud cover % (blue shading, right axis). "
+        "Solid = observed, dashed = forecast."
+    )
+
     # Data Sources
     st.write("---")
     with st.expander("📡 About the Data Sources"):
@@ -2449,6 +2814,9 @@ def run_app() -> None:
             - **Relative humidity** (`humidity`, %)
             - **Snow amount** (`snow`, inches)
             - **Air quality index** (`aqius` / `aqieur`)
+            - **UV Index** (`uvindex`)
+            - **Cloud cover** (`cloudcover`, %)
+            - **Sunrise / Sunset** (`sunrise`, `sunset`)
 
             Live conditions and today's hourly forecast refresh every **5 minutes**.
             The 5-year historical band refreshes once daily.

@@ -1374,3 +1374,135 @@ def test_render_kitty_comfort_banner_heading_includes_yes_no_status(monkeypatch)
 
     assert "Kitty Comfort Threshold: Yes" in captured["good"]
     assert "Kitty Comfort Threshold: No" in captured["bad"]
+
+
+# ---------------------------------------------------------------------------
+# Sunrise / Sunset helper tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("uv", "expected"),
+    [
+        (None, "Unavailable"),
+        (0, "Low"),
+        (2, "Low"),
+        (3, "Moderate"),
+        (5, "Moderate"),
+        (6, "High"),
+        (7, "High"),
+        (8, "Very High"),
+        (10, "Very High"),
+        (11, "Extreme"),
+        (15, "Extreme"),
+    ],
+)
+def test_uv_interpretation_thresholds(uv, expected):
+    assert app.uv_interpretation(uv) == expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("06:15:00", "6:15 AM"),
+        ("12:00:00", "12:00 PM"),
+        ("20:05:00", "8:05 PM"),
+        ("00:00:00", "12:00 AM"),
+        ("13:30:00", "1:30 PM"),
+        (None, None),
+        ("", None),
+    ],
+)
+def test_parse_solar_time(raw, expected):
+    assert app._parse_solar_time(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("today", "yesterday", "expected"),
+    [
+        ("06:15:00", "06:17:00", -2),
+        ("06:17:00", "06:15:00", 2),
+        ("06:15:00", "06:15:00", 0),
+        ("06:15:00", None, None),
+        (None, "06:15:00", None),
+    ],
+)
+def test_solar_time_delta_minutes(today, yesterday, expected):
+    assert app._solar_time_delta_minutes(today, yesterday) == expected
+
+
+@pytest.mark.parametrize(
+    ("delta", "expected"),
+    [
+        (2, "+2 min later"),
+        (-1, "-1 min earlier"),
+        (0, "same as yesterday"),
+        (None, None),
+    ],
+)
+def test_format_solar_delta(delta, expected):
+    assert app._format_solar_delta(delta) == expected
+
+
+def test_build_brightness_chart_returns_layered_spec():
+    df = pd.DataFrame(
+        {
+            "Hour": list(range(24)),
+            "UVIndex": [max(0, int(8 * (h - 6) / 6)) if 6 <= h <= 18 else 0 for h in range(24)],
+            "CloudCover": [40.0] * 24,
+        }
+    )
+
+    chart = app.build_brightness_chart(df, current_hour=14)
+    spec = chart.to_dict()
+
+    # Layered spec has a "layer" key with at least the cloud area and UV layers
+    assert "layer" in spec
+    assert len(spec["layer"]) >= 2
+
+
+def test_fetch_forecast_and_current_maps_uv_cloud_solar_fields(monkeypatch):
+    payload = {
+        "days": [
+            {
+                "sunrise": "06:15:00",
+                "sunset": "20:10:00",
+                "uvindex": 9,
+                "hours": [
+                    {
+                        "datetime": "12:00:00",
+                        "temp": 72.0,
+                        "feelslike": 70.0,
+                        "windspeed": 5.0,
+                        "uvindex": 8,
+                        "cloudcover": 25.0,
+                        "solarradiation": 650.0,
+                    }
+                ],
+            }
+        ],
+        "currentConditions": {
+            "temp": 72.0,
+            "feelslike": 70.0,
+            "windspeed": 5.0,
+            "uvindex": 7,
+            "cloudcover": 30.0,
+            "solarradiation": 600.0,
+        },
+    }
+
+    def fake_get(url, params, timeout):
+        return _MockResponse(payload)
+
+    monkeypatch.setattr(app.requests, "get", fake_get)
+
+    forecast_df, live_temp = app.fetch_forecast_and_current.__wrapped__("fake-key")
+
+    assert forecast_df["UVIndex"].iloc[0] == 8
+    assert forecast_df["CloudCover"].iloc[0] == 25.0
+    assert forecast_df["SolarRadiation"].iloc[0] == 650.0
+    assert live_temp["UVIndex"] == 7
+    assert live_temp["CloudCover"] == 30.0
+    assert live_temp["Sunrise"] == "06:15:00"
+    assert live_temp["Sunset"] == "20:10:00"
+    assert live_temp["UVIndexMax"] == 9
