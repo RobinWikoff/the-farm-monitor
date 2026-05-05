@@ -1665,6 +1665,7 @@ def build_precip_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
 
     x = alt.X(
         "Hour:Q",
+        scale=alt.Scale(domain=[0, 23]),
         axis=alt.Axis(
             values=list(range(24)),
             labelAngle=-45,
