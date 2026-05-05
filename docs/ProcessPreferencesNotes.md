@@ -301,5 +301,5 @@ Title: <System Name> Compatibility Evaluation and Plan
 - [x] Extract and document issue template used by recent/current repo issues (extracted from chat03/chat04 session history, 2026-05-04).
 - [x] Finalize and expand issue-template SOP section — see "Issue Template & SOP" above (2026-05-04).
 - [x] Review and complete in-progress work from before 2026-05-04; identify any code ready to merge (reviewed 2026-05-04 — all real changes committed in f9a6a72, CRLF churn stashed, working tree clean).
-- [ ] Verify rain section behavior: investigate report that rain occurred but app showed no rain.
+- [x] Verify rain section behavior: fixed in PR #84 — `_precip_occurred_today()` now checks all actual hours, not just current hour (2026-05-05).
 - [ ] Rework C4 diagrams for wiki readability (left-to-right flow, more concept-map style, fewer crossing arrows).
