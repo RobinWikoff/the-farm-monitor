@@ -379,6 +379,57 @@ def test_get_dev_near_limit_pct_accepts_percentage_integer():
     assert pct == 0.25
 
 
+# --- _precip_occurred_today ---
+
+
+def test_precip_occurred_today_true_when_rain_in_earlier_hour_but_dry_now():
+    df = pd.DataFrame(
+        {
+            "Hour": [8, 9, 10, 11, 12, 13, 14],
+            "PrecipIn": [0.0, 0.12, 0.08, 0.0, 0.0, 0.0, 0.0],
+            "SnowIn": [0.0] * 7,
+        }
+    )
+    assert app._precip_occurred_today(df) is True
+
+
+def test_precip_occurred_today_false_when_no_precip_all_day():
+    df = pd.DataFrame(
+        {
+            "Hour": [0, 1, 2, 3, 4, 5],
+            "PrecipIn": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            "SnowIn": [0.0] * 6,
+        }
+    )
+    assert app._precip_occurred_today(df) is False
+
+
+def test_precip_occurred_today_true_when_snow_in_earlier_hour():
+    df = pd.DataFrame(
+        {
+            "Hour": [6, 7, 8, 9],
+            "PrecipIn": [0.0, 0.0, 0.0, 0.0],
+            "SnowIn": [0.0, 0.5, 0.0, 0.0],
+        }
+    )
+    assert app._precip_occurred_today(df) is True
+
+
+def test_precip_occurred_today_false_on_empty_dataframe():
+    df = pd.DataFrame({"PrecipIn": [], "SnowIn": []})
+    assert app._precip_occurred_today(df) is False
+
+
+def test_precip_occurred_today_handles_missing_snow_column():
+    df = pd.DataFrame(
+        {
+            "Hour": [10, 11, 12],
+            "PrecipIn": [0.0, 0.25, 0.0],
+        }
+    )
+    assert app._precip_occurred_today(df) is True
+
+
 def test_get_dev_near_limit_pct_invalid_falls_back_to_default():
     pct = app._get_dev_near_limit_pct(secrets={}, environ={"DEV_GUARDRAIL_NEAR_LIMIT_PCT": "oops"})
     assert pct == 0.20

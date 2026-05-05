@@ -690,6 +690,15 @@ def _hist_cache_path(date_str: str) -> str:
     return os.path.join(cache_dir, f"hist_{date_str}.csv")
 
 
+def _precip_occurred_today(actuals: pd.DataFrame) -> bool:
+    """Return True if any actual hour in *actuals* recorded precipitation or snow > 0."""
+    if actuals.empty:
+        return False
+    precip_any = (actuals["PrecipIn"].fillna(0) > 0).any() if "PrecipIn" in actuals.columns else False
+    snow_any = (actuals["SnowIn"].fillna(0) > 0).any() if "SnowIn" in actuals.columns else False
+    return bool(precip_any or snow_any)
+
+
 def _get_hist_cache_retention_days(
     secrets: Mapping[str, Any] | None = None,
     environ: Mapping[str, str] | None = None,
@@ -2055,11 +2064,7 @@ def run_app() -> None:
     _kc_rain_or_snow = False
     if "PrecipIn" in df.columns or "SnowIn" in df.columns:
         _kc_actuals = df[df["Hour"] <= current_hour].copy()
-        if not _kc_actuals.empty:
-            _kc_latest = _kc_actuals.sort_values("Hour").iloc[-1]
-            _kc_rain_or_snow = (_kc_latest.get("PrecipIn") or 0) > 0 or (
-                _kc_latest.get("SnowIn") or 0
-            ) > 0
+        _kc_rain_or_snow = _precip_occurred_today(_kc_actuals)
     render_kitty_comfort_banner(
         live_temp_f=selected_live_temp,
         wind_speed=live_temp.get("WindSpeed"),
@@ -2218,14 +2223,8 @@ def run_app() -> None:
     else:
         total_precip_so_far = round(float(precip_actual["PrecipIn"].fillna(0).sum()), 2)
 
-    # Use the most recent actual datapoint in the chart series for "recently" status.
-    if precip_actual.empty:
-        rain_or_snow_recently = False
-    else:
-        latest_row = precip_actual.sort_values("Hour").iloc[-1]
-        latest_precip = latest_row.get("PrecipIn")
-        latest_snow = latest_row.get("SnowIn")
-        rain_or_snow_recently = (latest_precip or 0) > 0 or (latest_snow or 0) > 0
+    # True if any actual hour today recorded precipitation or snow (not just the current hour).
+    rain_or_snow_recently = _precip_occurred_today(precip_actual)
 
     p1, p2, p3, p4 = st.columns(4)
     p1.metric("Rain or Snow Recently?", "Yes" if rain_or_snow_recently else "No")
