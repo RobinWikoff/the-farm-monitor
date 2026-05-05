@@ -957,7 +957,26 @@ def test_build_precip_chart_layers():
     spec = chart.to_dict()
 
     assert "layer" in spec
-    assert len(spec["layer"]) == 3
+    assert len(spec["layer"]) == 5  # legend + actual + forecast + dot + label
+
+
+def test_build_precip_chart_x_axis_domain_is_full_day():
+    """X scale must cover [0, 23] even when only a few early hours have data."""
+    df = pd.DataFrame(
+        {
+            "Hour": list(range(24)),
+            "PrecipIn": [0.05, 0.1, 0.0] + [0.0] * 21,
+            "PrecipProb": [40.0] * 24,
+            "Humidity": [60.0] * 24,
+            "SnowIn": [0.0] * 24,
+        }
+    )
+
+    chart = app.build_precip_chart(df=df, current_hour=2)
+    spec = chart.to_dict()
+
+    x_encoding = spec["layer"][0]["encoding"]["x"]
+    assert x_encoding.get("scale", {}).get("domain") == [0, 23]
 
 
 @pytest.mark.parametrize(

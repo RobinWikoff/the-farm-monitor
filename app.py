@@ -1653,18 +1653,32 @@ def build_wind_chart(
 
 
 def build_precip_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
-    """Build hourly precipitation chart (inches) for actual hours only."""
+    """Build hourly precipitation chart (inches) with actual and forecast segments."""
     precip_df = df.copy()
-    precip_df["Status"] = precip_df["Hour"].apply(
-        lambda h: "Actual" if h <= current_hour else "Future"
-    )
-    actual = precip_df[(precip_df["Status"] == "Actual") & (precip_df["PrecipIn"].notna())]
 
-    max_precip = actual["PrecipIn"].max() if not actual.empty else 0
-    y_max = max(0.3, max_precip + 0.05)
+    actual = precip_df[(precip_df["Hour"] <= current_hour) & (precip_df["PrecipIn"].notna())].copy()
+    forecast = precip_df[
+        (precip_df["Hour"] > current_hour) & (precip_df["PrecipIn"].notna())
+    ].copy()
+
+    # Bridge point: duplicate current hour into forecast series so the lines connect visually
+    bridge = pd.DataFrame()
+    if not actual.empty and not forecast.empty:
+        current_row = actual[actual["Hour"] == current_hour]
+        if not current_row.empty:
+            bridge = pd.DataFrame(
+                {
+                    "Hour": [current_hour],
+                    "PrecipIn": [current_row["PrecipIn"].iloc[0]],
+                }
+            )
+
+    max_precip_all = precip_df["PrecipIn"].fillna(0).max()
+    y_max = max(0.3, max_precip_all + 0.05)
 
     x = alt.X(
         "Hour:Q",
+        scale=alt.Scale(domain=[0, 23]),
         axis=alt.Axis(
             values=list(range(24)),
             labelAngle=-45,
@@ -1678,17 +1692,21 @@ def build_precip_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
         scale=alt.Scale(domain=[0, y_max]),
     )
 
-    line = (
+    tooltip = [
+        alt.Tooltip("Hour:Q", title="Hour"),
+        alt.Tooltip("PrecipIn:Q", title="Precip (in)", format=".2f"),
+    ]
+
+    actual_line = (
         alt.Chart(actual)
         .mark_line(strokeWidth=4, color="#4db6ff")
-        .encode(
-            x=x,
-            y=y,
-            tooltip=[
-                alt.Tooltip("Hour:Q", title="Hour"),
-                alt.Tooltip("PrecipIn:Q", title="Precip in"),
-            ],
-        )
+        .encode(x=x, y=y, tooltip=tooltip)
+    )
+
+    forecast_line = (
+        alt.Chart(pd.concat([forecast, bridge], ignore_index=True))
+        .mark_line(strokeWidth=3, color="#a0c4ff", strokeDash=[8, 5])
+        .encode(x=x, y=y, tooltip=tooltip)
     )
 
     now_dot = (
@@ -1704,7 +1722,7 @@ def build_precip_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
                 {
                     "Hour": max_row["Hour"],
                     "PrecipIn": max_row["PrecipIn"],
-                    "Label": f"{max_row['PrecipIn']} in",
+                    "Label": f"{max_row['PrecipIn']:.2f} in",
                 }
             ]
         )
@@ -1716,8 +1734,38 @@ def build_precip_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
     else:
         label = alt.Chart(pd.DataFrame({"Hour": [], "PrecipIn": [], "Label": []})).mark_text()
 
+    # Legend via dummy colour-encoded layer
+    legend_df = pd.DataFrame(
+        {
+            "Hour": [current_hour, current_hour],
+            "PrecipIn": [0.0, 0.0],
+            "Series": ["Actual", "Forecast"],
+        }
+    )
+    color_scale = alt.Scale(domain=["Actual", "Forecast"], range=["#4db6ff", "#a0c4ff"])
+    legend_layer = (
+        alt.Chart(legend_df)
+        .mark_line()
+        .encode(
+            x=x,
+            y=y,
+            color=alt.Color(
+                "Series:N",
+                scale=color_scale,
+                legend=alt.Legend(
+                    orient="bottom",
+                    labelFontSize=12,
+                    title=None,
+                    columns=2,
+                    columnPadding=20,
+                    rowPadding=6,
+                ),
+            ),
+        )
+    )
+
     return (
-        (line + now_dot + label)
+        (legend_layer + actual_line + forecast_line + now_dot + label)
         .properties(height=280)
         .configure_legend(fillColor="#1e1e1e", padding=10)
     )
