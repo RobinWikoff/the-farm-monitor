@@ -291,6 +291,51 @@ Title: <System Name> Compatibility Evaluation and Plan
 
 ---
 
+### SOP: Implementing an Issue / Feature
+
+1. **Create a branch** before writing any code — never commit feature or fix work directly to `main`.
+   - Naming: `feature/<slug>`, `fix/<slug>`, or `chore/<slug>`.
+   - `git checkout -b feature/my-feature`
+
+2. **Implement** the change. Keep commits focused on the issue scope — avoid opportunistic refactors.
+
+3. **Run tests** locally before reviewing the UI:
+   ```bash
+   .venv/bin/pytest tests/test_core_logic.py tests/test_guardrail_config_sanity.py tests/test_integration_live_api.py -q -m "not live_api"
+   ```
+   All tests must be green. Fix any regressions before proceeding.
+
+4. **Review the UI** — start the app and visually inspect every section affected by the change:
+   ```bash
+   .venv/bin/streamlit run app.py
+   ```
+   - Check layout, spacing, labels, and data values in both sample mode and (if available) live mode.
+   - Verify new sections render correctly on the page without clipping or overflow.
+   - Check mobile-width behavior if the change affects layout.
+   - Do not commit until the UI looks correct.
+
+5. **Lint / format check**:
+   ```bash
+   .venv/bin/ruff check app.py && .venv/bin/ruff format --check app.py
+   ```
+
+6. **Commit with a descriptive message** referencing the issue:
+   ```bash
+   git add <files>
+   git commit -m "feat: <description> (closes #N)"
+   ```
+
+7. **Push and open a PR** targeting `main`:
+   ```bash
+   git push -u origin <branch>
+   ```
+   - PR title should match issue type convention (e.g. `feat:`, `fix:`, `chore:`).
+   - Link the issue in the PR description if not using `Closes #N` in the commit.
+
+8. **CI must pass** before merging — do not merge a PR with failing checks.
+
+---
+
 ## TODO
 
 - [x] Add `.venv/` explicitly to `.gitignore` - agent suggested
@@ -303,3 +348,5 @@ Title: <System Name> Compatibility Evaluation and Plan
 - [x] Review and complete in-progress work from before 2026-05-04; identify any code ready to merge (reviewed 2026-05-04 — all real changes committed in f9a6a72, CRLF churn stashed, working tree clean).
 - [x] Verify rain section behavior: fixed in PR #84 — `_precip_occurred_today()` now checks all actual hours, not just current hour (2026-05-05).
 - [ ] Rework C4 diagrams for wiki readability (left-to-right flow, more concept-map style, fewer crossing arrows).
+- [ ] Add/re-add titles to each app section (section headers are missing or inconsistent).
+- [ ] Incorporate sunrise/sunset into other chart sections for context (e.g., warmer after sunrise, wind patterns correlated with solar heating).

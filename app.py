@@ -166,7 +166,7 @@ def _build_dev_sample_payload(
         # UV peaks midday (~12:00), 0 at night; cloud cover varies throughout day
         uv_raw = 8.0 * math.sin((h - 6) * math.pi / 12.0) if 6 <= h <= 18 else 0.0
         uv = max(0.0, uv_raw)
-        cloud = max(0.0, min(100.0, 38.0 + 28.0 * math.sin(h * math.pi / 7.0)))
+        cloud = max(0.0, min(100.0, 45.0 + 35.0 * math.sin((h - 10) * math.pi / 14.0)))
         solar = max(0.0, 720.0 * math.sin((h - 6) * math.pi / 12.0)) if 6 <= h <= 18 else 0.0
 
         rows.append(
@@ -882,7 +882,9 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
                         "MainUS": mainus,
                         "UVIndex": int(round(uvindex)) if uvindex is not None else None,
                         "CloudCover": round(cloudcover, 1) if cloudcover is not None else None,
-                        "SolarRadiation": round(solarradiation, 1) if solarradiation is not None else None,
+                        "SolarRadiation": round(solarradiation, 1)
+                        if solarradiation is not None
+                        else None,
                     }
                 )
     forecast_df = pd.DataFrame(rows)
@@ -951,7 +953,11 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
         live_uvindex = forecast_df.iloc[-1]["UVIndex"]
     if live_cloudcover is None and not forecast_df.empty and "CloudCover" in forecast_df.columns:
         live_cloudcover = forecast_df.iloc[-1]["CloudCover"]
-    if live_solarradiation is None and not forecast_df.empty and "SolarRadiation" in forecast_df.columns:
+    if (
+        live_solarradiation is None
+        and not forecast_df.empty
+        and "SolarRadiation" in forecast_df.columns
+    ):
         live_solarradiation = forecast_df.iloc[-1]["SolarRadiation"]
 
     live_temp = {
@@ -975,7 +981,9 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
         "MainUS": live_mainus,
         "UVIndex": int(round(live_uvindex)) if live_uvindex is not None else None,
         "CloudCover": round(live_cloudcover, 1) if live_cloudcover is not None else None,
-        "SolarRadiation": round(live_solarradiation, 1) if live_solarradiation is not None else None,
+        "SolarRadiation": round(live_solarradiation, 1)
+        if live_solarradiation is not None
+        else None,
         "Sunrise": today_sunrise,
         "Sunset": today_sunset,
         "UVIndexMax": int(round(today_uvindex_max)) if today_uvindex_max is not None else None,
@@ -1037,6 +1045,7 @@ def _solar_time_delta_minutes(today_t: str | None, yesterday_t: str | None) -> i
     if not today_t or not yesterday_t:
         return None
     try:
+
         def _to_min(t: str) -> int:
             p = t.split(":")
             return int(p[0]) * 60 + int(p[1])
@@ -2048,12 +2057,17 @@ def build_brightness_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChar
     # Cloud cover area — full day, secondary Y axis (right)
     cloud_area = (
         alt.Chart(b_df)
-        .mark_area(opacity=0.22, color="#7ec8e3")
+        .mark_area(opacity=0.45, color="#4ea8d2")
         .encode(
             x=alt.X("Hour:Q", axis=x_axis),
             y=alt.Y(
                 "CloudCover:Q",
-                axis=alt.Axis(title="Cloud Cover (%)", labelFontSize=11, titleFontSize=13),
+                axis=alt.Axis(
+                    title="█ Cloud Cover (%) — right",
+                    labelFontSize=11,
+                    titleFontSize=13,
+                    titleColor="#4ea8d2",
+                ),
                 scale=alt.Scale(domain=[0, 100]),
             ),
             tooltip=[
@@ -2071,7 +2085,12 @@ def build_brightness_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChar
             x=alt.X("Hour:Q", axis=x_axis),
             y=alt.Y(
                 "UVIndex:Q",
-                axis=alt.Axis(title="UV Index", labelFontSize=11, titleFontSize=13),
+                axis=alt.Axis(
+                    title="━ UV Index — left",
+                    labelFontSize=11,
+                    titleFontSize=13,
+                    titleColor="#f5b800",
+                ),
                 scale=alt.Scale(domain=[0, uv_max]),
             ),
             tooltip=[
@@ -2084,9 +2103,7 @@ def build_brightness_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChar
 
     # UV forecast line (dashed)
     uv_forecast_line = (
-        alt.Chart(
-            pd.concat([forecast, bridge], ignore_index=True).assign(Series="Forecast UV")
-        )
+        alt.Chart(pd.concat([forecast, bridge], ignore_index=True).assign(Series="Forecast UV"))
         .mark_line(strokeWidth=4, color="#ffd966", strokeDash=[8, 5])
         .encode(
             x=alt.X("Hour:Q", axis=x_axis),
@@ -2129,11 +2146,7 @@ def build_brightness_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChar
 
     uv_layers = uv_actual_line + uv_forecast_line + now_dot + peak_lbl_layer
 
-    return (
-        alt.layer(cloud_area, uv_layers)
-        .resolve_scale(y="independent")
-        .properties(height=280)
-    )
+    return alt.layer(uv_layers, cloud_area).resolve_scale(y="independent").properties(height=280)
 
 
 # ---------------------------------------------------------------------------
@@ -2773,9 +2786,11 @@ def run_app() -> None:
             build_brightness_chart(df[["Hour", "UVIndex", "CloudCover"]], current_hour),
             width="stretch",
         )
-    st.caption(
-        "☀️ UV Index (yellow line, left axis) and cloud cover % (blue shading, right axis). "
-        "Solid = observed, dashed = forecast."
+    st.markdown(
+        '<div style="font-size: 0.9em; line-height: 1.6;">'
+        '<span style="color: #f5b800; font-weight: bold;">━ UV Index</span> (left axis) — solid = observed, dashed = forecast<br/>'
+        '<span style="color: #4ea8d2; font-weight: bold;">█ Cloud Cover %</span> (right axis)</div>',
+        unsafe_allow_html=True,
     )
 
     # Data Sources
