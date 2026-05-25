@@ -288,6 +288,7 @@ Title: <System Name> Compatibility Evaluation and Plan
 5. **Traceability**: link to related issues, PRs, ADR docs, or chat session references where useful.
 6. **Child issues**: for large issues (like #9), break into labeled sub-issues (9A, 9B, etc.) using `docs/uor/issue-9-followup-issues.md` as the reference pattern.
 7. **Closing an issue via commit**: add `Closes #N` or `Fixes #N` to the commit message or PR description to auto-close.
+8. **Issue drafts from Copilot**: always request and provide the issue draft as Markdown (ready to paste), wrapped in a fenced markdown block.
 
 ---
 
