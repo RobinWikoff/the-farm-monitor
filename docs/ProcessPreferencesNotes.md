@@ -350,3 +350,5 @@ Title: <System Name> Compatibility Evaluation and Plan
 - [ ] Rework C4 diagrams for wiki readability (left-to-right flow, more concept-map style, fewer crossing arrows).
 - [ ] Add/re-add titles to each app section (section headers are missing or inconsistent).
 - [ ] Incorporate sunrise/sunset into other chart sections for context (e.g., warmer after sunrise, wind patterns correlated with solar heating).
+- [ ] Add a better app header/description — improve the main title area to include labeled "Date:" and "Time:" fields showing the current date and time prominently.
+- [ ] Remove "— left" and "— right" from the Y-axis titles in the sunlight/brightness chart (axis position is already self-evident from placement).
