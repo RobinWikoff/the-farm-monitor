@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = { workspace = true }
 axum = { workspace = true }
+chrono = { workspace = true }
+farm-monitor-data = { path = "../farm-monitor-data" }
 farm-monitor-domain = { path = "../farm-monitor-domain" }
 tokio = { workspace = true }
 tracing = { workspace = true }
