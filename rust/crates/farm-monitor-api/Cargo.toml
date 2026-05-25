@@ -1,0 +1,11 @@
+[package]
+name = "farm-monitor-api"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { workspace = true }
+farm-monitor-domain = { path = "../farm-monitor-domain" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
