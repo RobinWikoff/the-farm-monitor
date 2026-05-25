@@ -22,6 +22,21 @@ Scope: Rust migration Phase C, dashboard section migration and parity review.
 - Provider data for Phase C remains normalized/mock-backed for migration progress; live provider parity will be completed in later milestones.
 - Visual parity is behavior-first in this phase; exact chart styling and interactions are tracked as follow-up polish.
 
+## Visual Verification Artifacts
+- Desktop audit (2026-05-25): [docs/verification/rust-phase-c-desktop-visual-audit.md](docs/verification/rust-phase-c-desktop-visual-audit.md)
+- Mobile audit (2026-05-25): [docs/verification/rust-phase-c-mobile-visual-audit.md](docs/verification/rust-phase-c-mobile-visual-audit.md)
+
+## Charting Approach Decision
+- Decision: keep server-rendered HTML tables plus bar indicators for Phase C parity signoff.
+- Rationale: this approach preserves section hierarchy, observed/forecast semantics, and axis/legend intent without introducing a second charting stack mid-migration.
+- Acceptable deviation threshold for Phase C: behavior and information parity is required; exact visual style and chart interaction parity is deferred to post-Phase-C polish.
+
+## Phase C Closeout Status
+- PR #99 (Part 1): merged.
+- PR #100 (Part 2): merged.
+- PR #101 (Part 3): open at review time of this checklist update.
+- Issue #94 close condition: merge PR #101, then post closeout comment linking this checklist and the three Phase C PRs.
+
 ## Validation
 - Rust quality gates:
   - `cargo fmt --all`

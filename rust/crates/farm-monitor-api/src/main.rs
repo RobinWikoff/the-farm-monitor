@@ -333,10 +333,10 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
     let co = (current_aqi_for_pollutants / 90.0).max(0.2);
 
     let template = r#"<!doctype html>
-<html lang=\"en\">
+<html lang="en">
 <head>
-    <meta charset=\"utf-8\" />
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>The Farm Monitor (Rust)</title>
     <style>
         :root {
@@ -351,7 +351,7 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
         * { box-sizing: border-box; }
         body {
             margin: 0;
-            font-family: \"Segoe UI\", Tahoma, Geneva, Verdana, sans-serif;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
             background: radial-gradient(circle at 20% 0%, #1d2735, var(--bg) 45%);
             color: var(--text);
         }
@@ -442,22 +442,22 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
     </style>
 </head>
 <body>
-    <main class=\"container\">
-        <section class=\"hero\">
-            <h1>The Farm Monitor: How's the Weather? <span class=\"badge\">Rust Phase C</span></h1>
+    <main class="container">
+        <section class="hero">
+            <h1>The Farm Monitor: How's the Weather? <span class="badge">Rust Phase C</span></h1>
             <p>Live model-backed preview using normalized forecast data (__SOURCE__).</p>
         </section>
 
-        <section class=\"grid\">
-            <article class=\"card span-8\">
+        <section class="grid">
+            <article class="card span-8">
                 <h2>Temperature Trend</h2>
                 <p>Preview rows (hour, temp, wind, AQI, UV):</p>
-                <table class=\"mini-table\">
+                <table class="mini-table">
                     <thead><tr><th>Hour</th><th>Temp</th><th>Wind</th><th>AQI</th><th>UV</th></tr></thead>
                     <tbody>__HOURLY_ROWS__</tbody>
                 </table>
             </article>
-            <article class=\"card span-4\">
+            <article class="card span-4">
                 <h2>Current Conditions</h2>
                 <p><strong>Now Temp:</strong> __TEMP_NOW__</p>
                 <p><strong>Feels Like:</strong> __FEELS_NOW__</p>
@@ -465,68 +465,68 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
                 <p><strong>AQI:</strong> __AQI_NOW__</p>
             </article>
 
-            <article class=\"card span-6\">
+            <article class="card span-6">
                 <h2>Wind Outlook</h2>
-                <div class=\"metrics\">
-                    <div class=\"metric\"><div class=\"k\">Wind Speed Now</div><div class=\"v\">__WIND_NOW__</div></div>
-                    <div class=\"metric\"><div class=\"k\">1-hour Delta</div><div class=\"v\">__WIND_DELTA__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Today's Fastest Wind</div><div class=\"v\">__FASTEST_WIND__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Strongest Gust (Observed)</div><div class=\"v\">__STRONGEST_GUST__</div></div>
+                <div class="metrics">
+                    <div class="metric"><div class="k">Wind Speed Now</div><div class="v">__WIND_NOW__</div></div>
+                    <div class="metric"><div class="k">1-hour Delta</div><div class="v">__WIND_DELTA__</div></div>
+                    <div class="metric"><div class="k">Today's Fastest Wind</div><div class="v">__FASTEST_WIND__</div></div>
+                    <div class="metric"><div class="k">Strongest Gust (Observed)</div><div class="v">__STRONGEST_GUST__</div></div>
                 </div>
-                <table class=\"mini-table\">
+                <table class="mini-table">
                     <thead><tr><th>Hour</th><th>Series</th><th>Speed</th><th>Gust</th><th>Trend</th></tr></thead>
                     <tbody>__WIND_ROWS__</tbody>
                 </table>
             </article>
 
-            <article class=\"card span-6\">
+            <article class="card span-6">
                 <h2>Air Quality</h2>
-                <div class=\"metrics\">
-                    <div class=\"metric\"><div class=\"k\">Current AQI</div><div class=\"v\">__CURRENT_AQI__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Highest AQI Today</div><div class=\"v\">__HIGH_AQI__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Lowest AQI Today</div><div class=\"v\">__LOW_AQI__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Interpretation</div><div class=\"v\">__AQI_INTERP__</div></div>
+                <div class="metrics">
+                    <div class="metric"><div class="k">Current AQI</div><div class="v">__CURRENT_AQI__</div></div>
+                    <div class="metric"><div class="k">Highest AQI Today</div><div class="v">__HIGH_AQI__</div></div>
+                    <div class="metric"><div class="k">Lowest AQI Today</div><div class="v">__LOW_AQI__</div></div>
+                    <div class="metric"><div class="k">Interpretation</div><div class="v">__AQI_INTERP__</div></div>
                 </div>
-                <table class=\"mini-table\">
+                <table class="mini-table">
                     <thead><tr><th>Hour</th><th>Series</th><th>AQI</th><th>Label</th><th>Trend</th></tr></thead>
                     <tbody>__AQI_ROWS__</tbody>
                 </table>
-                <p style=\"margin-top:0.55rem;\">Pollutant Breakdown: PM2.5 __PM25__ ug/m3 | PM10 __PM10__ ug/m3 | O3 __O3__ ppb | NO2 __NO2__ ppb | CO __CO__ ppm</p>
+                <p style="margin-top:0.55rem;">Pollutant Breakdown: PM2.5 __PM25__ ug/m3 | PM10 __PM10__ ug/m3 | O3 __O3__ ppb | NO2 __NO2__ ppb | CO __CO__ ppm</p>
             </article>
 
-            <article class=\"card span-12\">
+            <article class="card span-12">
                 <h2>Precipitation</h2>
-                <div class=\"metrics\">
-                    <div class=\"metric\"><div class=\"k\">Rain or Snow Recently?</div><div class=\"v\">__RAIN_RECENTLY__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Total Accumulation So Far</div><div class=\"v\">__PRECIP_TOTAL__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Precipitation Probability Now</div><div class=\"v\">__PRECIP_NOW__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Relative Humidity Now</div><div class=\"v\">__HUMIDITY_NOW__</div></div>
+                <div class="metrics">
+                    <div class="metric"><div class="k">Rain or Snow Recently?</div><div class="v">__RAIN_RECENTLY__</div></div>
+                    <div class="metric"><div class="k">Total Accumulation So Far</div><div class="v">__PRECIP_TOTAL__</div></div>
+                    <div class="metric"><div class="k">Precipitation Probability Now</div><div class="v">__PRECIP_NOW__</div></div>
+                    <div class="metric"><div class="k">Relative Humidity Now</div><div class="v">__HUMIDITY_NOW__</div></div>
                 </div>
-                <table class=\"mini-table\">
+                <table class="mini-table">
                     <thead><tr><th>Hour</th><th>Precip</th><th>Prob</th><th>Humidity</th><th>Snow</th></tr></thead>
                     <tbody>__PRECIP_ROWS__</tbody>
                 </table>
             </article>
 
-            <article class=\"card span-12\">
+            <article class="card span-12">
                 <h2>Sunrise / Sunset / Brightness</h2>
-                <div class=\"metrics\">
-                    <div class=\"metric\"><div class=\"k\">Sunrise</div><div class=\"v\">06:15 (+1m vs yesterday)</div></div>
-                    <div class=\"metric\"><div class=\"k\">Sunset</div><div class=\"v\">20:10 (+2m vs yesterday)</div></div>
-                    <div class=\"metric\"><div class=\"k\">Daylight Today</div><div class=\"v\">13h 55m (+3m)</div></div>
-                    <div class=\"metric\"><div class=\"k\">Peak UV Index Today</div><div class=\"v\">__PEAK_UV__</div></div>
+                <div class="metrics">
+                    <div class="metric"><div class="k">Sunrise</div><div class="v">06:15 (+1m vs yesterday)</div></div>
+                    <div class="metric"><div class="k">Sunset</div><div class="v">20:10 (+2m vs yesterday)</div></div>
+                    <div class="metric"><div class="k">Daylight Today</div><div class="v">13h 55m (+3m)</div></div>
+                    <div class="metric"><div class="k">Peak UV Index Today</div><div class="v">__PEAK_UV__</div></div>
                 </div>
-                <table class=\"mini-table\">
+                <table class="mini-table">
                     <thead><tr><th>Hour</th><th>UV</th><th>Cloud</th><th>UV Axis</th><th>Cloud Axis</th></tr></thead>
                     <tbody>__BRIGHTNESS_ROWS__</tbody>
                 </table>
-                <p class=\"legend\"><span class=\"uv\">━ UV Index</span> (left axis) and <span class=\"cloud\">█ Cloud Cover %</span> (right axis).</p>
+                <p class="legend"><span class="uv">━ UV Index</span> (left axis) and <span class="cloud">█ Cloud Cover %</span> (right axis).</p>
             </article>
 
-            <article class=\"card span-12\">
+            <article class="card span-12">
                 <h2>Data Sources</h2>
                 <p>Current source: <code>__SOURCE__</code> | Generated at: __GENERATED_AT__</p>
-                <p style=\"margin-top:0.5rem;\">Open-Meteo and Visual Crossing semantics are represented in this phase by a normalized source contract; series are shown as observed and forecast for parity behavior review.</p>
+                <p style="margin-top:0.5rem;">Open-Meteo and Visual Crossing semantics are represented in this phase by a normalized source contract; series are shown as observed and forecast for parity behavior review.</p>
             </article>
         </section>
     </main>
