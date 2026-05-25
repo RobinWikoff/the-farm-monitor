@@ -2,11 +2,12 @@
 
 This directory hosts Phase A Rust migration scaffolding for The Farm Monitor.
 
-## Scope (Phase A)
+## Scope (Phase A + Phase B in progress)
 
 - Rust workspace and crate boundaries
 - API crate with minimal `/healthz` endpoint
 - Domain crate for shared data models
+- Data crate for provider abstraction, normalization, file cache, and guardrails
 - CI workflow for Rust lint/build/test checks
 
 ## Local Commands (when Rust toolchain is installed)
