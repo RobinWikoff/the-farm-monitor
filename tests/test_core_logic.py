@@ -334,6 +334,10 @@ def test_aqi_interpretation_thresholds(aqi, expected):
     assert app.aqi_interpretation(aqi) == expected
 
 
+def test_aqi_interpretation_nan_is_unavailable():
+    assert app.aqi_interpretation(float("nan")) == "Unavailable"
+
+
 def test_format_dev_guardrail_sidebar_line_near_limit_shows_warning():
     item = {
         "label": "VC forecast/current",
@@ -1401,6 +1405,10 @@ def test_uv_interpretation_thresholds(uv, expected):
     assert app.uv_interpretation(uv) == expected
 
 
+def test_uv_interpretation_nan_is_unavailable():
+    assert app.uv_interpretation(float("nan")) == "Unavailable"
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
@@ -1506,3 +1514,45 @@ def test_fetch_forecast_and_current_maps_uv_cloud_solar_fields(monkeypatch):
     assert live_temp["Sunrise"] == "06:15:00"
     assert live_temp["Sunset"] == "20:10:00"
     assert live_temp["UVIndexMax"] == 9
+
+
+def test_fetch_forecast_and_current_handles_non_finite_aqi_uv(monkeypatch):
+    payload = {
+        "days": [
+            {
+                "sunrise": "06:15:00",
+                "sunset": "20:10:00",
+                "uvindex": float("nan"),
+                "hours": [
+                    {
+                        "datetime": "12:00:00",
+                        "temp": 72.0,
+                        "feelslike": 70.0,
+                        "windspeed": 5.0,
+                        "aqius": float("nan"),
+                        "uvindex": float("nan"),
+                        "cloudcover": 25.0,
+                    }
+                ],
+            }
+        ],
+        "currentConditions": {
+            "temp": 72.0,
+            "feelslike": 70.0,
+            "windspeed": 5.0,
+            "aqius": float("nan"),
+            "uvindex": float("nan"),
+            "cloudcover": 30.0,
+        },
+    }
+
+    def fake_get(url, params, timeout):
+        return _MockResponse(payload)
+
+    monkeypatch.setattr(app.requests, "get", fake_get)
+
+    _, live_temp = app.fetch_forecast_and_current.__wrapped__("fake-key")
+
+    assert live_temp["AQI"] is None
+    assert live_temp["UVIndex"] is None
+    assert live_temp["UVIndexMax"] is None
