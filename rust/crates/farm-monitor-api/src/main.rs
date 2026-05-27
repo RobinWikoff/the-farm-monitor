@@ -263,7 +263,10 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
     }
 
     let (temp_now, wind_now) = match current {
-        Some(ref p) => (format!("{:.1}°F", p.temp_f), format!("{:.1} mph", p.wind_mph)),
+        Some(ref p) => (
+            format!("{:.1}°F", p.temp_f),
+            format!("{:.1} mph", p.wind_mph),
+        ),
         None => ("-".to_string(), "-".to_string()),
     };
 
@@ -293,8 +296,8 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
 
     let wind_direction_txt = {
         const DIRS: [&str; 16] = [
-            "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW",
-            "W", "WNW", "NW", "NNW",
+            "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW",
+            "NW", "NNW",
         ];
         let degrees = (now_hour as f64 * 15.0) % 360.0;
         let idx = ((degrees / 22.5).round() as usize) % DIRS.len();
