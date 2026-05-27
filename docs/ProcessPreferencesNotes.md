@@ -2,6 +2,7 @@
 
 Canonical process preferences, issue templates, and implementation SOP moved to wiki:
 - Process-Preferences-and-Issue-SOP (the-farm-monitor.wiki)
+- https://github.com/RobinWikoff/the-farm-monitor/wiki/Process-Preferences-and-Issue-SOP
 
 Why this file remains:
 - Keep a stable local pointer used by contributors who start process work from docs/.

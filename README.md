@@ -4,7 +4,11 @@ Streamlit weather monitor for Loveland, CO with forecast, current conditions, an
 
 ## Feature Documentation
 
-Feature requirements and logic are documented in:
+Canonical feature requirements and logic are documented in the wiki:
+
+- https://github.com/RobinWikoff/the-farm-monitor/wiki/Dashboard-Feature-Requirements-and-Logic
+
+Local anchor file:
 
 - [docs/feature-requirements.md](docs/feature-requirements.md)
 
@@ -12,16 +16,20 @@ Architecture diagrams and narrative docs (C4 model) are documented in:
 
 - [docs/c4/README.md](docs/c4/README.md)
 
-Operations reference (secrets management, restore procedure, repo access policy) is documented in:
+Canonical operations reference is documented in the wiki:
+
+- https://github.com/RobinWikoff/the-farm-monitor/wiki/Operations-Reference
+
+Local anchor file:
 
 - [docs/ops.md](docs/ops.md)
 
 ### Documentation Maintenance Policy
 
-- Update [docs/feature-requirements.md](docs/feature-requirements.md) in the same PR whenever behavior changes in weather or memo features.
+- Update the wiki feature page in the same PR whenever behavior changes in weather or memo features.
 - Run `./scripts/c4_docs_workflow.sh --range HEAD~1..HEAD` and follow the generated report when architecture/components/dependencies change.
 - Update [docs/c4/README.md](docs/c4/README.md) (and impacted C4 pages) when the workflow indicates C4 updates are required.
-- Manually sync architecture narrative updates into the wiki repo page `Model-Architecture-and-Behavior.md`.
+- Update architecture narrative in the wiki page `Model-Architecture-and-Behavior`.
 - If no feature behavior changed, include: `No feature-doc changes required` in the PR description.
 - If no architecture changed, include: `No C4 changes required` in the PR description.
 - Keep changelog and tests aligned with any feature logic changes.

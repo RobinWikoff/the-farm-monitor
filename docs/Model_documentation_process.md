@@ -2,6 +2,7 @@
 
 Canonical model documentation governance is maintained in wiki:
 - Model-Documentation-Process (the-farm-monitor.wiki)
+- https://github.com/RobinWikoff/the-farm-monitor/wiki/Model-Documentation-Process
 
 This local file is intentionally limited to repository-local workflow glue.
 

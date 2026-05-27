@@ -2,6 +2,7 @@
 
 Canonical parity baseline and historical checklist snapshot are maintained in wiki:
 - Rust-Parity-and-Acceptance-Criteria (the-farm-monitor.wiki)
+- https://github.com/RobinWikoff/the-farm-monitor/wiki/Rust-Parity-and-Acceptance-Criteria
 
 Why this file remains:
 - Keep the historical file path referenced by parity issue and PR threads.

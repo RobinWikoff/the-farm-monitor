@@ -2,6 +2,7 @@
 
 Canonical feature behavior documentation moved to wiki:
 - Dashboard-Feature-Requirements-and-Logic (the-farm-monitor.wiki)
+- https://github.com/RobinWikoff/the-farm-monitor/wiki/Dashboard-Feature-Requirements-and-Logic
 
 Why this file remains:
 - Keep a stable in-repo anchor for contributors who begin from docs/.
