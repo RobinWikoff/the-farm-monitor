@@ -24,6 +24,43 @@ Local anchor file:
 
 - [docs/ops.md](docs/ops.md)
 
+## Secrets Quickstart (Local Dev)
+
+Use either environment variables or Streamlit secrets for `VISUAL_CROSSING_API_KEY`.
+Environment variables take precedence when both are present.
+
+Option A: `.env` file
+
+```bash
+cat > .env <<'EOF'
+VISUAL_CROSSING_API_KEY=your_real_key_here
+ENV=dev
+DEV_ALLOW_LIVE_API=true
+DEV_USE_SAMPLE_DATA=false
+EOF
+```
+
+Option B: `.streamlit/secrets.toml`
+
+```bash
+mkdir -p .streamlit
+cat > .streamlit/secrets.toml <<'EOF'
+VISUAL_CROSSING_API_KEY = "your_real_key_here"
+ENV = "dev"
+DEV_ALLOW_LIVE_API = true
+DEV_USE_SAMPLE_DATA = false
+EOF
+```
+
+Run app:
+
+```bash
+python -m streamlit run app.py
+```
+
+Security note:
+- `.env` and `.streamlit/secrets.toml` are gitignored and should never be committed.
+
 ### Documentation Maintenance Policy
 
 - Update the wiki feature page in the same PR whenever behavior changes in weather or memo features.
