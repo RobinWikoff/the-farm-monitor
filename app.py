@@ -2026,7 +2026,7 @@ def build_aqi_chart(df: pd.DataFrame, current_hour: int) -> alt.LayerChart:
     hi_hour = actual.loc[actual["AQI"] == hi, "Hour"].iloc[0] if hi is not None else None
     lo_hour = actual.loc[actual["AQI"] == lo, "Hour"].iloc[0] if lo is not None else None
 
-    callouts = pd.DataFrame()
+    callouts = pd.DataFrame(columns=["Hour", "AQI", "Label"])
     if hi is not None and lo is not None:
         callouts = pd.DataFrame(
             [

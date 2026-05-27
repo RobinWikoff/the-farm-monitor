@@ -983,6 +983,20 @@ def test_build_precip_chart_x_axis_domain_is_full_day():
     assert x_encoding.get("scale", {}).get("domain") == [0, 23]
 
 
+def test_build_aqi_chart_handles_missing_observed_values_without_keyerror():
+    df = pd.DataFrame(
+        {
+            "Hour": list(range(24)),
+            "AQI": [None] * 24,
+        }
+    )
+
+    chart = app.build_aqi_chart(df=df, current_hour=10)
+    spec = chart.to_dict()
+
+    assert "layer" in spec
+
+
 @pytest.mark.parametrize(
     "live_temp, threshold, forecast_future, mode, expected_call",
     [
