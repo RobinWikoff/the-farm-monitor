@@ -398,11 +398,12 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
             --good: #22a06b;
             --warn: #d97706;
             --border: #dbe3ee;
+            --shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
         }
         * { box-sizing: border-box; }
         body {
             margin: 0;
-            font-family: \"Segoe UI\", Tahoma, Geneva, Verdana, sans-serif;
+            font-family: \"Inter\", \"Segoe UI\", Tahoma, Geneva, Verdana, sans-serif;
             background: var(--bg);
             color: var(--text);
         }
@@ -414,11 +415,12 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
         .hero {
             background: var(--panel);
             border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 0.95rem 1.05rem;
+            border-radius: 12px;
+            padding: 1rem 1.1rem;
             margin-bottom: 0.9rem;
+            box-shadow: var(--shadow);
         }
-        .hero h1 { margin: 0 0 0.35rem 0; font-size: 1.3rem; }
+        .hero h1 { margin: 0 0 0.35rem 0; font-size: 1.32rem; letter-spacing: 0.01em; }
         .hero p { margin: 0; color: var(--muted); }
         .layout {
             display: grid;
@@ -441,63 +443,80 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
         .card {
             background: var(--panel);
             border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 0.85rem 0.95rem;
+            border-radius: 12px;
+            padding: 0.95rem 1.05rem;
             min-height: 120px;
+            box-shadow: var(--shadow);
         }
-        .card h2 { margin: 0 0 0.5rem 0; font-size: 1.02rem; }
+        .card h2 {
+            margin: 0;
+            font-size: 1.02rem;
+            letter-spacing: 0.01em;
+            border-bottom: 1px solid #e6edf7;
+            padding-bottom: 0.45rem;
+        }
         .card p { margin: 0; color: var(--muted); line-height: 1.4; }
         .metrics {
             display: grid;
             gap: 0.55rem;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             margin-top: 0.5rem;
             margin-bottom: 0.65rem;
         }
+        .span-3 .metrics { grid-template-columns: 1fr; }
         .metric {
             border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 0.45rem 0.55rem;
-            background: #fbfdff;
+            border-radius: 10px;
+            padding: 0.48rem 0.6rem;
+            background: #f8fbff;
         }
-        .metric .k { color: #617287; font-size: 0.78rem; margin-bottom: 0.2rem; }
-        .metric .v { font-size: 0.92rem; font-weight: 600; color: #1f2937; }
+        .metric .k { color: #617287; font-size: 0.74rem; margin-bottom: 0.2rem; text-transform: uppercase; letter-spacing: 0.03em; }
+        .metric .v { font-size: 0.93rem; font-weight: 650; color: #1f2937; line-height: 1.25; }
         .settings-note { margin-top: 0.5rem; color: #607286; font-size: 0.85rem; }
         .chart {
-            margin-top: 0.5rem;
+            margin-top: 0.55rem;
             border: 1px dashed #c9d7e8;
-            border-radius: 8px;
-            padding: 0.6rem;
+            border-radius: 10px;
+            padding: 0.65rem;
             background: #f8fbff;
             color: #48627c;
-            font-size: 0.85rem;
+            font-size: 0.86rem;
         }
         .mini-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 0.5rem;
+            margin-top: 0.6rem;
             font-size: 0.87rem;
+            border: 1px solid #e6edf7;
+            border-radius: 10px;
+            overflow: hidden;
         }
         .mini-table th {
             text-align: left;
             color: #607286;
             border-bottom: 1px solid var(--border);
-            padding: 0.3rem 0.2rem;
+            padding: 0.4rem 0.35rem;
+            background: #f5f8fd;
+            text-transform: uppercase;
+            font-size: 0.72rem;
+            letter-spacing: 0.03em;
         }
         .mini-table td {
             border-bottom: 1px solid #edf1f7;
             color: #374151;
-            padding: 0.32rem 0.2rem;
+            padding: 0.38rem 0.35rem;
             vertical-align: middle;
         }
+        .mini-table tbody tr:nth-child(even) td { background: #fbfdff; }
         .status {
             background: #f3faf5;
             border: 1px solid #d2ebd8;
-            border-radius: 10px;
-            padding: 0.7rem 0.85rem;
+            border-radius: 12px;
+            padding: 0.76rem 0.95rem;
             font-size: 0.92rem;
             color: #234b35;
             margin-bottom: 0.2rem;
+            box-shadow: var(--shadow);
         }
         .span-4 { grid-column: span 4; }
         .span-6 { grid-column: span 6; }
@@ -507,8 +526,22 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
         .span-9 { grid-column: span 9; }
         .legend { font-size: 0.92rem; color: var(--muted); margin-top: 0.55rem; }
         .legend .uv { color: var(--warn); font-weight: 600; }
+        .subheading {
+            margin: 0.7rem 0 0.35rem;
+            font-size: 0.75rem;
+            color: #637588;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .detail-note { margin-top: 0.35rem; }
+        .detail-note-strong { margin-top: 0.5rem; }
+        @media (max-width: 1180px) {
+            .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .span-3 .metrics { grid-template-columns: 1fr; }
+        }
         .legend .cloud { color: var(--accent); font-weight: 600; }
         @media (max-width: 900px) {
+            .metrics { grid-template-columns: 1fr; }
             .span-3, .span-4, .span-6, .span-8, .span-9, .span-12 { grid-column: span 12; }
         }
     </style>
@@ -573,7 +606,7 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
                 </div>
                 <div class=\"chart\">AQI chart: observed vs forecast semantics.</div>
                 <p class=\"legend\">Caption: pollutant fields use source-missing semantics when unavailable.</p>
-                <h3 style=\"margin:0.6rem 0 0.2rem 0; font-size:0.95rem; color:#334155;\">Pollutant Breakdown</h3>
+                <h3 class=\"subheading\">Pollutant Breakdown</h3>
                 <table class=\"mini-table\">
                     <thead><tr><th>Pollutant</th><th>Value</th><th>Units</th></tr></thead>
                     <tbody>
@@ -617,9 +650,9 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
             <article class=\"card span-12\">
                 <h2>Data Sources</h2>
                 <p>Provider role context: Open-Meteo style hourly model blends and Visual Crossing style observational semantics are represented through a normalized contract in this phase.</p>
-                <p style=\"margin-top:0.5rem;\">Blended-model caveat: values can reflect mixed model assumptions and should be interpreted as trend guidance, not instrument-grade measurements.</p>
-                <p style=\"margin-top:0.35rem;\">Refresh cadence context: normalized forecast bundles are generated periodically, with observed-vs-forecast boundaries anchored to the current hour.</p>
-                <p style=\"margin-top:0.35rem;\">Current source: <code>__SOURCE__</code> | Generated at: __GENERATED_AT__</p>
+                <p class=\"detail-note-strong\">Blended-model caveat: values can reflect mixed model assumptions and should be interpreted as trend guidance, not instrument-grade measurements.</p>
+                <p class=\"detail-note\">Refresh cadence context: normalized forecast bundles are generated periodically, with observed-vs-forecast boundaries anchored to the current hour.</p>
+                <p class=\"detail-note\">Current source: <code>__SOURCE__</code> | Generated at: __GENERATED_AT__</p>
             </article>
             </div>
             </section>
