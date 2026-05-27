@@ -899,7 +899,7 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
                         "PrecipProb": round(precipprob, 1) if precipprob is not None else None,
                         "Humidity": round(humidity, 1) if humidity is not None else None,
                         "SnowIn": round(snow, 2) if snow is not None else None,
-                            "AQI": _int_if_finite(aqi),
+                        "AQI": _int_if_finite(aqi),
                         "PM2_5": pm25,
                         "PM10": pm10,
                         "O3": o3,
@@ -907,7 +907,7 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
                         "SO2": so2,
                         "CO": co,
                         "MainUS": mainus,
-                            "UVIndex": _int_if_finite(uvindex),
+                        "UVIndex": _int_if_finite(uvindex),
                         "CloudCover": round(cloudcover, 1) if cloudcover is not None else None,
                         "SolarRadiation": round(solarradiation, 1)
                         if solarradiation is not None
@@ -993,7 +993,9 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
         "WindSpeed": _rounded_if_finite(live_windspeed, 1),
         "WindGust": _rounded_if_finite(live_windgust, 1),
         "WindDeg": _rounded_if_finite(live_winddeg, 1),
-        "WindDir": wind_degree_to_cardinal(live_winddeg) if _finite_float(live_winddeg) is not None else "Unknown",
+        "WindDir": wind_degree_to_cardinal(live_winddeg)
+        if _finite_float(live_winddeg) is not None
+        else "Unknown",
         "PrecipIn": _rounded_if_finite(live_precip, 2),
         "PrecipProb": _rounded_if_finite(live_precipprob, 1),
         "Humidity": _rounded_if_finite(live_humidity, 1),
