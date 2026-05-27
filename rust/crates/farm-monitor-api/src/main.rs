@@ -478,10 +478,93 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
             border: 1px dashed #c9d7e8;
             border-radius: 10px;
             padding: 0.65rem;
-            background: #f8fbff;
+            background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
             color: #48627c;
             font-size: 0.86rem;
         }
+        .chart-title {
+            font-size: 0.82rem;
+            color: #29445e;
+            font-weight: 650;
+            letter-spacing: 0.01em;
+        }
+        .chart-note {
+            margin-top: 0.2rem;
+            color: #5b6f84;
+            font-size: 0.78rem;
+        }
+        .chart-ribbon {
+            margin-top: 0.5rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+        }
+        .chip {
+            border: 1px solid #ced9e8;
+            background: #f7fbff;
+            color: #35556f;
+            border-radius: 999px;
+            padding: 0.16rem 0.45rem;
+            font-size: 0.72rem;
+            letter-spacing: 0.01em;
+        }
+        .chip.obs {
+            border-color: #79a6f6;
+            background: #edf4ff;
+            color: #1f4e95;
+        }
+        .chip.fcst {
+            border-color: #85b9c9;
+            background: #eef9fc;
+            color: #245a67;
+        }
+        .chip.uv-chip {
+            border-color: #f1c36d;
+            background: #fff7e8;
+            color: #8a5b08;
+        }
+        .chip.cloud-chip {
+            border-color: #8bb4ef;
+            background: #eef4ff;
+            color: #1f4e95;
+        }
+        .mini-bars {
+            margin-top: 0.5rem;
+            display: grid;
+            grid-template-columns: repeat(12, minmax(0, 1fr));
+            gap: 0.2rem;
+            align-items: end;
+            height: 56px;
+            padding: 0.25rem;
+            border: 1px solid #dfe8f5;
+            border-radius: 8px;
+            background: #ffffff;
+        }
+        .bar {
+            border-radius: 4px 4px 2px 2px;
+            background: #a9c2e9;
+            min-height: 22%;
+        }
+        .bar.obs { background: #5b8fe0; }
+        .bar.fcst { background: #74b6c7; }
+        .bar.aqi-bar { background: #96b6e8; }
+        .bar.cloud-bar { background: #8bb4ef; }
+        .bar.uv-bar { background: #f2bf63; }
+        .axis-tags {
+            margin-top: 0.42rem;
+            display: flex;
+            justify-content: space-between;
+            gap: 0.35rem;
+            flex-wrap: wrap;
+        }
+        .axis-tag {
+            font-size: 0.72rem;
+            color: #5f7184;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .axis-tag.left { color: #26547f; }
+        .axis-tag.right { color: #8a5b08; }
         .mini-table {
             width: 100%;
             border-collapse: collapse;
@@ -593,7 +676,15 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
                     <div class=\"metric\"><div class=\"k\">Today's Fastest Wind</div><div class=\"v\">__FASTEST_WIND__</div></div>
                     <div class=\"metric\"><div class=\"k\">Today's Strongest Gust</div><div class=\"v\">__STRONGEST_GUST__</div></div>
                 </div>
-                <div class=\"chart\">Wind chart: speed with gust overlay and observed vs forecast semantics.</div>
+                <div class=\"chart\">
+                    <div class=\"chart-title\">Wind speed trend with gust context</div>
+                    <div class=\"chart-note\">Observed hours transition into forecast hours at the current-hour boundary.</div>
+                    <div class=\"chart-ribbon\"><span class=\"chip obs\">Observed</span><span class=\"chip fcst\">Forecast</span></div>
+                    <div class=\"mini-bars\">
+                        <span class=\"bar obs\" style=\"height:42%\"></span><span class=\"bar obs\" style=\"height:55%\"></span><span class=\"bar obs\" style=\"height:46%\"></span><span class=\"bar obs\" style=\"height:62%\"></span><span class=\"bar obs\" style=\"height:51%\"></span><span class=\"bar obs\" style=\"height:66%\"></span><span class=\"bar fcst\" style=\"height:58%\"></span><span class=\"bar fcst\" style=\"height:72%\"></span><span class=\"bar fcst\" style=\"height:64%\"></span><span class=\"bar fcst\" style=\"height:78%\"></span><span class=\"bar fcst\" style=\"height:69%\"></span><span class=\"bar fcst\" style=\"height:74%\"></span>
+                    </div>
+                    <div class=\"axis-tags\"><span class=\"axis-tag left\">Y-axis: wind speed mph</span><span class=\"axis-tag\">X-axis: local hour</span></div>
+                </div>
                 <p class=\"legend\">Caption: wind cutoff evaluation uses configured kitty wind threshold.</p>
             </article>
             <article class=\"card span-6\">
@@ -604,7 +695,15 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
                     <div class=\"metric\"><div class=\"k\">Lowest AQI Today</div><div class=\"v\">__LOW_AQI__</div></div>
                     <div class=\"metric\"><div class=\"k\">Interpretation</div><div class=\"v\">__AQI_INTERP__</div></div>
                 </div>
-                <div class=\"chart\">AQI chart: observed vs forecast semantics.</div>
+                <div class=\"chart\">
+                    <div class=\"chart-title\">AQI trend with observed-to-forecast split</div>
+                    <div class=\"chart-note\">Trend readability is anchored to the same hour-boundary semantics as temperature and wind.</div>
+                    <div class=\"chart-ribbon\"><span class=\"chip obs\">Observed AQI</span><span class=\"chip fcst\">Forecast AQI</span></div>
+                    <div class=\"mini-bars\">
+                        <span class=\"bar aqi-bar obs\" style=\"height:40%\"></span><span class=\"bar aqi-bar obs\" style=\"height:48%\"></span><span class=\"bar aqi-bar obs\" style=\"height:45%\"></span><span class=\"bar aqi-bar obs\" style=\"height:53%\"></span><span class=\"bar aqi-bar obs\" style=\"height:50%\"></span><span class=\"bar aqi-bar obs\" style=\"height:57%\"></span><span class=\"bar aqi-bar fcst\" style=\"height:52%\"></span><span class=\"bar aqi-bar fcst\" style=\"height:59%\"></span><span class=\"bar aqi-bar fcst\" style=\"height:56%\"></span><span class=\"bar aqi-bar fcst\" style=\"height:63%\"></span><span class=\"bar aqi-bar fcst\" style=\"height:58%\"></span><span class=\"bar aqi-bar fcst\" style=\"height:61%\"></span>
+                    </div>
+                    <div class=\"axis-tags\"><span class=\"axis-tag left\">Y-axis: AQI scale</span><span class=\"axis-tag\">X-axis: local hour</span></div>
+                </div>
                 <p class=\"legend\">Caption: pollutant fields use source-missing semantics when unavailable.</p>
                 <h3 class=\"subheading\">Pollutant Breakdown</h3>
                 <table class=\"mini-table\">
@@ -643,7 +742,15 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
                     <div class=\"metric\"><div class=\"k\">Daylight Today</div><div class=\"v\">13h 55m (+3m)</div></div>
                     <div class=\"metric\"><div class=\"k\">Peak UV Index Today</div><div class=\"v\">__PEAK_UV__</div></div>
                 </div>
-                <div class=\"chart\">Brightness chart: UV and cloud dual-axis semantics.</div>
+                <div class=\"chart\">
+                    <div class=\"chart-title\">Brightness trend: UV and cloud dual-axis view</div>
+                    <div class=\"chart-note\">UV and cloud traces are read independently while sharing hourly alignment.</div>
+                    <div class=\"chart-ribbon\"><span class=\"chip uv-chip\">UV Index</span><span class=\"chip cloud-chip\">Cloud Cover %</span></div>
+                    <div class=\"mini-bars\">
+                        <span class=\"bar uv-bar\" style=\"height:10%\"></span><span class=\"bar cloud-bar\" style=\"height:56%\"></span><span class=\"bar uv-bar\" style=\"height:22%\"></span><span class=\"bar cloud-bar\" style=\"height:48%\"></span><span class=\"bar uv-bar\" style=\"height:45%\"></span><span class=\"bar cloud-bar\" style=\"height:38%\"></span><span class=\"bar uv-bar\" style=\"height:72%\"></span><span class=\"bar cloud-bar\" style=\"height:31%\"></span><span class=\"bar uv-bar\" style=\"height:66%\"></span><span class=\"bar cloud-bar\" style=\"height:42%\"></span><span class=\"bar uv-bar\" style=\"height:34%\"></span><span class=\"bar cloud-bar\" style=\"height:54%\"></span>
+                    </div>
+                    <div class=\"axis-tags\"><span class=\"axis-tag right\">Left axis: UV index</span><span class=\"axis-tag left\">Right axis: cloud cover %</span></div>
+                </div>
                 <p class=\"legend\"><span class=\"uv\">━ UV Index</span> (left axis) and <span class=\"cloud\">█ Cloud Cover %</span> (right axis).</p>
             </article>
 
