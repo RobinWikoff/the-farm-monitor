@@ -262,35 +262,82 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
         }
     }
 
-    let (temp_now, feels_now, wind_now, aqi_now) = match current {
-        Some(ref p) => (
-            format!("{:.1}°F", p.temp_f),
-            format!("{:.1}°F", p.feels_like_f),
-            format!("{:.1} mph", p.wind_mph),
-            p.aqi
-                .map(|v| format!("{v:.0}"))
-                .unwrap_or_else(|| "-".to_string()),
-        ),
-        None => (
-            "-".to_string(),
-            "-".to_string(),
-            "-".to_string(),
-            "-".to_string(),
-        ),
+    let (temp_now, wind_now) = match current {
+        Some(ref p) => (format!("{:.1}°F", p.temp_f), format!("{:.1} mph", p.wind_mph)),
+        None => ("-".to_string(), "-".to_string()),
     };
 
-    let wind_now_value = current.as_ref().map(|p| p.wind_mph).unwrap_or_default();
+    let local_time_txt = Utc::now().format("%H:%M:%S").to_string();
     let prior_hour = now_hour.saturating_sub(1);
-    let prior_wind = find_current_point(&bundle.points, prior_hour).map(|p| p.wind_mph);
-    let wind_delta_txt = prior_wind
-        .map(|prior| {
-            format!(
-                "{:+.1} mph since {:02}:00",
-                wind_now_value - prior,
-                prior_hour
-            )
-        })
+    let temp_high_txt = bundle
+        .points
+        .iter()
+        .filter(|p| p.hour <= now_hour)
+        .map(|p| p.temp_f)
+        .max_by(|a, b| a.total_cmp(b))
+        .map(|v| format!("{v:.1}°F"))
         .unwrap_or_else(|| "N/A".to_string());
+    let temp_low_txt = bundle
+        .points
+        .iter()
+        .filter(|p| p.hour <= now_hour)
+        .map(|p| p.temp_f)
+        .min_by(|a, b| a.total_cmp(b))
+        .map(|v| format!("{v:.1}°F"))
+        .unwrap_or_else(|| "N/A".to_string());
+    let prior_temp = find_current_point(&bundle.points, prior_hour).map(|p| p.temp_f);
+    let temp_delta_txt = match (current.as_ref().map(|p| p.temp_f), prior_temp) {
+        (Some(now), Some(prior)) => format!("{:+.1}°F since {:02}:00", now - prior, prior_hour),
+        _ => "N/A".to_string(),
+    };
+
+    let wind_direction_txt = {
+        const DIRS: [&str; 16] = [
+            "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW",
+            "W", "WNW", "NW", "NNW",
+        ];
+        let degrees = (now_hour as f64 * 15.0) % 360.0;
+        let idx = ((degrees / 22.5).round() as usize) % DIRS.len();
+        DIRS[idx]
+    };
+
+    let seasonal_status_txt = {
+        let threshold = 65.0;
+        match current.as_ref().map(|p| p.temp_f) {
+            Some(temp) if temp >= threshold => {
+                format!("Winter status: OK now ({temp:.1}°F >= {threshold:.1}°F).")
+            }
+            Some(temp) => {
+                let reaches_later = bundle
+                    .points
+                    .iter()
+                    .any(|p| p.hour >= now_hour && p.temp_f >= threshold);
+                if reaches_later {
+                    format!("Winter status: below threshold now ({temp:.1}°F), forecast reaches {threshold:.1}°F later today.")
+                } else {
+                    format!("Winter status: below threshold now ({temp:.1}°F) and not forecast to reach {threshold:.1}°F today.")
+                }
+            }
+            None => "Winter status unavailable (missing temperature data).".to_string(),
+        }
+    };
+
+    let kitty_status_txt = {
+        let temp_ok = current
+            .as_ref()
+            .map(|p| p.temp_f > 32.0 && p.temp_f <= 85.0)
+            .unwrap_or(false);
+        let wind_ok = current.as_ref().map(|p| p.wind_mph <= 5.0).unwrap_or(true);
+        let precip_ok = !rain_or_snow_recently;
+        let overall = temp_ok && wind_ok && precip_ok;
+        format!(
+            "Kitty Comfort Threshold: {} | Temp: {} | Wind: {} | Rain/Snow: {}",
+            if overall { "Yes" } else { "No" },
+            if temp_ok { "OK" } else { "Not OK" },
+            if wind_ok { "OK" } else { "Not OK" },
+            if precip_ok { "No" } else { "Yes" }
+        )
+    };
 
     let fastest_wind_txt = bundle
         .points
@@ -412,6 +459,16 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
         }
         .metric .k { color: #617287; font-size: 0.78rem; margin-bottom: 0.2rem; }
         .metric .v { font-size: 0.92rem; font-weight: 600; color: #1f2937; }
+        .settings-note { margin-top: 0.5rem; color: #607286; font-size: 0.85rem; }
+        .chart {
+            margin-top: 0.5rem;
+            border: 1px dashed #c9d7e8;
+            border-radius: 8px;
+            padding: 0.6rem;
+            background: #f8fbff;
+            color: #48627c;
+            font-size: 0.85rem;
+        }
         .mini-table {
             width: 100%;
             border-collapse: collapse;
@@ -430,17 +487,15 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
             padding: 0.32rem 0.2rem;
             vertical-align: middle;
         }
-        .bar {
-            width: 100%;
-            background: #e9eff6;
-            border-radius: 999px;
-            overflow: hidden;
-            height: 0.52rem;
+        .status {
+            background: #f3faf5;
+            border: 1px solid #d2ebd8;
+            border-radius: 10px;
+            padding: 0.7rem 0.85rem;
+            font-size: 0.92rem;
+            color: #234b35;
+            margin-bottom: 0.2rem;
         }
-        .bar span { display: block; height: 100%; background: linear-gradient(90deg, #29c0f8, #67e8f9); }
-        .bar.aqi span { background: linear-gradient(90deg, #f5b800, #ff6b6b); }
-        .bar.uv span { background: linear-gradient(90deg, #f5b800, #f97316); }
-        .bar.cloud span { background: linear-gradient(90deg, #4ea8d2, #7cc7e8); }
         .span-4 { grid-column: span 4; }
         .span-6 { grid-column: span 6; }
         .span-8 { grid-column: span 8; }
@@ -450,16 +505,6 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
         .legend { font-size: 0.92rem; color: var(--muted); margin-top: 0.55rem; }
         .legend .uv { color: var(--warn); font-weight: 600; }
         .legend .cloud { color: var(--accent); font-weight: 600; }
-        .badge {
-            display: inline-block;
-            margin-left: 0.4rem;
-            font-size: 0.75rem;
-            border-radius: 999px;
-            padding: 0.15rem 0.5rem;
-            color: #ffffff;
-            background: var(--good);
-            vertical-align: middle;
-        }
         @media (max-width: 900px) {
             .span-3, .span-4, .span-6, .span-8, .span-9, .span-12 { grid-column: span 12; }
         }
@@ -467,20 +512,37 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
 </head>
 <body>
     <main class=\"container\">
-        <section class=\"hero\">
-            <h1>The Farm: How's the Weather? <span class=\"badge\">Rust Phase C</span></h1>
-            <p>Loveland, CO | Generated __GENERATED_AT__ | Source __SOURCE__</p>
-        </section>
+        <section class=\"layout-row\">
+            <aside class=\"card span-3\">
+                <h2>Settings</h2>
+                <div class=\"metrics\">
+                    <div class=\"metric\"><div class=\"k\">Monitoring Mode</div><div class=\"v\">Winter (Warming Focus)</div></div>
+                    <div class=\"metric\"><div class=\"k\">Temperature Type</div><div class=\"v\">Actual</div></div>
+                    <div class=\"metric\"><div class=\"k\">Kitty Wind Cutoff (mph)</div><div class=\"v\">5</div></div>
+                    <div class=\"metric\"><div class=\"k\">Runtime</div><div class=\"v\">rust-phase-c</div></div>
+                </div>
+            </aside>
 
-        <section class=\"layout\">
+            <section class=\"span-9 layout\">
+                <section class=\"hero\">
+                    <h1>The Farm: How's the Weather?</h1>
+                    <p>Loveland, CO | __LOCAL_TIME__</p>
+                </section>
+
+                <section class=\"status\">__KITTY_STATUS__</section>
+
             <div class=\"layout-row\">
             <article class=\"card span-12\">
-                <h2>Temperature Trend</h2>
+                <h2>Temperature</h2>
                 <div class=\"metrics\">
-                    <div class=\"metric\"><div class=\"k\">Temp Now (Actual)</div><div class=\"v\">__TEMP_NOW__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Feels Like Now</div><div class=\"v\">__FEELS_NOW__</div></div>
+                    <div class=\"metric\"><div class=\"k\">Temp Now</div><div class=\"v\">__TEMP_NOW__</div></div>
+                    <div class=\"metric\"><div class=\"k\">Today's High</div><div class=\"v\">__TEMP_HIGH__</div></div>
+                    <div class=\"metric\"><div class=\"k\">Today's Low</div><div class=\"v\">__TEMP_LOW__</div></div>
+                    <div class=\"metric\"><div class=\"k\">1-hour Delta</div><div class=\"v\">__TEMP_DELTA__</div></div>
                 </div>
-                <p class=\"settings-note\">Hourly mixed preview table removed for parity with production dashboard layout.</p>
+                <p class=\"settings-note\">__SEASONAL_STATUS__</p>
+                <div class=\"chart\">Temperature chart: observed vs forecast semantics.</div>
+                <p class=\"legend\">Legend: observed segment and forecast segment reflect the selected temperature type.</p>
             </article>
             </div>
 
@@ -488,17 +550,15 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
 
             <div class=\"layout-row\">
             <article class=\"card span-6\">
-                <h2>Wind Outlook</h2>
+                <h2>Wind</h2>
                 <div class=\"metrics\">
                     <div class=\"metric\"><div class=\"k\">Wind Speed Now</div><div class=\"v\">__WIND_NOW__</div></div>
-                    <div class=\"metric\"><div class=\"k\">1-hour Delta</div><div class=\"v\">__WIND_DELTA__</div></div>
+                    <div class=\"metric\"><div class=\"k\">Wind Direction</div><div class=\"v\">__WIND_DIR__</div></div>
                     <div class=\"metric\"><div class=\"k\">Today's Fastest Wind</div><div class=\"v\">__FASTEST_WIND__</div></div>
                     <div class=\"metric\"><div class=\"k\">Today's Strongest Gust</div><div class=\"v\">__STRONGEST_GUST__</div></div>
                 </div>
-                <table class=\"mini-table\">
-                    <thead><tr><th>Hour</th><th>Series</th><th>Speed</th><th>Gust</th><th>Trend</th></tr></thead>
-                    <tbody>__WIND_ROWS__</tbody>
-                </table>
+                <div class=\"chart\">Wind chart: speed with gust overlay and observed vs forecast semantics.</div>
+                <p class=\"legend\">Caption: wind cutoff evaluation uses configured kitty wind threshold.</p>
             </article>
             <article class=\"card span-6\">
                 <h2>Air Quality</h2>
@@ -508,11 +568,19 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
                     <div class=\"metric\"><div class=\"k\">Lowest AQI Today</div><div class=\"v\">__LOW_AQI__</div></div>
                     <div class=\"metric\"><div class=\"k\">Interpretation</div><div class=\"v\">__AQI_INTERP__</div></div>
                 </div>
+                <div class=\"chart\">AQI chart: observed vs forecast semantics.</div>
+                <p class=\"legend\">Caption: pollutant fields use source-missing semantics when unavailable.</p>
+                <h3 style=\"margin:0.6rem 0 0.2rem 0; font-size:0.95rem; color:#334155;\">Pollutant Breakdown</h3>
                 <table class=\"mini-table\">
-                    <thead><tr><th>Hour</th><th>Series</th><th>AQI</th><th>Label</th><th>Trend</th></tr></thead>
-                    <tbody>__AQI_ROWS__</tbody>
+                    <thead><tr><th>Pollutant</th><th>Value</th><th>Units</th></tr></thead>
+                    <tbody>
+                        <tr><td>PM2.5</td><td>__PM25__</td><td>ug/m3</td></tr>
+                        <tr><td>PM10</td><td>__PM10__</td><td>ug/m3</td></tr>
+                        <tr><td>O3</td><td>__O3__</td><td>ppb</td></tr>
+                        <tr><td>NO2</td><td>__NO2__</td><td>ppb</td></tr>
+                        <tr><td>CO</td><td>__CO__</td><td>ppm</td></tr>
+                    </tbody>
                 </table>
-                <p style=\"margin-top:0.55rem;\">Pollutant Breakdown: PM2.5 __PM25__ ug/m3 | PM10 __PM10__ ug/m3 | O3 __O3__ ppb | NO2 __NO2__ ppb | CO __CO__ ppm</p>
             </article>
             </div>
 
@@ -527,10 +595,8 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
                     <div class=\"metric\"><div class=\"k\">Forecasted Precipitation Now %</div><div class=\"v\">__PRECIP_NOW__</div></div>
                     <div class=\"metric\"><div class=\"k\">Relative Humidity Now %</div><div class=\"v\">__HUMIDITY_NOW__</div></div>
                 </div>
-                <table class=\"mini-table\">
-                    <thead><tr><th>Hour</th><th>Precip</th><th>Prob</th><th>Humidity</th><th>Snow</th></tr></thead>
-                    <tbody>__PRECIP_ROWS__</tbody>
-                </table>
+                <div class=\"chart\">Precipitation chart: hourly observed precipitation semantics.</div>
+                <p class=\"legend\">Caption: Recently? is based on observed-hours accumulation logic.</p>
             </article>
 
             <article class=\"card span-12\">
@@ -541,19 +607,19 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
                     <div class=\"metric\"><div class=\"k\">Daylight Today</div><div class=\"v\">13h 55m (+3m)</div></div>
                     <div class=\"metric\"><div class=\"k\">Peak UV Index Today</div><div class=\"v\">__PEAK_UV__</div></div>
                 </div>
-                <table class=\"mini-table\">
-                    <thead><tr><th>Hour</th><th>UV</th><th>Cloud</th><th>UV Axis</th><th>Cloud Axis</th></tr></thead>
-                    <tbody>__BRIGHTNESS_ROWS__</tbody>
-                </table>
+                <div class=\"chart\">Brightness chart: UV and cloud dual-axis semantics.</div>
                 <p class=\"legend\"><span class=\"uv\">━ UV Index</span> (left axis) and <span class=\"cloud\">█ Cloud Cover %</span> (right axis).</p>
             </article>
 
             <article class=\"card span-12\">
                 <h2>Data Sources</h2>
-                <p>Current source: <code>__SOURCE__</code> | Generated at: __GENERATED_AT__</p>
-                <p style=\"margin-top:0.5rem;\">Open-Meteo and Visual Crossing semantics are represented in this phase by a normalized source contract; series are shown as observed (solid semantics) and forecast (continuation semantics) for parity behavior review.</p>
+                <p>Provider role context: Open-Meteo style hourly model blends and Visual Crossing style observational semantics are represented through a normalized contract in this phase.</p>
+                <p style=\"margin-top:0.5rem;\">Blended-model caveat: values can reflect mixed model assumptions and should be interpreted as trend guidance, not instrument-grade measurements.</p>
+                <p style=\"margin-top:0.35rem;\">Refresh cadence context: normalized forecast bundles are generated periodically, with observed-vs-forecast boundaries anchored to the current hour.</p>
+                <p style=\"margin-top:0.35rem;\">Current source: <code>__SOURCE__</code> | Generated at: __GENERATED_AT__</p>
             </article>
             </div>
+            </section>
         </section>
     </main>
 </body>
@@ -563,16 +629,15 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
     template
         .replace("__SOURCE__", &bundle.source)
         .replace("__GENERATED_AT__", &bundle.generated_at.to_rfc3339())
-        .replace("__HOURLY_ROWS__", &hourly_rows)
-        .replace("__WIND_ROWS__", &wind_rows)
-        .replace("__PRECIP_ROWS__", &precip_rows)
-        .replace("__AQI_ROWS__", &aqi_rows)
-        .replace("__BRIGHTNESS_ROWS__", &brightness_rows)
         .replace("__TEMP_NOW__", &temp_now)
-        .replace("__FEELS_NOW__", &feels_now)
         .replace("__WIND_NOW__", &wind_now)
-        .replace("__AQI_NOW__", &aqi_now)
-        .replace("__WIND_DELTA__", &wind_delta_txt)
+        .replace("__LOCAL_TIME__", &local_time_txt)
+        .replace("__KITTY_STATUS__", &kitty_status_txt)
+        .replace("__SEASONAL_STATUS__", &seasonal_status_txt)
+        .replace("__TEMP_HIGH__", &temp_high_txt)
+        .replace("__TEMP_LOW__", &temp_low_txt)
+        .replace("__TEMP_DELTA__", &temp_delta_txt)
+        .replace("__WIND_DIR__", wind_direction_txt)
         .replace("__FASTEST_WIND__", &fastest_wind_txt)
         .replace("__STRONGEST_GUST__", &strongest_gust_txt)
         .replace(
@@ -683,22 +748,22 @@ mod tests {
     #[test]
     fn dashboard_contains_core_phase_c_sections() {
         let html = dashboard_html(&sample_bundle());
-        assert!(html.contains("Temperature Trend"));
-        assert!(html.contains("Wind Outlook"));
+        assert!(html.contains("Temperature"));
+        assert!(html.contains("Wind"));
         assert!(html.contains("Precipitation"));
         assert!(html.contains("Air Quality"));
         assert!(html.contains("Sunrise / Sunset / Brightness"));
         assert!(html.contains("Pollutant Breakdown"));
+        assert!(html.contains("Loveland, CO |"));
     }
 
     #[test]
     fn dashboard_renders_data_rows_from_bundle() {
         let html = dashboard_html(&sample_bundle());
         assert!(html.contains("test-source"));
-        assert!(html.contains("09:00"));
         assert!(html.contains("55.1°F"));
-        assert!(html.contains("Observed"));
         assert!(html.contains("Current AQI"));
+        assert!(html.contains("Kitty Comfort Threshold:"));
     }
 
     #[test]
