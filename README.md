@@ -12,9 +12,13 @@ Local anchor file:
 
 - [docs/feature-requirements.md](docs/feature-requirements.md)
 
-Architecture diagrams and narrative docs (C4 model) are documented in:
+Architecture diagrams and academic C4/UOR materials are archived in:
 
-- [docs/c4/README.md](docs/c4/README.md)
+- [docs/archive/2026-05-academic-archive-pass](docs/archive/2026-05-academic-archive-pass)
+
+Canonical architecture narrative for current parity work is maintained in wiki:
+
+- https://github.com/RobinWikoff/the-farm-monitor/wiki/Academic-Archive
 
 Canonical operations reference is documented in the wiki:
 
@@ -64,9 +68,8 @@ Security note:
 ### Documentation Maintenance Policy
 
 - Update the wiki feature page in the same PR whenever behavior changes in weather or memo features.
-- Run `./scripts/c4_docs_workflow.sh --range HEAD~1..HEAD` and follow the generated report when architecture/components/dependencies change.
-- Update [docs/c4/README.md](docs/c4/README.md) (and impacted C4 pages) when the workflow indicates C4 updates are required.
-- Update architecture narrative in the wiki page `Model-Architecture-and-Behavior`.
+- C4/UOR materials are archived for academic reference; promote from archive only when explicitly needed for implementation decisions.
+- Update architecture narrative in wiki pages only when archived academic material is promoted back into active use.
 - If no feature behavior changed, include: `No feature-doc changes required` in the PR description.
 - If no architecture changed, include: `No C4 changes required` in the PR description.
 - Keep changelog and tests aligned with any feature logic changes.

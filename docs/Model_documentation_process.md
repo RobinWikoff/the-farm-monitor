@@ -6,10 +6,12 @@ Canonical model documentation governance is maintained in wiki:
 
 This local file is intentionally limited to repository-local workflow glue.
 
-## Local C4 Workflow Hooks
-- Run C4 doc impact check:
-  - ./scripts/c4_docs_workflow.sh --range HEAD~1..HEAD
-- If architecture-relevant files changed, update docs/c4/* source files and sync wiki architecture narrative.
+## Local Academic Archive Notes
+- C4 and UOR source materials are archived under:
+  - docs/archive/2026-05-academic-archive-pass/
+- The legacy C4 workflow scripts are archived under:
+  - scripts/archive/2026-05-academic-archive-pass/
+- Promote archived materials back into active workflows only when required for in-flight implementation decisions.
 
 ## Local Policy
 - Treat wiki pages as canonical narrative and process references.
