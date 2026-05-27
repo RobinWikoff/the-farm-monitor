@@ -428,7 +428,7 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
         }
         .layout-row {
             display: grid;
-            grid-template-columns: repeat(12, minmax(0, 1fr));
+            grid-template-columns: 1fr;
             gap: 0.9rem;
         }
         .stack {
@@ -603,12 +603,12 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
             margin-bottom: 0.2rem;
             box-shadow: var(--shadow);
         }
-        .span-4 { grid-column: span 4; }
-        .span-6 { grid-column: span 6; }
-        .span-8 { grid-column: span 8; }
-        .span-12 { grid-column: span 12; }
-        .span-3 { grid-column: span 3; }
-        .span-9 { grid-column: span 9; }
+        .span-4 { grid-column: span 1; }
+        .span-6 { grid-column: span 1; }
+        .span-8 { grid-column: span 1; }
+        .span-12 { grid-column: span 1; }
+        .span-3 { grid-column: span 1; }
+        .span-9 { grid-column: span 1; }
         .legend { font-size: 0.92rem; color: var(--muted); margin-top: 0.55rem; }
         .legend .uv { color: var(--warn); font-weight: 600; }
         .subheading {
@@ -627,7 +627,7 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
         .legend .cloud { color: var(--accent); font-weight: 600; }
         @media (max-width: 900px) {
             .metrics { grid-template-columns: 1fr; }
-            .span-3, .span-4, .span-6, .span-8, .span-9, .span-12 { grid-column: span 12; }
+            .span-3, .span-4, .span-6, .span-8, .span-9, .span-12 { grid-column: span 1; }
         }
     </style>
 </head>
