@@ -9,5 +9,8 @@ __pycache__/
 .streamlit/guardrails/
 .streamlit/hist_cache/
 
+# Rust dashboard local cache artifacts
+rust/.streamlit/rust_cache/
+
 # Local wiki checkout (separate git repo)
 the-farm-monitor.wiki/
