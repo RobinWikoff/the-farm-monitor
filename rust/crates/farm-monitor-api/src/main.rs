@@ -340,40 +340,62 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
     <title>The Farm Monitor (Rust)</title>
     <style>
         :root {
-            --bg: #0e1117;
-            --panel: #161b22;
-            --text: #e6edf3;
-            --muted: #9da7b3;
-            --accent: #22d3ee;
-            --good: #9ad162;
-            --warn: #f5b800;
+            --bg: #f7f9fc;
+            --panel: #ffffff;
+            --text: #1f2937;
+            --muted: #5f6b7a;
+            --accent: #2563eb;
+            --good: #22a06b;
+            --warn: #d97706;
+            --border: #dbe3ee;
         }
         * { box-sizing: border-box; }
         body {
             margin: 0;
             font-family: \"Segoe UI\", Tahoma, Geneva, Verdana, sans-serif;
-            background: radial-gradient(circle at 20% 0%, #1d2735, var(--bg) 45%);
+            background: var(--bg);
             color: var(--text);
         }
-        .container { max-width: 1200px; margin: 0 auto; padding: 1.25rem; }
-        .hero {
-            background: linear-gradient(135deg, #142033, #101827);
-            border: 1px solid #273244;
-            border-radius: 14px;
-            padding: 1rem 1.25rem;
-            margin-bottom: 1rem;
+        .container {
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 1.25rem 1rem 2rem;
         }
-        .hero h1 { margin: 0 0 0.35rem 0; font-size: 1.45rem; }
+        .hero {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.95rem 1.05rem;
+            margin-bottom: 0.9rem;
+        }
+        .hero h1 { margin: 0 0 0.35rem 0; font-size: 1.3rem; }
         .hero p { margin: 0; color: var(--muted); }
-        .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 0.9rem; }
+        .layout {
+            display: grid;
+            gap: 0.9rem;
+        }
+        .layout-row {
+            display: grid;
+            grid-template-columns: repeat(12, minmax(0, 1fr));
+            gap: 0.9rem;
+        }
+        .stack {
+            display: grid;
+            gap: 0.9rem;
+        }
+        .section-divider {
+            border: 0;
+            border-top: 1px solid var(--border);
+            margin: 0.2rem 0 0.4rem;
+        }
         .card {
             background: var(--panel);
-            border: 1px solid #2a3342;
-            border-radius: 12px;
-            padding: 0.9rem;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.85rem 0.95rem;
             min-height: 120px;
         }
-        .card h2 { margin: 0 0 0.5rem 0; font-size: 1rem; }
+        .card h2 { margin: 0 0 0.5rem 0; font-size: 1.02rem; }
         .card p { margin: 0; color: var(--muted); line-height: 1.4; }
         .metrics {
             display: grid;
@@ -383,13 +405,13 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
             margin-bottom: 0.65rem;
         }
         .metric {
-            border: 1px solid #2f3a4c;
-            border-radius: 9px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
             padding: 0.45rem 0.55rem;
-            background: #111a27;
+            background: #fbfdff;
         }
-        .metric .k { color: #95a7be; font-size: 0.78rem; margin-bottom: 0.2rem; }
-        .metric .v { font-size: 0.92rem; font-weight: 600; color: #dbe9f6; }
+        .metric .k { color: #617287; font-size: 0.78rem; margin-bottom: 0.2rem; }
+        .metric .v { font-size: 0.92rem; font-weight: 600; color: #1f2937; }
         .mini-table {
             width: 100%;
             border-collapse: collapse;
@@ -398,19 +420,19 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
         }
         .mini-table th {
             text-align: left;
-            color: #97a8bc;
-            border-bottom: 1px solid #2b384a;
+            color: #607286;
+            border-bottom: 1px solid var(--border);
             padding: 0.3rem 0.2rem;
         }
         .mini-table td {
-            border-bottom: 1px solid #223044;
-            color: #d5e2ef;
+            border-bottom: 1px solid #edf1f7;
+            color: #374151;
             padding: 0.32rem 0.2rem;
             vertical-align: middle;
         }
         .bar {
             width: 100%;
-            background: #172131;
+            background: #e9eff6;
             border-radius: 999px;
             overflow: hidden;
             height: 0.52rem;
@@ -423,6 +445,8 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
         .span-6 { grid-column: span 6; }
         .span-8 { grid-column: span 8; }
         .span-12 { grid-column: span 12; }
+        .span-3 { grid-column: span 3; }
+        .span-9 { grid-column: span 9; }
         .legend { font-size: 0.92rem; color: var(--muted); margin-top: 0.55rem; }
         .legend .uv { color: var(--warn); font-weight: 600; }
         .legend .cloud { color: var(--accent); font-weight: 600; }
@@ -432,12 +456,12 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
             font-size: 0.75rem;
             border-radius: 999px;
             padding: 0.15rem 0.5rem;
-            color: #09101a;
+            color: #ffffff;
             background: var(--good);
             vertical-align: middle;
         }
         @media (max-width: 900px) {
-            .span-4, .span-6, .span-8, .span-12 { grid-column: span 12; }
+            .span-3, .span-4, .span-6, .span-8, .span-9, .span-12 { grid-column: span 12; }
         }
     </style>
 </head>
@@ -448,8 +472,9 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
             <p>Live model-backed preview using normalized forecast data (__SOURCE__).</p>
         </section>
 
-        <section class=\"grid\">
-            <article class=\"card span-8\">
+        <section class=\"layout\">
+            <div class=\"layout-row\">
+            <article class=\"card span-9\">
                 <h2>Temperature Trend</h2>
                 <p>Preview rows (hour, temp, wind, AQI, UV):</p>
                 <table class=\"mini-table\">
@@ -457,14 +482,18 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
                     <tbody>__HOURLY_ROWS__</tbody>
                 </table>
             </article>
-            <article class=\"card span-4\">
+            <article class=\"card span-3\">
                 <h2>Current Conditions</h2>
                 <p><strong>Now Temp:</strong> __TEMP_NOW__</p>
                 <p><strong>Feels Like:</strong> __FEELS_NOW__</p>
                 <p><strong>Wind:</strong> __WIND_NOW__</p>
                 <p><strong>AQI:</strong> __AQI_NOW__</p>
             </article>
+            </div>
 
+            <hr class=\"section-divider\" />
+
+            <div class=\"layout-row\">
             <article class=\"card span-6\">
                 <h2>Wind Outlook</h2>
                 <div class=\"metrics\">
@@ -478,7 +507,6 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
                     <tbody>__WIND_ROWS__</tbody>
                 </table>
             </article>
-
             <article class=\"card span-6\">
                 <h2>Air Quality</h2>
                 <div class=\"metrics\">
@@ -493,7 +521,11 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
                 </table>
                 <p style=\"margin-top:0.55rem;\">Pollutant Breakdown: PM2.5 __PM25__ ug/m3 | PM10 __PM10__ ug/m3 | O3 __O3__ ppb | NO2 __NO2__ ppb | CO __CO__ ppm</p>
             </article>
+            </div>
 
+            <hr class=\"section-divider\" />
+
+            <div class=\"stack\">
             <article class=\"card span-12\">
                 <h2>Precipitation</h2>
                 <div class=\"metrics\">
@@ -526,8 +558,9 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
             <article class=\"card span-12\">
                 <h2>Data Sources</h2>
                 <p>Current source: <code>__SOURCE__</code> | Generated at: __GENERATED_AT__</p>
-                <p style=\"margin-top:0.5rem;\">Open-Meteo and Visual Crossing semantics are represented in this phase by a normalized source contract; series are shown as observed and forecast for parity behavior review.</p>
+                <p style=\"margin-top:0.5rem;\">Open-Meteo and Visual Crossing semantics are represented in this phase by a normalized source contract; series are shown as observed (solid semantics) and forecast (continuation semantics) for parity behavior review.</p>
             </article>
+            </div>
         </section>
     </main>
 </body>

@@ -127,6 +127,33 @@ def wind_degree_to_cardinal(degrees: float | None) -> str:
     return dirs[idx]
 
 
+def _finite_float(value: Any) -> float | None:
+    """Return a finite float value or None for missing/non-finite inputs."""
+    if value is None:
+        return None
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(f):
+        return None
+    return f
+
+
+def _rounded_if_finite(value: Any, digits: int) -> float | None:
+    f = _finite_float(value)
+    if f is None:
+        return None
+    return round(f, digits)
+
+
+def _int_if_finite(value: Any) -> int | None:
+    f = _finite_float(value)
+    if f is None:
+        return None
+    return int(round(f))
+
+
 def _get_vc_api_key() -> str:
     """Return Visual Crossing API key from Streamlit secrets or environment."""
     env_key = os.getenv("VISUAL_CROSSING_API_KEY")
@@ -872,7 +899,7 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
                         "PrecipProb": round(precipprob, 1) if precipprob is not None else None,
                         "Humidity": round(humidity, 1) if humidity is not None else None,
                         "SnowIn": round(snow, 2) if snow is not None else None,
-                        "AQI": int(round(aqi)) if aqi is not None else None,
+                            "AQI": _int_if_finite(aqi),
                         "PM2_5": pm25,
                         "PM10": pm10,
                         "O3": o3,
@@ -880,7 +907,7 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
                         "SO2": so2,
                         "CO": co,
                         "MainUS": mainus,
-                        "UVIndex": int(round(uvindex)) if uvindex is not None else None,
+                            "UVIndex": _int_if_finite(uvindex),
                         "CloudCover": round(cloudcover, 1) if cloudcover is not None else None,
                         "SolarRadiation": round(solarradiation, 1)
                         if solarradiation is not None
@@ -961,17 +988,17 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
         live_solarradiation = forecast_df.iloc[-1]["SolarRadiation"]
 
     live_temp = {
-        "Actual": round(live_actual, 1) if live_actual is not None else None,
-        "FeelsLike": round(live_feelslike, 1) if live_feelslike is not None else None,
-        "WindSpeed": round(live_windspeed, 1) if live_windspeed is not None else None,
-        "WindGust": round(live_windgust, 1) if live_windgust is not None else None,
-        "WindDeg": round(live_winddeg, 1) if live_winddeg is not None else None,
-        "WindDir": wind_degree_to_cardinal(live_winddeg) if live_winddeg is not None else "Unknown",
-        "PrecipIn": round(live_precip, 2) if live_precip is not None else None,
-        "PrecipProb": round(live_precipprob, 1) if live_precipprob is not None else None,
-        "Humidity": round(live_humidity, 1) if live_humidity is not None else None,
-        "SnowIn": round(live_snow, 2) if live_snow is not None else None,
-        "AQI": int(round(live_aqi)) if live_aqi is not None else None,
+        "Actual": _rounded_if_finite(live_actual, 1),
+        "FeelsLike": _rounded_if_finite(live_feelslike, 1),
+        "WindSpeed": _rounded_if_finite(live_windspeed, 1),
+        "WindGust": _rounded_if_finite(live_windgust, 1),
+        "WindDeg": _rounded_if_finite(live_winddeg, 1),
+        "WindDir": wind_degree_to_cardinal(live_winddeg) if _finite_float(live_winddeg) is not None else "Unknown",
+        "PrecipIn": _rounded_if_finite(live_precip, 2),
+        "PrecipProb": _rounded_if_finite(live_precipprob, 1),
+        "Humidity": _rounded_if_finite(live_humidity, 1),
+        "SnowIn": _rounded_if_finite(live_snow, 2),
+        "AQI": _int_if_finite(live_aqi),
         "PM2_5": live_pm25,
         "PM10": live_pm10,
         "O3": live_o3,
@@ -979,23 +1006,21 @@ def fetch_forecast_and_current(vc_api_key: str) -> tuple[pd.DataFrame, dict]:
         "SO2": live_so2,
         "CO": live_co,
         "MainUS": live_mainus,
-        "UVIndex": int(round(live_uvindex)) if live_uvindex is not None else None,
-        "CloudCover": round(live_cloudcover, 1) if live_cloudcover is not None else None,
-        "SolarRadiation": round(live_solarradiation, 1)
-        if live_solarradiation is not None
-        else None,
+        "UVIndex": _int_if_finite(live_uvindex),
+        "CloudCover": _rounded_if_finite(live_cloudcover, 1),
+        "SolarRadiation": _rounded_if_finite(live_solarradiation, 1),
         "Sunrise": today_sunrise,
         "Sunset": today_sunset,
-        "UVIndexMax": int(round(today_uvindex_max)) if today_uvindex_max is not None else None,
+        "UVIndexMax": _int_if_finite(today_uvindex_max),
     }
 
     return forecast_df, live_temp
 
 
 def aqi_interpretation(aqi: float | int | None) -> str:
-    if aqi is None:
+    value = _finite_float(aqi)
+    if value is None:
         return "Unavailable"
-    value = float(aqi)
     if value <= 50:
         return "Good"
     if value <= 100:
@@ -1011,9 +1036,9 @@ def aqi_interpretation(aqi: float | int | None) -> str:
 
 def uv_interpretation(uv: float | int | None) -> str:
     """Return a plain-English UV exposure category."""
-    if uv is None:
+    v = _finite_float(uv)
+    if v is None:
         return "Unavailable"
-    v = float(uv)
     if v <= 2:
         return "Low"
     if v <= 5:
@@ -2590,12 +2615,13 @@ def run_app() -> None:
     air_actual = air_df[air_df["Hour"] <= current_hour].copy()
     air_actual_values = air_actual["AQI"].dropna()
 
-    if live_aqi is None and not air_actual_values.empty:
+    live_aqi_f = _finite_float(live_aqi)
+    if live_aqi_f is None and not air_actual_values.empty:
         current_aqi = float(air_actual.sort_values("Hour").iloc[-1]["AQI"])
-    elif live_aqi is None:
+    elif live_aqi_f is None:
         current_aqi = None
     else:
-        current_aqi = float(live_aqi)
+        current_aqi = live_aqi_f
 
     if air_actual_values.empty:
         highest_aqi = None
@@ -2749,8 +2775,9 @@ def run_app() -> None:
             )
     if peak_uv is None:
         day_max = live_temp.get("UVIndexMax")
-        if day_max is not None:
-            peak_uv = int(day_max)
+        day_max_f = _finite_float(day_max)
+        if day_max_f is not None:
+            peak_uv = int(day_max_f)
 
     b1, b2, b3, b4 = st.columns(4)
     b1.metric(
