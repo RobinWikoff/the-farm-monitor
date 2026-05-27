@@ -383,10 +383,10 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
     let co = (current_aqi_for_pollutants / 90.0).max(0.2);
 
     let template = r#"<!doctype html>
-<html lang=\"en\">
+<html lang="en">
 <head>
-    <meta charset=\"utf-8\" />
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>The Farm Monitor (Rust)</title>
     <style>
         :root {
@@ -403,7 +403,7 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
         * { box-sizing: border-box; }
         body {
             margin: 0;
-            font-family: \"Inter\", \"Segoe UI\", Tahoma, Geneva, Verdana, sans-serif;
+            font-family: "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
             background: var(--bg);
             color: var(--text);
         }
@@ -541,6 +541,8 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
             background: #ffffff;
         }
         .bar {
+            display: block;
+            width: 100%;
             border-radius: 4px 4px 2px 2px;
             background: #a9c2e9;
             min-height: 22%;
@@ -630,83 +632,83 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
     </style>
 </head>
 <body>
-    <main class=\"container\">
-        <section class=\"layout-row\">
-            <aside class=\"card span-3\">
+    <main class="container">
+        <section class="layout-row">
+            <aside class="card span-3">
                 <h2>Settings</h2>
-                <div class=\"metrics\">
-                    <div class=\"metric\"><div class=\"k\">Monitoring Mode</div><div class=\"v\">Winter (Warming Focus)</div></div>
-                    <div class=\"metric\"><div class=\"k\">Temperature Type</div><div class=\"v\">Actual</div></div>
-                    <div class=\"metric\"><div class=\"k\">Kitty Wind Cutoff (mph)</div><div class=\"v\">5</div></div>
-                    <div class=\"metric\"><div class=\"k\">Runtime</div><div class=\"v\">rust-phase-c</div></div>
+                <div class="metrics">
+                    <div class="metric"><div class="k">Monitoring Mode</div><div class="v">Winter (Warming Focus)</div></div>
+                    <div class="metric"><div class="k">Temperature Type</div><div class="v">Actual</div></div>
+                    <div class="metric"><div class="k">Kitty Wind Cutoff (mph)</div><div class="v">5</div></div>
+                    <div class="metric"><div class="k">Runtime</div><div class="v">rust-phase-c</div></div>
                 </div>
             </aside>
 
-            <section class=\"span-9 layout\">
-                <section class=\"hero\">
+            <section class="span-9 layout">
+                <section class="hero">
                     <h1>The Farm: How's the Weather?</h1>
                     <p>Loveland, CO | __LOCAL_TIME__</p>
                 </section>
 
-                <section class=\"status\">__KITTY_STATUS__</section>
+                <section class="status">__KITTY_STATUS__</section>
 
-            <div class=\"layout-row\">
-            <article class=\"card span-12\">
+            <div class="layout-row">
+            <article class="card span-12">
                 <h2>Temperature</h2>
-                <div class=\"metrics\">
-                    <div class=\"metric\"><div class=\"k\">Temp Now</div><div class=\"v\">__TEMP_NOW__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Today's High</div><div class=\"v\">__TEMP_HIGH__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Today's Low</div><div class=\"v\">__TEMP_LOW__</div></div>
-                    <div class=\"metric\"><div class=\"k\">1-hour Delta</div><div class=\"v\">__TEMP_DELTA__</div></div>
+                <div class="metrics">
+                    <div class="metric"><div class="k">Temp Now</div><div class="v">__TEMP_NOW__</div></div>
+                    <div class="metric"><div class="k">Today's High</div><div class="v">__TEMP_HIGH__</div></div>
+                    <div class="metric"><div class="k">Today's Low</div><div class="v">__TEMP_LOW__</div></div>
+                    <div class="metric"><div class="k">1-hour Delta</div><div class="v">__TEMP_DELTA__</div></div>
                 </div>
-                <p class=\"settings-note\">__SEASONAL_STATUS__</p>
-                <div class=\"chart\">Temperature chart: observed vs forecast semantics.</div>
-                <p class=\"legend\">Legend: observed segment and forecast segment reflect the selected temperature type.</p>
+                <p class="settings-note">__SEASONAL_STATUS__</p>
+                <div class="chart">Temperature chart: observed vs forecast semantics.</div>
+                <p class="legend">Legend: observed segment and forecast segment reflect the selected temperature type.</p>
             </article>
             </div>
 
-            <hr class=\"section-divider\" />
+            <hr class="section-divider" />
 
-            <div class=\"layout-row\">
-            <article class=\"card span-6\">
+            <div class="layout-row">
+            <article class="card span-6">
                 <h2>Wind</h2>
-                <div class=\"metrics\">
-                    <div class=\"metric\"><div class=\"k\">Wind Speed Now</div><div class=\"v\">__WIND_NOW__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Wind Direction</div><div class=\"v\">__WIND_DIR__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Today's Fastest Wind</div><div class=\"v\">__FASTEST_WIND__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Today's Strongest Gust</div><div class=\"v\">__STRONGEST_GUST__</div></div>
+                <div class="metrics">
+                    <div class="metric"><div class="k">Wind Speed Now</div><div class="v">__WIND_NOW__</div></div>
+                    <div class="metric"><div class="k">Wind Direction</div><div class="v">__WIND_DIR__</div></div>
+                    <div class="metric"><div class="k">Today's Fastest Wind</div><div class="v">__FASTEST_WIND__</div></div>
+                    <div class="metric"><div class="k">Today's Strongest Gust</div><div class="v">__STRONGEST_GUST__</div></div>
                 </div>
-                <div class=\"chart\">
-                    <div class=\"chart-title\">Wind speed trend with gust context</div>
-                    <div class=\"chart-note\">Observed hours transition into forecast hours at the current-hour boundary.</div>
-                    <div class=\"chart-ribbon\"><span class=\"chip obs\">Observed</span><span class=\"chip fcst\">Forecast</span></div>
-                    <div class=\"mini-bars\">
-                        <span class=\"bar obs\" style=\"height:42%\"></span><span class=\"bar obs\" style=\"height:55%\"></span><span class=\"bar obs\" style=\"height:46%\"></span><span class=\"bar obs\" style=\"height:62%\"></span><span class=\"bar obs\" style=\"height:51%\"></span><span class=\"bar obs\" style=\"height:66%\"></span><span class=\"bar fcst\" style=\"height:58%\"></span><span class=\"bar fcst\" style=\"height:72%\"></span><span class=\"bar fcst\" style=\"height:64%\"></span><span class=\"bar fcst\" style=\"height:78%\"></span><span class=\"bar fcst\" style=\"height:69%\"></span><span class=\"bar fcst\" style=\"height:74%\"></span>
+                <div class="chart">
+                    <div class="chart-title">Wind speed trend with gust context</div>
+                    <div class="chart-note">Observed hours transition into forecast hours at the current-hour boundary.</div>
+                    <div class="chart-ribbon"><span class="chip obs">Observed</span><span class="chip fcst">Forecast</span></div>
+                    <div class="mini-bars">
+                        <span class="bar obs" style="height:42%"></span><span class="bar obs" style="height:55%"></span><span class="bar obs" style="height:46%"></span><span class="bar obs" style="height:62%"></span><span class="bar obs" style="height:51%"></span><span class="bar obs" style="height:66%"></span><span class="bar fcst" style="height:58%"></span><span class="bar fcst" style="height:72%"></span><span class="bar fcst" style="height:64%"></span><span class="bar fcst" style="height:78%"></span><span class="bar fcst" style="height:69%"></span><span class="bar fcst" style="height:74%"></span>
                     </div>
-                    <div class=\"axis-tags\"><span class=\"axis-tag left\">Y-axis: wind speed mph</span><span class=\"axis-tag\">X-axis: local hour</span></div>
+                    <div class="axis-tags"><span class="axis-tag left">Y-axis: wind speed mph</span><span class="axis-tag">X-axis: local hour</span></div>
                 </div>
-                <p class=\"legend\">Caption: wind cutoff evaluation uses configured kitty wind threshold.</p>
+                <p class="legend">Caption: wind cutoff evaluation uses configured kitty wind threshold.</p>
             </article>
-            <article class=\"card span-6\">
+            <article class="card span-6">
                 <h2>Air Quality</h2>
-                <div class=\"metrics\">
-                    <div class=\"metric\"><div class=\"k\">Current AQI</div><div class=\"v\">__CURRENT_AQI__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Highest AQI Today</div><div class=\"v\">__HIGH_AQI__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Lowest AQI Today</div><div class=\"v\">__LOW_AQI__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Interpretation</div><div class=\"v\">__AQI_INTERP__</div></div>
+                <div class="metrics">
+                    <div class="metric"><div class="k">Current AQI</div><div class="v">__CURRENT_AQI__</div></div>
+                    <div class="metric"><div class="k">Highest AQI Today</div><div class="v">__HIGH_AQI__</div></div>
+                    <div class="metric"><div class="k">Lowest AQI Today</div><div class="v">__LOW_AQI__</div></div>
+                    <div class="metric"><div class="k">Interpretation</div><div class="v">__AQI_INTERP__</div></div>
                 </div>
-                <div class=\"chart\">
-                    <div class=\"chart-title\">AQI trend with observed-to-forecast split</div>
-                    <div class=\"chart-note\">Trend readability is anchored to the same hour-boundary semantics as temperature and wind.</div>
-                    <div class=\"chart-ribbon\"><span class=\"chip obs\">Observed AQI</span><span class=\"chip fcst\">Forecast AQI</span></div>
-                    <div class=\"mini-bars\">
-                        <span class=\"bar aqi-bar obs\" style=\"height:40%\"></span><span class=\"bar aqi-bar obs\" style=\"height:48%\"></span><span class=\"bar aqi-bar obs\" style=\"height:45%\"></span><span class=\"bar aqi-bar obs\" style=\"height:53%\"></span><span class=\"bar aqi-bar obs\" style=\"height:50%\"></span><span class=\"bar aqi-bar obs\" style=\"height:57%\"></span><span class=\"bar aqi-bar fcst\" style=\"height:52%\"></span><span class=\"bar aqi-bar fcst\" style=\"height:59%\"></span><span class=\"bar aqi-bar fcst\" style=\"height:56%\"></span><span class=\"bar aqi-bar fcst\" style=\"height:63%\"></span><span class=\"bar aqi-bar fcst\" style=\"height:58%\"></span><span class=\"bar aqi-bar fcst\" style=\"height:61%\"></span>
+                <div class="chart">
+                    <div class="chart-title">AQI trend with observed-to-forecast split</div>
+                    <div class="chart-note">Trend readability is anchored to the same hour-boundary semantics as temperature and wind.</div>
+                    <div class="chart-ribbon"><span class="chip obs">Observed AQI</span><span class="chip fcst">Forecast AQI</span></div>
+                    <div class="mini-bars">
+                        <span class="bar aqi-bar obs" style="height:40%"></span><span class="bar aqi-bar obs" style="height:48%"></span><span class="bar aqi-bar obs" style="height:45%"></span><span class="bar aqi-bar obs" style="height:53%"></span><span class="bar aqi-bar obs" style="height:50%"></span><span class="bar aqi-bar obs" style="height:57%"></span><span class="bar aqi-bar fcst" style="height:52%"></span><span class="bar aqi-bar fcst" style="height:59%"></span><span class="bar aqi-bar fcst" style="height:56%"></span><span class="bar aqi-bar fcst" style="height:63%"></span><span class="bar aqi-bar fcst" style="height:58%"></span><span class="bar aqi-bar fcst" style="height:61%"></span>
                     </div>
-                    <div class=\"axis-tags\"><span class=\"axis-tag left\">Y-axis: AQI scale</span><span class=\"axis-tag\">X-axis: local hour</span></div>
+                    <div class="axis-tags"><span class="axis-tag left">Y-axis: AQI scale</span><span class="axis-tag">X-axis: local hour</span></div>
                 </div>
-                <p class=\"legend\">Caption: pollutant fields use source-missing semantics when unavailable.</p>
-                <h3 class=\"subheading\">Pollutant Breakdown</h3>
-                <table class=\"mini-table\">
+                <p class="legend">Caption: pollutant fields use source-missing semantics when unavailable.</p>
+                <h3 class="subheading">Pollutant Breakdown</h3>
+                <table class="mini-table">
                     <thead><tr><th>Pollutant</th><th>Value</th><th>Units</th></tr></thead>
                     <tbody>
                         <tr><td>PM2.5</td><td>__PM25__</td><td>ug/m3</td></tr>
@@ -719,47 +721,47 @@ fn dashboard_html(bundle: &ForecastBundle) -> String {
             </article>
             </div>
 
-            <hr class=\"section-divider\" />
+            <hr class="section-divider" />
 
-            <div class=\"stack\">
-            <article class=\"card span-12\">
+            <div class="stack">
+            <article class="card span-12">
                 <h2>Precipitation</h2>
-                <div class=\"metrics\">
-                    <div class=\"metric\"><div class=\"k\">Rain or Snow Recently?</div><div class=\"v\">__RAIN_RECENTLY__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Total Accumulation So Far Today</div><div class=\"v\">__PRECIP_TOTAL__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Forecasted Precipitation Now %</div><div class=\"v\">__PRECIP_NOW__</div></div>
-                    <div class=\"metric\"><div class=\"k\">Relative Humidity Now %</div><div class=\"v\">__HUMIDITY_NOW__</div></div>
+                <div class="metrics">
+                    <div class="metric"><div class="k">Rain or Snow Recently?</div><div class="v">__RAIN_RECENTLY__</div></div>
+                    <div class="metric"><div class="k">Total Accumulation So Far Today</div><div class="v">__PRECIP_TOTAL__</div></div>
+                    <div class="metric"><div class="k">Forecasted Precipitation Now %</div><div class="v">__PRECIP_NOW__</div></div>
+                    <div class="metric"><div class="k">Relative Humidity Now %</div><div class="v">__HUMIDITY_NOW__</div></div>
                 </div>
-                <div class=\"chart\">Precipitation chart: hourly observed precipitation semantics.</div>
-                <p class=\"legend\">Caption: Recently? is based on observed-hours accumulation logic.</p>
+                <div class="chart">Precipitation chart: hourly observed precipitation semantics.</div>
+                <p class="legend">Caption: Recently? is based on observed-hours accumulation logic.</p>
             </article>
 
-            <article class=\"card span-12\">
+            <article class="card span-12">
                 <h2>Sunrise / Sunset / Brightness</h2>
-                <div class=\"metrics\">
-                    <div class=\"metric\"><div class=\"k\">Sunrise</div><div class=\"v\">06:15 (+1m vs yesterday)</div></div>
-                    <div class=\"metric\"><div class=\"k\">Sunset</div><div class=\"v\">20:10 (+2m vs yesterday)</div></div>
-                    <div class=\"metric\"><div class=\"k\">Daylight Today</div><div class=\"v\">13h 55m (+3m)</div></div>
-                    <div class=\"metric\"><div class=\"k\">Peak UV Index Today</div><div class=\"v\">__PEAK_UV__</div></div>
+                <div class="metrics">
+                    <div class="metric"><div class="k">Sunrise</div><div class="v">06:15 (+1m vs yesterday)</div></div>
+                    <div class="metric"><div class="k">Sunset</div><div class="v">20:10 (+2m vs yesterday)</div></div>
+                    <div class="metric"><div class="k">Daylight Today</div><div class="v">13h 55m (+3m)</div></div>
+                    <div class="metric"><div class="k">Peak UV Index Today</div><div class="v">__PEAK_UV__</div></div>
                 </div>
-                <div class=\"chart\">
-                    <div class=\"chart-title\">Brightness trend: UV and cloud dual-axis view</div>
-                    <div class=\"chart-note\">UV and cloud traces are read independently while sharing hourly alignment.</div>
-                    <div class=\"chart-ribbon\"><span class=\"chip uv-chip\">UV Index</span><span class=\"chip cloud-chip\">Cloud Cover %</span></div>
-                    <div class=\"mini-bars\">
-                        <span class=\"bar uv-bar\" style=\"height:10%\"></span><span class=\"bar cloud-bar\" style=\"height:56%\"></span><span class=\"bar uv-bar\" style=\"height:22%\"></span><span class=\"bar cloud-bar\" style=\"height:48%\"></span><span class=\"bar uv-bar\" style=\"height:45%\"></span><span class=\"bar cloud-bar\" style=\"height:38%\"></span><span class=\"bar uv-bar\" style=\"height:72%\"></span><span class=\"bar cloud-bar\" style=\"height:31%\"></span><span class=\"bar uv-bar\" style=\"height:66%\"></span><span class=\"bar cloud-bar\" style=\"height:42%\"></span><span class=\"bar uv-bar\" style=\"height:34%\"></span><span class=\"bar cloud-bar\" style=\"height:54%\"></span>
+                <div class="chart">
+                    <div class="chart-title">Brightness trend: UV and cloud dual-axis view</div>
+                    <div class="chart-note">UV and cloud traces are read independently while sharing hourly alignment.</div>
+                    <div class="chart-ribbon"><span class="chip uv-chip">UV Index</span><span class="chip cloud-chip">Cloud Cover %</span></div>
+                    <div class="mini-bars">
+                        <span class="bar uv-bar" style="height:10%"></span><span class="bar cloud-bar" style="height:56%"></span><span class="bar uv-bar" style="height:22%"></span><span class="bar cloud-bar" style="height:48%"></span><span class="bar uv-bar" style="height:45%"></span><span class="bar cloud-bar" style="height:38%"></span><span class="bar uv-bar" style="height:72%"></span><span class="bar cloud-bar" style="height:31%"></span><span class="bar uv-bar" style="height:66%"></span><span class="bar cloud-bar" style="height:42%"></span><span class="bar uv-bar" style="height:34%"></span><span class="bar cloud-bar" style="height:54%"></span>
                     </div>
-                    <div class=\"axis-tags\"><span class=\"axis-tag right\">Left axis: UV index</span><span class=\"axis-tag left\">Right axis: cloud cover %</span></div>
+                    <div class="axis-tags"><span class="axis-tag right">Left axis: UV index</span><span class="axis-tag left">Right axis: cloud cover %</span></div>
                 </div>
-                <p class=\"legend\"><span class=\"uv\">━ UV Index</span> (left axis) and <span class=\"cloud\">█ Cloud Cover %</span> (right axis).</p>
+                <p class="legend"><span class="uv">━ UV Index</span> (left axis) and <span class="cloud">█ Cloud Cover %</span> (right axis).</p>
             </article>
 
-            <article class=\"card span-12\">
+            <article class="card span-12">
                 <h2>Data Sources</h2>
                 <p>Provider role context: Open-Meteo style hourly model blends and Visual Crossing style observational semantics are represented through a normalized contract in this phase.</p>
-                <p class=\"detail-note-strong\">Blended-model caveat: values can reflect mixed model assumptions and should be interpreted as trend guidance, not instrument-grade measurements.</p>
-                <p class=\"detail-note\">Refresh cadence context: normalized forecast bundles are generated periodically, with observed-vs-forecast boundaries anchored to the current hour.</p>
-                <p class=\"detail-note\">Current source: <code>__SOURCE__</code> | Generated at: __GENERATED_AT__</p>
+                <p class="detail-note-strong">Blended-model caveat: values can reflect mixed model assumptions and should be interpreted as trend guidance, not instrument-grade measurements.</p>
+                <p class="detail-note">Refresh cadence context: normalized forecast bundles are generated periodically, with observed-vs-forecast boundaries anchored to the current hour.</p>
+                <p class="detail-note">Current source: <code>__SOURCE__</code> | Generated at: __GENERATED_AT__</p>
             </article>
             </div>
             </section>

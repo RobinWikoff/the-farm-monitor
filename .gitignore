@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 .streamlit/secrets.toml
 .streamlit/hist_cache/
+.streamlit/rust_cache/
 .env
 .env.*
 !.env.example
