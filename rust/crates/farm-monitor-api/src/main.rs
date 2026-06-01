@@ -223,11 +223,13 @@ fn moving_average_series(points: &[(u8, f64)], radius: usize) -> Vec<(u8, f64)> 
         .collect()
 }
 
+type HourSeries = Vec<(u8, f64)>;
+
 fn build_context_band(
     points: &[(u8, f64)],
     band_width: f64,
     clamp_min: Option<f64>,
-) -> (Vec<(u8, f64)>, Vec<(u8, f64)>, Vec<(u8, f64)>) {
+) -> (HourSeries, HourSeries, HourSeries) {
     let mean = moving_average_series(points, 2);
     let low = mean
         .iter()
