@@ -209,6 +209,64 @@ fn line_bounds(points: &[(u8, f64)]) -> Option<(f64, f64)> {
     Some((min_v, max_v))
 }
 
+fn moving_average_series(points: &[(u8, f64)], radius: usize) -> Vec<(u8, f64)> {
+    points
+        .iter()
+        .enumerate()
+        .map(|(idx, (hour, _))| {
+            let start = idx.saturating_sub(radius);
+            let end = (idx + radius + 1).min(points.len());
+            let window = &points[start..end];
+            let avg = window.iter().map(|(_, v)| *v).sum::<f64>() / window.len() as f64;
+            (*hour, avg)
+        })
+        .collect()
+}
+
+fn build_context_band(
+    points: &[(u8, f64)],
+    band_width: f64,
+    clamp_min: Option<f64>,
+) -> (Vec<(u8, f64)>, Vec<(u8, f64)>, Vec<(u8, f64)>) {
+    let mean = moving_average_series(points, 2);
+    let low = mean
+        .iter()
+        .map(|(h, v)| {
+            let candidate = v - band_width;
+            (
+                *h,
+                clamp_min.map_or(candidate, |min_v| candidate.max(min_v)),
+            )
+        })
+        .collect();
+    let high = mean.iter().map(|(h, v)| (*h, v + band_width)).collect();
+    (low, mean, high)
+}
+
+fn area_polygon_points(
+    low: &[(u8, f64)],
+    high: &[(u8, f64)],
+    min_y: f64,
+    max_y: f64,
+    width: f64,
+    height: f64,
+) -> String {
+    let mut points: Vec<String> = high
+        .iter()
+        .map(|(hour, value)| {
+            let (x, y) = chart_xy(*hour, *value, min_y, max_y, width, height);
+            format!("{x:.1},{y:.1}")
+        })
+        .collect();
+
+    for (hour, value) in low.iter().rev() {
+        let (x, y) = chart_xy(*hour, *value, min_y, max_y, width, height);
+        points.push(format!("{x:.1},{y:.1}"));
+    }
+
+    points.join(" ")
+}
+
 fn build_line_chart_svg(
     points: &[(u8, f64)],
     now_hour: u8,
@@ -284,6 +342,9 @@ fn build_temperature_chart_svg(points: &[(u8, f64)], now_hour: u8, threshold_f: 
     let observed_poly = polyline_points(&observed, min_v, max_v, width, height);
     let forecast_poly = polyline_points(&forecast, min_v, max_v, width, height);
     let (_, target_y) = chart_xy(0, threshold_f, min_v, max_v, width, height);
+    let (hist_low, hist_mean, hist_high) = build_context_band(points, 3.2, None);
+    let hist_band_poly = area_polygon_points(&hist_low, &hist_high, min_v, max_v, width, height);
+    let hist_mean_poly = polyline_points(&hist_mean, min_v, max_v, width, height);
 
     let current = observed.last().copied().or_else(|| points.first().copied());
     let high = observed.iter().max_by(|a, b| a.1.total_cmp(&b.1)).copied();
@@ -330,7 +391,7 @@ fn build_temperature_chart_svg(points: &[(u8, f64)], now_hour: u8, threshold_f: 
         .unwrap_or_default();
 
     format!(
-        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"Temperature trend with target threshold\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" /><line class=\"trend-target\" x1=\"34\" y1=\"{target_y:.1}\" x2=\"628\" y2=\"{target_y:.1}\" /><polyline class=\"trend-line temp-obs\" points=\"{observed_poly}\" /><polyline class=\"trend-line temp-fcst\" points=\"{forecast_poly}\" />{current_dot}{labels}<text x=\"6\" y=\"20\" class=\"trend-label\">Temp °F</text><text x=\"540\" y=\"20\" class=\"trend-label\">Target {threshold_f:.0}°F</text><text x=\"592\" y=\"172\" class=\"trend-label\">Hour</text></svg>"
+        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"Temperature trend with target threshold\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" /><polygon class=\"trend-band temp-band\" points=\"{hist_band_poly}\" /><polyline class=\"trend-line temp-hist\" points=\"{hist_mean_poly}\" /><line class=\"trend-target\" x1=\"34\" y1=\"{target_y:.1}\" x2=\"628\" y2=\"{target_y:.1}\" /><polyline class=\"trend-line temp-obs\" points=\"{observed_poly}\" /><polyline class=\"trend-line temp-fcst\" points=\"{forecast_poly}\" />{current_dot}{labels}<text x=\"6\" y=\"20\" class=\"trend-label\">Temp °F</text><text x=\"540\" y=\"20\" class=\"trend-label\">Target {threshold_f:.0}°F</text><text x=\"592\" y=\"172\" class=\"trend-label\">Hour</text></svg>"
     )
 }
 
@@ -364,6 +425,9 @@ fn build_wind_chart_svg(points: &[(u8, f64)], now_hour: u8) -> String {
     let observed_poly = polyline_points(&observed, min_v, max_v, width, height);
     let forecast_poly = polyline_points(&forecast, min_v, max_v, width, height);
     let gust_poly = polyline_points(&gust_points, min_v, max_v, width, height);
+    let (hist_low, hist_mean, hist_high) = build_context_band(&observed, 1.5, Some(0.0));
+    let hist_band_poly = area_polygon_points(&hist_low, &hist_high, min_v, max_v, width, height);
+    let hist_mean_poly = polyline_points(&hist_mean, min_v, max_v, width, height);
     let current = observed.last().copied().or_else(|| points.first().copied());
     let strongest_wind = observed.iter().max_by(|a, b| a.1.total_cmp(&b.1)).copied();
     let strongest_gust = gust_points
@@ -397,7 +461,7 @@ fn build_wind_chart_svg(points: &[(u8, f64)], now_hour: u8) -> String {
         .unwrap_or_default();
 
     format!(
-        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"Wind and gust trend\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" /><polyline class=\"trend-line wind-obs\" points=\"{observed_poly}\" /><polyline class=\"trend-line wind-fcst\" points=\"{forecast_poly}\" /><polyline class=\"trend-line gust\" points=\"{gust_poly}\" />{current_dot}{labels}<text x=\"6\" y=\"20\" class=\"trend-label\">Wind mph</text><text x=\"514\" y=\"20\" class=\"trend-label\">Gust overlay</text><text x=\"592\" y=\"172\" class=\"trend-label\">Hour</text></svg>"
+        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"Wind and gust trend\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" /><polygon class=\"trend-band wind-band\" points=\"{hist_band_poly}\" /><polyline class=\"trend-line wind-hist\" points=\"{hist_mean_poly}\" /><polyline class=\"trend-line wind-obs\" points=\"{observed_poly}\" /><polyline class=\"trend-line wind-fcst\" points=\"{forecast_poly}\" /><polyline class=\"trend-line gust\" points=\"{gust_poly}\" />{current_dot}{labels}<text x=\"6\" y=\"20\" class=\"trend-label\">Wind mph</text><text x=\"514\" y=\"20\" class=\"trend-label\">Gust overlay</text><text x=\"592\" y=\"172\" class=\"trend-label\">Hour</text></svg>"
     )
 }
 
@@ -423,6 +487,11 @@ fn build_aqi_chart_svg(points: &[(u8, f64)], now_hour: u8) -> String {
     let observed_poly = polyline_points(&observed, min_v, max_v, width, height);
     let forecast_poly = polyline_points(&forecast, min_v, max_v, width, height);
     let current = observed.last().copied().or_else(|| points.first().copied());
+    let split_x = observed
+        .iter()
+        .find(|(hour, _)| *hour == now_hour)
+        .map(|(h, _)| chart_xy(*h, min_v, min_v, max_v, width, height).0)
+        .unwrap_or(34.0);
     let high = observed.iter().max_by(|a, b| a.1.total_cmp(&b.1)).copied();
     let low = observed.iter().min_by(|a, b| a.1.total_cmp(&b.1)).copied();
 
@@ -451,7 +520,7 @@ fn build_aqi_chart_svg(points: &[(u8, f64)], now_hour: u8) -> String {
         .unwrap_or_default();
 
     format!(
-        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"AQI trend\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" /><polyline class=\"trend-line aqi-obs\" points=\"{observed_poly}\" /><polyline class=\"trend-line aqi-fcst\" points=\"{forecast_poly}\" />{current_dot}{labels}<text x=\"6\" y=\"20\" class=\"trend-label\">AQI</text><text x=\"592\" y=\"172\" class=\"trend-label\">Hour</text></svg>"
+        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"AQI trend\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" /><line class=\"trend-split\" x1=\"{split_x:.1}\" y1=\"10\" x2=\"{split_x:.1}\" y2=\"156\" /><polyline class=\"trend-line aqi-obs\" points=\"{observed_poly}\"><title>Observed AQI up to current hour</title></polyline><polyline class=\"trend-line aqi-fcst\" points=\"{forecast_poly}\"><title>Forecast AQI from current hour onward</title></polyline>{current_dot}{labels}<text x=\"6\" y=\"20\" class=\"trend-label\">AQI</text><text x=\"470\" y=\"20\" class=\"trend-label\">Obs -> Fcst split</text><text x=\"592\" y=\"172\" class=\"trend-label\">Hour</text></svg>"
     )
 }
 
@@ -489,7 +558,7 @@ fn build_brightness_chart_svg(points: &[(u8, f64, f64)], now_hour: u8) -> String
     cloud_poly.push_str(" 628.0,156.0");
 
     format!(
-        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"UV and cloud cover trend\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" /><polygon class=\"trend-cloud-area\" points=\"{cloud_poly}\" /><polyline class=\"trend-line uv obs\" points=\"{uv_obs_poly}\" /><polyline class=\"trend-line uv fcst\" points=\"{uv_fcst_poly}\" /><text x=\"6\" y=\"20\" class=\"trend-label\">UV (left)</text><text x=\"530\" y=\"20\" class=\"trend-label\">Cloud % (right)</text><text x=\"592\" y=\"172\" class=\"trend-label\">Hour</text></svg>"
+        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"UV and cloud cover trend\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" /><line class=\"trend-axis-right\" x1=\"628\" y1=\"10\" x2=\"628\" y2=\"156\" /><polygon class=\"trend-cloud-area\" points=\"{cloud_poly}\"><title>Cloud cover area (right axis, %)</title></polygon><polyline class=\"trend-line uv obs\" points=\"{uv_obs_poly}\"><title>Observed UV index (left axis)</title></polyline><polyline class=\"trend-line uv fcst\" points=\"{uv_fcst_poly}\"><title>Forecast UV index (left axis)</title></polyline><text x=\"6\" y=\"20\" class=\"trend-label\">UV index (left axis)</text><text x=\"466\" y=\"20\" class=\"trend-label\">Cloud cover % (right axis)</text><text x=\"592\" y=\"172\" class=\"trend-label\">Hour</text></svg>"
     )
 }
 
@@ -1001,6 +1070,11 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
             background: #fff7e8;
             color: #8a5b08;
         }
+        .chip.hist-chip {
+            border-color: #c4d3ea;
+            background: #f5f8ff;
+            color: #4d6280;
+        }
         .chip.cloud-chip {
             border-color: #8bb4ef;
             background: #eef4ff;
@@ -1085,11 +1159,41 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
             stroke-width: 1.8;
             stroke-dasharray: 8 4;
         }
+        .trend-band {
+            stroke: none;
+        }
+        .trend-band.temp-band {
+            fill: #a0c4ff;
+            fill-opacity: 0.18;
+        }
+        .trend-band.wind-band {
+            fill: #c7d7f0;
+            fill-opacity: 0.18;
+        }
+        .trend-line.temp-hist {
+            stroke: #a0c4ff;
+            stroke-width: 2.0;
+            stroke-dasharray: 3 3;
+        }
+        .trend-line.wind-hist {
+            stroke: #9fb4d6;
+            stroke-width: 2.0;
+            stroke-dasharray: 3 3;
+        }
         .trend-cloud-area {
             fill: #8bb4ef;
             fill-opacity: 0.34;
             stroke: #8bb4ef;
             stroke-width: 1.2;
+        }
+        .trend-axis-right {
+            stroke: #8bb4ef;
+            stroke-width: 1.2;
+        }
+        .trend-split {
+            stroke: #d4deec;
+            stroke-width: 1.1;
+            stroke-dasharray: 4 5;
         }
         .trend-now {
             fill: #00b7ff;
@@ -1240,7 +1344,7 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                 <div class="chart">
                     <div class="chart-title">Temperature trend with threshold overlay</div>
                     <div class="chart-note">Observed and forecast temperature lines follow the selected temperature basis.</div>
-                    <div class="chart-ribbon"><span class="chip obs">Observed</span><span class="chip fcst">Forecast</span><span class="chip">Target threshold</span></div>
+                    <div class="chart-ribbon"><span class="chip obs">Observed</span><span class="chip fcst">Forecast</span><span class="chip">Target threshold</span><span class="chip hist-chip">Context band + mean</span></div>
                     __TEMP_CHART__
                 </div>
                 <p class="legend">Legend: observed segment and forecast segment reflect the selected temperature type.</p>
@@ -1261,7 +1365,7 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                 <div class="chart">
                     <div class="chart-title">Wind speed trend with gust context</div>
                     <div class="chart-note">Observed hours transition into forecast hours at the current-hour boundary.</div>
-                    <div class="chart-ribbon"><span class="chip obs">Observed</span><span class="chip fcst">Forecast</span></div>
+                    <div class="chart-ribbon"><span class="chip obs">Observed</span><span class="chip fcst">Forecast</span><span class="chip">Gust overlay</span><span class="chip hist-chip">Context band + mean</span></div>
                     __WIND_CHART__
                     <div class="axis-tags"><span class="axis-tag left">Y-axis: wind speed mph</span><span class="axis-tag">X-axis: local hour</span></div>
                 </div>
@@ -1277,7 +1381,7 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                 </div>
                 <div class="chart">
                     <div class="chart-title">AQI trend with observed-to-forecast split</div>
-                    <div class="chart-note">Trend readability is anchored to the same hour-boundary semantics as temperature and wind.</div>
+                    <div class="chart-note">Trend readability is anchored to the same hour-boundary semantics as temperature and wind; split marker shows observed-to-forecast transition.</div>
                     <div class="chart-ribbon"><span class="chip obs">Observed AQI</span><span class="chip fcst">Forecast AQI</span></div>
                     __AQI_CHART__
                     <div class="axis-tags"><span class="axis-tag left">Y-axis: AQI scale</span><span class="axis-tag">X-axis: local hour</span></div>
@@ -1322,10 +1426,10 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                 </div>
                 <div class="chart">
                     <div class="chart-title">Brightness trend: UV and cloud dual-axis view</div>
-                    <div class="chart-note">UV and cloud traces are read independently while sharing hourly alignment.</div>
-                    <div class="chart-ribbon"><span class="chip uv-chip">UV Index</span><span class="chip cloud-chip">Cloud Cover %</span></div>
+                    <div class="chart-note">UV and cloud traces are read independently while sharing hourly alignment; left axis tracks UV and right axis tracks cloud cover.</div>
+                    <div class="chart-ribbon"><span class="chip uv-chip">Observed UV</span><span class="chip fcst">Forecast UV</span><span class="chip cloud-chip">Cloud cover area</span></div>
                     __BRIGHTNESS_CHART__
-                    <div class="axis-tags"><span class="axis-tag right">Left axis: UV index</span><span class="axis-tag left">Right axis: cloud cover %</span></div>
+                    <div class="axis-tags"><span class="axis-tag right">Left axis: UV index (0-11)</span><span class="axis-tag left">Right axis: cloud cover % (0-100)</span></div>
                 </div>
                 <p class="legend"><span class="uv">━ UV Index</span> (left axis) and <span class="cloud">█ Cloud Cover %</span> (right axis).</p>
             </article>
@@ -1542,6 +1646,11 @@ mod tests {
         assert!(html.contains("trend-line gust"));
         assert!(html.contains("trend-line aqi-obs"));
         assert!(html.contains("trend-line aqi-fcst"));
+        assert!(html.contains("trend-band temp-band"));
+        assert!(html.contains("trend-band wind-band"));
+        assert!(html.contains("trend-line temp-hist"));
+        assert!(html.contains("trend-line wind-hist"));
+        assert!(html.contains("Obs -> Fcst split"));
     }
 
     #[test]
