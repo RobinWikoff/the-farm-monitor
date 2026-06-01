@@ -2,9 +2,9 @@
 
 ## [Unreleased] - 2026-03-16
 ### Added
-- Feature documentation: added `docs/feature-requirements.md` with requirements and logic for weather and memo features.
-- Documentation maintenance policy: README now links feature docs and requires same-PR updates when feature behavior changes.
-- Architecture documentation: added C4 model docs under `docs/c4/` (context, container, component, and code-level diagrams + narrative).
+- Feature documentation local anchor: `docs/feature-requirements.md` (canonical behavior requirements maintained in wiki).
+- Documentation maintenance policy: README links wiki-canonical requirements/process pages plus local anchor docs.
+- Architecture documentation references now point to wiki canonical pages and the academic archive paths under `docs/archive/2026-05-academic-archive-pass/`.
 
 ### Fixed
 - Issue #30: Historical API rate limit handling — stop fetching further yearly data on first 429 response; fall back to cached band or a single caption instead of showing an error.
