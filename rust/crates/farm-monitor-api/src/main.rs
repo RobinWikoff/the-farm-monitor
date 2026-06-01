@@ -11,8 +11,8 @@ use farm_monitor_data::{
     ProviderForecastResponse,
 };
 use farm_monitor_domain::HealthStatus;
-use std::net::SocketAddr;
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::{f64::consts::PI, fmt::Write};
 use tracing::info;
 
@@ -172,7 +172,13 @@ fn chart_xy(hour: u8, value: f64, min_y: f64, max_y: f64, width: f64, height: f6
     (x, y)
 }
 
-fn polyline_points(points: &[(u8, f64)], min_y: f64, max_y: f64, width: f64, height: f64) -> String {
+fn polyline_points(
+    points: &[(u8, f64)],
+    min_y: f64,
+    max_y: f64,
+    width: f64,
+    height: f64,
+) -> String {
     points
         .iter()
         .map(|(hour, value)| {
@@ -280,14 +286,8 @@ fn build_temperature_chart_svg(points: &[(u8, f64)], now_hour: u8, threshold_f: 
     let (_, target_y) = chart_xy(0, threshold_f, min_v, max_v, width, height);
 
     let current = observed.last().copied().or_else(|| points.first().copied());
-    let high = observed
-        .iter()
-        .max_by(|a, b| a.1.total_cmp(&b.1))
-        .copied();
-    let low = observed
-        .iter()
-        .min_by(|a, b| a.1.total_cmp(&b.1))
-        .copied();
+    let high = observed.iter().max_by(|a, b| a.1.total_cmp(&b.1)).copied();
+    let low = observed.iter().min_by(|a, b| a.1.total_cmp(&b.1)).copied();
 
     let mut label_points: Vec<(u8, f64, f64)> = Vec::new();
     if let Some((hour, value)) = current {
@@ -366,7 +366,10 @@ fn build_wind_chart_svg(points: &[(u8, f64)], now_hour: u8) -> String {
     let gust_poly = polyline_points(&gust_points, min_v, max_v, width, height);
     let current = observed.last().copied().or_else(|| points.first().copied());
     let strongest_wind = observed.iter().max_by(|a, b| a.1.total_cmp(&b.1)).copied();
-    let strongest_gust = gust_points.iter().max_by(|a, b| a.1.total_cmp(&b.1)).copied();
+    let strongest_gust = gust_points
+        .iter()
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .copied();
 
     let mut labels = String::new();
     for (hour, value, dy, class_name) in [
@@ -462,7 +465,10 @@ fn build_brightness_chart_svg(points: &[(u8, f64, f64)], now_hour: u8) -> String
         .iter()
         .map(|(h, uv, _)| (*h, ((uv / 11.0) * 100.0).clamp(0.0, 100.0)))
         .collect();
-    let cloud_scaled: Vec<(u8, f64)> = points.iter().map(|(h, _, c)| (*h, (*c).clamp(0.0, 100.0))).collect();
+    let cloud_scaled: Vec<(u8, f64)> = points
+        .iter()
+        .map(|(h, _, c)| (*h, (*c).clamp(0.0, 100.0)))
+        .collect();
 
     let uv_obs: Vec<(u8, f64)> = uv_scaled
         .iter()
@@ -799,7 +805,13 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
 
     let temp_chart_svg = build_temperature_chart_svg(&temp_series, now_hour, settings.threshold_f);
     let wind_chart_svg = build_wind_chart_svg(&wind_series, now_hour);
-    let precip_chart_svg = build_line_chart_svg(&precip_series, now_hour, "Precip %", "precip-obs", "precip-fcst");
+    let precip_chart_svg = build_line_chart_svg(
+        &precip_series,
+        now_hour,
+        "Precip %",
+        "precip-obs",
+        "precip-fcst",
+    );
     let aqi_chart_svg = build_aqi_chart_svg(&aqi_series, now_hour);
     let brightness_chart_svg = build_brightness_chart_svg(&brightness_series, now_hour);
 
@@ -1344,22 +1356,41 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
         .replace("__SEASONAL_STATUS__", &seasonal_status_txt)
         .replace("__ACTIVE_MODE__", settings.mode_label)
         .replace("__ACTIVE_TEMP__", settings.temp_label)
-        .replace("__WIND_CUTOFF__", &settings.kitty_wind_cutoff_mph.to_string())
+        .replace(
+            "__WIND_CUTOFF__",
+            &settings.kitty_wind_cutoff_mph.to_string(),
+        )
         .replace(
             "__MODE_WINTER_SELECTED__",
-            if settings.is_winter_mode { "selected" } else { "" },
+            if settings.is_winter_mode {
+                "selected"
+            } else {
+                ""
+            },
         )
         .replace(
             "__MODE_SUMMER_SELECTED__",
-            if settings.is_winter_mode { "" } else { "selected" },
+            if settings.is_winter_mode {
+                ""
+            } else {
+                "selected"
+            },
         )
         .replace(
             "__TEMP_ACTUAL_SELECTED__",
-            if settings.use_feels_like { "" } else { "selected" },
+            if settings.use_feels_like {
+                ""
+            } else {
+                "selected"
+            },
         )
         .replace(
             "__TEMP_FEELS_SELECTED__",
-            if settings.use_feels_like { "selected" } else { "" },
+            if settings.use_feels_like {
+                "selected"
+            } else {
+                ""
+            },
         )
         .replace("__TEMP_CHART__", &temp_chart_svg)
         .replace("__WIND_CHART__", &wind_chart_svg)
