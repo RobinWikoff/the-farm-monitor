@@ -9,3 +9,4 @@ Why this file remains:
 
 Local-only reminder:
 - Store machine-specific secret values and ad hoc workspace notes outside of version control.
+- UI-impacting PRs must follow the UI review sign-off gate policy tracked in issue #129 and use the PR template handoff checklist.

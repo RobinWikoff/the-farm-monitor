@@ -70,8 +70,11 @@ Security note:
 - Update the wiki feature page in the same PR whenever behavior changes in weather or memo features.
 - C4/UOR materials are archived for academic reference; promote from archive only when explicitly needed for implementation decisions.
 - Update architecture narrative in wiki pages only when archived academic material is promoted back into active use.
+- For UI-impacting PRs, include a linked UI review gate issue and complete the UI Review Handoff in the PR template before merge.
+- For UI-impacting PRs, include the explicit final gate statement: `OK everything is good for UI review.`
 - If no feature behavior changed, include: `No feature-doc changes required` in the PR description.
 - If no architecture changed, include: `No C4 changes required` in the PR description.
+- If UI behavior did not change, include: `No UI review gate required` in the PR description.
 - Keep changelog and tests aligned with any feature logic changes.
 
 ## Code Formatting (Ruff)
