@@ -1,14 +1,12 @@
 use crate::models::{LocationRequest, ProviderForecastResponse, ProviderPoint};
 use anyhow::Result;
-use async_trait::async_trait;
 use chrono::Utc;
 use reqwest::Client;
 use serde::Deserialize;
 use std::env;
 
-#[async_trait]
 pub trait WeatherProvider {
-    async fn fetch_forecast(&self, location: &LocationRequest) -> Result<ProviderForecastResponse>;
+    fn fetch_forecast<'a>(&'a self, location: &'a LocationRequest) -> impl std::future::Future<Output = Result<ProviderForecastResponse>> + Send + 'a;
 }
 
 #[derive(Clone, Debug)]
@@ -58,7 +56,6 @@ struct TimelineHour {
     cloudcover: Option<f64>,
 }
 
-#[async_trait]
 impl WeatherProvider for VisualCrossingProvider {
     async fn fetch_forecast(&self, location: &LocationRequest) -> Result<ProviderForecastResponse> {
         let url = format!(
@@ -120,7 +117,6 @@ mod tests {
 
     struct MockProvider;
 
-    #[async_trait]
     impl WeatherProvider for MockProvider {
         async fn fetch_forecast(
             &self,

@@ -8,14 +8,14 @@ use chrono::{Timelike, Utc};
 use farm_monitor_data::models::ProviderPoint;
 use farm_monitor_data::{
     normalize_provider_response, FileForecastCache, ForecastBundle, ForecastPoint, LocationRequest,
-    ProviderForecastResponse,
+    ProviderForecastResponse, VisualCrossingProvider, WeatherProvider,
 };
 use farm_monitor_domain::HealthStatus;
 use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
 use std::{f64::consts::PI, fmt::Write};
-use tracing::info;
+use tracing::{info, warn};
 
 #[tokio::main]
 async fn main() {
@@ -52,7 +52,7 @@ async fn index() -> Redirect {
 
 async fn dashboard(Query(query): Query<HashMap<String, String>>) -> Html<String> {
     let settings = dashboard_settings_from_query(&query);
-    match load_dashboard_bundle() {
+    match load_dashboard_bundle().await {
         Ok(bundle) => Html(dashboard_html(&bundle, &settings)),
         Err(err) => Html(error_dashboard_html(&format!(
             "failed to load dashboard data: {err}"
@@ -107,7 +107,7 @@ fn dashboard_settings_from_query(query: &HashMap<String, String>) -> DashboardSe
     }
 }
 
-fn load_dashboard_bundle() -> anyhow::Result<ForecastBundle> {
+async fn load_dashboard_bundle() -> anyhow::Result<ForecastBundle> {
     let now = Utc::now();
     let today = now.date_naive();
     let cache = FileForecastCache::new(".streamlit/rust_cache");
@@ -120,8 +120,20 @@ fn load_dashboard_bundle() -> anyhow::Result<ForecastBundle> {
         lat: 40.39,
         lon: -105.07,
     };
-    let provider = mock_provider_forecast(&location);
-    let normalized = normalize_provider_response(provider);
+    let provider_response = match VisualCrossingProvider::from_env() {
+        Ok(provider) => match provider.fetch_forecast(&location).await {
+            Ok(response) => response,
+            Err(err) => {
+                warn!(error = %err, "visual crossing fetch failed, falling back to mock data");
+                mock_provider_forecast(&location)
+            }
+        },
+        Err(err) => {
+            warn!(error = %err, "VISUAL_CROSSING_API_KEY missing, falling back to mock data");
+            mock_provider_forecast(&location)
+        }
+    };
+    let normalized = normalize_provider_response(provider_response);
 
     cache.write(today, &normalized)?;
     let _ = cache.cleanup_older_than(14, now);
