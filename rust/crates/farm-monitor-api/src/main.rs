@@ -8,13 +8,14 @@ use chrono::{Timelike, Utc};
 use farm_monitor_data::models::ProviderPoint;
 use farm_monitor_data::{
     normalize_provider_response, FileForecastCache, ForecastBundle, ForecastPoint, LocationRequest,
-    ProviderForecastResponse,
+    ProviderForecastResponse, VisualCrossingProvider, WeatherProvider,
 };
 use farm_monitor_domain::HealthStatus;
 use std::collections::HashMap;
+use std::env;
 use std::net::SocketAddr;
 use std::{f64::consts::PI, fmt::Write};
-use tracing::info;
+use tracing::{info, warn};
 
 #[tokio::main]
 async fn main() {
@@ -29,7 +30,10 @@ async fn main() {
         .route("/dashboard", get(dashboard))
         .route("/healthz", get(healthz));
 
-    let addr: SocketAddr = "127.0.0.1:8080".parse().expect("valid socket address");
+    let bind_addr = env::var("FM_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".to_string());
+    let addr: SocketAddr = bind_addr
+        .parse()
+        .expect("valid socket address in FM_BIND_ADDR");
     info!(%addr, "starting farm-monitor-api");
 
     let listener = tokio::net::TcpListener::bind(addr)
@@ -48,7 +52,7 @@ async fn index() -> Redirect {
 
 async fn dashboard(Query(query): Query<HashMap<String, String>>) -> Html<String> {
     let settings = dashboard_settings_from_query(&query);
-    match load_dashboard_bundle() {
+    match load_dashboard_bundle().await {
         Ok(bundle) => Html(dashboard_html(&bundle, &settings)),
         Err(err) => Html(error_dashboard_html(&format!(
             "failed to load dashboard data: {err}"
@@ -103,7 +107,7 @@ fn dashboard_settings_from_query(query: &HashMap<String, String>) -> DashboardSe
     }
 }
 
-fn load_dashboard_bundle() -> anyhow::Result<ForecastBundle> {
+async fn load_dashboard_bundle() -> anyhow::Result<ForecastBundle> {
     let now = Utc::now();
     let today = now.date_naive();
     let cache = FileForecastCache::new(".streamlit/rust_cache");
@@ -116,8 +120,20 @@ fn load_dashboard_bundle() -> anyhow::Result<ForecastBundle> {
         lat: 40.39,
         lon: -105.07,
     };
-    let provider = mock_provider_forecast(&location);
-    let normalized = normalize_provider_response(provider);
+    let provider_response = match VisualCrossingProvider::from_env() {
+        Ok(provider) => match provider.fetch_forecast(&location).await {
+            Ok(response) => response,
+            Err(err) => {
+                warn!(error = %err, "visual crossing fetch failed, falling back to mock data");
+                mock_provider_forecast(&location)
+            }
+        },
+        Err(err) => {
+            warn!(error = %err, "VISUAL_CROSSING_API_KEY missing, falling back to mock data");
+            mock_provider_forecast(&location)
+        }
+    };
+    let normalized = normalize_provider_response(provider_response);
 
     cache.write(today, &normalized)?;
     let _ = cache.cleanup_older_than(14, now);
@@ -269,55 +285,72 @@ fn area_polygon_points(
     points.join(" ")
 }
 
-fn build_line_chart_svg(
-    points: &[(u8, f64)],
-    now_hour: u8,
-    y_axis_label: &str,
-    observed_class: &str,
-    forecast_class: &str,
-) -> String {
-    if points.is_empty() {
-        return "<div class=\"chart-note\">No chart data available.</div>".to_string();
+fn hourly_grid_svg() -> String {
+    let mut g = String::new();
+    for h in 0u8..=23 {
+        let x = 34.0 + (h as f64 / 23.0) * 594.0;
+        g.push_str(&format!(
+            "<line class=\"trend-grid\" x1=\"{x:.1}\" y1=\"10\" x2=\"{x:.1}\" y2=\"156\" /><line class=\"trend-tick\" x1=\"{x:.1}\" y1=\"156\" x2=\"{x:.1}\" y2=\"160\" />"
+        ));
     }
+    for h in (0u8..=21).step_by(3) {
+        let x = 34.0 + (h as f64 / 23.0) * 594.0;
+        let label = format!("{h:02}:00");
+        g.push_str(&format!(
+            "<text class=\"trend-axis-label\" x=\"{x:.1}\" y=\"172\" text-anchor=\"middle\">{label}</text>"
+        ));
+    }
+    g
+}
 
-    let width = 640.0;
-    let height = 180.0;
-    let Some((min_v, max_v)) = line_bounds(points) else {
-        return "<div class=\"chart-note\">No chart data available.</div>".to_string();
+fn nice_y_step(range: f64) -> f64 {
+    if range <= 0.0 {
+        return 1.0;
+    }
+    let rough = range / 4.0;
+    let magnitude = 10f64.powf(rough.log10().floor());
+    let normalized = rough / magnitude;
+    let nice = if normalized <= 1.5 {
+        1.0
+    } else if normalized <= 3.0 {
+        2.0
+    } else if normalized <= 7.0 {
+        5.0
+    } else {
+        10.0
     };
+    nice * magnitude
+}
 
-    let observed: Vec<(u8, f64)> = points
-        .iter()
-        .copied()
-        .filter(|(hour, _)| *hour <= now_hour)
-        .collect();
-    let mut forecast: Vec<(u8, f64)> = points
-        .iter()
-        .copied()
-        .filter(|(hour, _)| *hour >= now_hour)
-        .collect();
-    if forecast.is_empty() {
-        forecast = observed.last().copied().into_iter().collect();
+fn y_axis_svg(min_v: f64, max_v: f64, height: f64) -> String {
+    let range = (max_v - min_v).abs();
+    if range < 1e-9 {
+        return String::new();
     }
-
-    let observed_poly = polyline_points(&observed, min_v, max_v, width, height);
-    let forecast_poly = polyline_points(&forecast, min_v, max_v, width, height);
-    let current_point = points
-        .iter()
-        .find(|(hour, _)| *hour == now_hour)
-        .copied()
-        .or_else(|| observed.last().copied());
-
-    let current_dot = current_point
-        .map(|(hour, value)| {
-            let (cx, cy) = chart_xy(hour, value, min_v, max_v, width, height);
-            format!("<circle class=\"trend-now\" cx=\"{cx:.1}\" cy=\"{cy:.1}\" r=\"4.3\" />")
-        })
-        .unwrap_or_default();
-
-    format!(
-        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"{y_axis_label} trend\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" /><polyline class=\"trend-line {observed_class}\" points=\"{observed_poly}\" /><polyline class=\"trend-line {forecast_class}\" points=\"{forecast_poly}\" />{current_dot}<text x=\"6\" y=\"20\" class=\"trend-label\">{y_axis_label}</text><text x=\"592\" y=\"172\" class=\"trend-label\">Hour</text></svg>"
-    )
+    let step = nice_y_step(range).max(1e-9);
+    let pad_top = 10.0_f64;
+    let pad_bottom = 24.0_f64;
+    let draw_h = height - pad_top - pad_bottom;
+    let start = (min_v / step).ceil() * step;
+    let mut s = String::new();
+    let mut v = start;
+    while v <= max_v + step * 0.01 {
+        let y = pad_top + ((max_v - v) / range) * draw_h;
+        let label = if step >= 1.0 {
+            format!("{:.0}", v)
+        } else if step >= 0.1 {
+            format!("{:.1}", v)
+        } else {
+            format!("{:.2}", v)
+        };
+        let _ = write!(
+            s,
+            "<line class=\"trend-tick\" x1=\"26\" y1=\"{y:.1}\" x2=\"34\" y2=\"{y:.1}\" /><text class=\"trend-axis-label\" x=\"24\" y=\"{yt:.1}\" text-anchor=\"end\">{label}</text>",
+            yt = y + 3.5
+        );
+        v += step;
+    }
+    s
 }
 
 fn build_temperature_chart_svg(points: &[(u8, f64)], now_hour: u8, threshold_f: f64) -> String {
@@ -328,9 +361,11 @@ fn build_temperature_chart_svg(points: &[(u8, f64)], now_hour: u8, threshold_f: 
     let height = 180.0;
     let mut bounds_points = points.to_vec();
     bounds_points.push((0, threshold_f));
-    let Some((min_v, max_v)) = line_bounds(&bounds_points) else {
+    let Some((data_min, data_max)) = line_bounds(&bounds_points) else {
         return "<div class=\"chart-note\">No chart data available.</div>".to_string();
     };
+    let min_v = f64::min(30.0, data_min - 10.0);
+    let max_v = f64::max(100.0, data_max + 10.0);
     let observed: Vec<(u8, f64)> = points
         .iter()
         .copied()
@@ -392,8 +427,10 @@ fn build_temperature_chart_svg(points: &[(u8, f64)], now_hour: u8, threshold_f: 
         })
         .unwrap_or_default();
 
+    let y_ticks = y_axis_svg(min_v, max_v, height);
+    let hourly_grid = hourly_grid_svg();
     format!(
-        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"Temperature trend with target threshold\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" /><polygon class=\"trend-band temp-band\" points=\"{hist_band_poly}\" /><polyline class=\"trend-line temp-hist\" points=\"{hist_mean_poly}\" /><line class=\"trend-target\" x1=\"34\" y1=\"{target_y:.1}\" x2=\"628\" y2=\"{target_y:.1}\" /><polyline class=\"trend-line temp-obs\" points=\"{observed_poly}\" /><polyline class=\"trend-line temp-fcst\" points=\"{forecast_poly}\" />{current_dot}{labels}<text x=\"6\" y=\"20\" class=\"trend-label\">Temp °F</text><text x=\"540\" y=\"20\" class=\"trend-label\">Target {threshold_f:.0}°F</text><text x=\"592\" y=\"172\" class=\"trend-label\">Hour</text></svg>"
+        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"Temperature trend with target threshold\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" />{hourly_grid}{y_ticks}<polygon class=\"trend-band temp-band\" points=\"{hist_band_poly}\" /><polyline class=\"trend-line temp-hist\" points=\"{hist_mean_poly}\" /><line class=\"trend-target\" x1=\"34\" y1=\"{target_y:.1}\" x2=\"628\" y2=\"{target_y:.1}\" /><polyline class=\"trend-line temp-obs\" points=\"{observed_poly}\" /><polyline class=\"trend-line temp-fcst\" points=\"{forecast_poly}\" />{current_dot}{labels}</svg>"
     )
 }
 
@@ -411,9 +448,11 @@ fn build_wind_chart_svg(points: &[(u8, f64)], now_hour: u8) -> String {
         .collect();
     let mut bounds_points = points.to_vec();
     bounds_points.extend(gust_points.iter().copied());
-    let Some((min_v, max_v)) = line_bounds(&bounds_points) else {
+    let Some((_, data_max_w)) = line_bounds(&bounds_points) else {
         return "<div class=\"chart-note\">No chart data available.</div>".to_string();
     };
+    let min_v = 0.0_f64;
+    let max_v = f64::max(50.0, data_max_w + 5.0);
     let observed: Vec<(u8, f64)> = points
         .iter()
         .copied()
@@ -462,8 +501,51 @@ fn build_wind_chart_svg(points: &[(u8, f64)], now_hour: u8) -> String {
         })
         .unwrap_or_default();
 
+    let y_ticks = y_axis_svg(min_v, max_v, height);
+    let hourly_grid = hourly_grid_svg();
     format!(
-        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"Wind and gust trend\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" /><polygon class=\"trend-band wind-band\" points=\"{hist_band_poly}\" /><polyline class=\"trend-line wind-hist\" points=\"{hist_mean_poly}\" /><polyline class=\"trend-line wind-obs\" points=\"{observed_poly}\" /><polyline class=\"trend-line wind-fcst\" points=\"{forecast_poly}\" /><polyline class=\"trend-line gust\" points=\"{gust_poly}\" />{current_dot}{labels}<text x=\"6\" y=\"20\" class=\"trend-label\">Wind mph</text><text x=\"514\" y=\"20\" class=\"trend-label\">Gust overlay</text><text x=\"592\" y=\"172\" class=\"trend-label\">Hour</text></svg>"
+        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"Wind and gust trend\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" />{hourly_grid}{y_ticks}<polygon class=\"trend-band wind-band\" points=\"{hist_band_poly}\" /><polyline class=\"trend-line wind-hist\" points=\"{hist_mean_poly}\" /><polyline class=\"trend-line wind-obs\" points=\"{observed_poly}\" /><polyline class=\"trend-line wind-fcst\" points=\"{forecast_poly}\" /><polyline class=\"trend-line gust\" points=\"{gust_poly}\" />{current_dot}{labels}</svg>"
+    )
+}
+
+fn build_precip_chart_svg(points: &[(u8, f64)], now_hour: u8) -> String {
+    if points.is_empty() {
+        return "<div class=\"chart-note\">No chart data available.</div>".to_string();
+    }
+    let width = 640.0;
+    let height = 180.0;
+    let data_max_p = points.iter().map(|(_, v)| *v).fold(0.0_f64, f64::max);
+    let min_v = 0.0_f64;
+    let max_v = f64::max(0.3, data_max_p + 0.05);
+    let observed: Vec<(u8, f64)> = points
+        .iter()
+        .copied()
+        .filter(|(hour, _)| *hour <= now_hour)
+        .collect();
+    let mut forecast: Vec<(u8, f64)> = points
+        .iter()
+        .copied()
+        .filter(|(hour, _)| *hour >= now_hour)
+        .collect();
+    if forecast.is_empty() {
+        forecast = observed.last().copied().into_iter().collect();
+    }
+    let observed_poly = polyline_points(&observed, min_v, max_v, width, height);
+    let forecast_poly = polyline_points(&forecast, min_v, max_v, width, height);
+    let (hist_low, hist_mean, hist_high) = build_context_band(&observed, 0.05, Some(0.0));
+    let hist_band_poly = area_polygon_points(&hist_low, &hist_high, min_v, max_v, width, height);
+    let hist_mean_poly = polyline_points(&hist_mean, min_v, max_v, width, height);
+    let current = observed.last().copied().or_else(|| points.first().copied());
+    let current_dot = current
+        .map(|(hour, value)| {
+            let (cx, cy) = chart_xy(hour, value, min_v, max_v, width, height);
+            format!("<circle class=\"trend-now\" cx=\"{cx:.1}\" cy=\"{cy:.1}\" r=\"4.3\" />")
+        })
+        .unwrap_or_default();
+    let y_ticks = y_axis_svg(min_v, max_v, height);
+    let hourly_grid = hourly_grid_svg();
+    format!(
+        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"Precipitation trend\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" />{hourly_grid}{y_ticks}<polygon class=\"trend-band precip-band\" points=\"{hist_band_poly}\" /><polyline class=\"trend-line precip-hist\" points=\"{hist_mean_poly}\" /><polyline class=\"trend-line precip-obs\" points=\"{observed_poly}\" /><polyline class=\"trend-line precip-fcst\" points=\"{forecast_poly}\" />{current_dot}</svg>"
     )
 }
 
@@ -473,9 +555,11 @@ fn build_aqi_chart_svg(points: &[(u8, f64)], now_hour: u8) -> String {
     }
     let width = 640.0;
     let height = 180.0;
-    let Some((min_v, max_v)) = line_bounds(points) else {
+    let Some((_, data_max_a)) = line_bounds(points) else {
         return "<div class=\"chart-note\">No chart data available.</div>".to_string();
     };
+    let min_v = 0.0_f64;
+    let max_v = f64::max(120.0, data_max_a + 15.0);
     let observed: Vec<(u8, f64)> = points
         .iter()
         .copied()
@@ -521,8 +605,14 @@ fn build_aqi_chart_svg(points: &[(u8, f64)], now_hour: u8) -> String {
         })
         .unwrap_or_default();
 
+    let (hist_low_a, hist_mean_a, hist_high_a) = build_context_band(&observed, 15.0, Some(0.0));
+    let hist_band_poly =
+        area_polygon_points(&hist_low_a, &hist_high_a, min_v, max_v, width, height);
+    let hist_mean_poly = polyline_points(&hist_mean_a, min_v, max_v, width, height);
+    let y_ticks = y_axis_svg(min_v, max_v, height);
+    let hourly_grid = hourly_grid_svg();
     format!(
-        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"AQI trend\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" /><line class=\"trend-split\" x1=\"{split_x:.1}\" y1=\"10\" x2=\"{split_x:.1}\" y2=\"156\" /><polyline class=\"trend-line aqi-obs\" points=\"{observed_poly}\"><title>Observed AQI up to current hour</title></polyline><polyline class=\"trend-line aqi-fcst\" points=\"{forecast_poly}\"><title>Forecast AQI from current hour onward</title></polyline>{current_dot}{labels}<text x=\"6\" y=\"20\" class=\"trend-label\">AQI</text><text x=\"470\" y=\"20\" class=\"trend-label\">Obs -> Fcst split</text><text x=\"592\" y=\"172\" class=\"trend-label\">Hour</text></svg>"
+        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"AQI trend\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" />{hourly_grid}{y_ticks}<polygon class=\"trend-band aqi-band\" points=\"{hist_band_poly}\" /><polyline class=\"trend-line aqi-hist\" points=\"{hist_mean_poly}\" /><line class=\"trend-split\" x1=\"{split_x:.1}\" y1=\"10\" x2=\"{split_x:.1}\" y2=\"156\" /><polyline class=\"trend-line aqi-obs\" points=\"{observed_poly}\"><title>Observed AQI up to current hour</title></polyline><polyline class=\"trend-line aqi-fcst\" points=\"{forecast_poly}\"><title>Forecast AQI from current hour onward</title></polyline>{current_dot}{labels}</svg>"
     )
 }
 
@@ -559,8 +649,9 @@ fn build_brightness_chart_svg(points: &[(u8, f64, f64)], now_hour: u8) -> String
     cloud_poly.push_str(&polyline_points(&cloud_scaled, 0.0, 100.0, width, height));
     cloud_poly.push_str(" 628.0,156.0");
 
+    let hourly_grid = hourly_grid_svg();
     format!(
-        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"UV and cloud cover trend\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" /><line class=\"trend-axis-right\" x1=\"628\" y1=\"10\" x2=\"628\" y2=\"156\" /><polygon class=\"trend-cloud-area\" points=\"{cloud_poly}\"><title>Cloud cover area (right axis, %)</title></polygon><polyline class=\"trend-line uv obs\" points=\"{uv_obs_poly}\"><title>Observed UV index (left axis)</title></polyline><polyline class=\"trend-line uv fcst\" points=\"{uv_fcst_poly}\"><title>Forecast UV index (left axis)</title></polyline><text x=\"6\" y=\"20\" class=\"trend-label\">UV index (left axis)</text><text x=\"466\" y=\"20\" class=\"trend-label\">Cloud cover % (right axis)</text><text x=\"592\" y=\"172\" class=\"trend-label\">Hour</text></svg>"
+        "<svg class=\"trend-svg\" viewBox=\"0 0 {width:.0} {height:.0}\" role=\"img\" aria-label=\"UV and cloud cover trend\"><line class=\"trend-axis\" x1=\"34\" y1=\"156\" x2=\"628\" y2=\"156\" /><line class=\"trend-axis\" x1=\"34\" y1=\"10\" x2=\"34\" y2=\"156\" /><line class=\"trend-axis-right\" x1=\"628\" y1=\"10\" x2=\"628\" y2=\"156\" />{hourly_grid}<polygon class=\"trend-cloud-area\" points=\"{cloud_poly}\"><title>Cloud cover area (right axis, %)</title></polygon><polyline class=\"trend-line uv obs\" points=\"{uv_obs_poly}\"><title>Observed UV index (left axis)</title></polyline><polyline class=\"trend-line uv fcst\" points=\"{uv_fcst_poly}\"><title>Forecast UV index (left axis)</title></polyline></svg>"
     )
 }
 
@@ -638,6 +729,25 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
             );
         }
 
+        let cloud = point.cloud_cover_pct.unwrap_or(0.0);
+        let uv = point.uv_index.unwrap_or(0.0);
+        let precip_prob = ((cloud * 0.78) + if uv < 1.0 { 22.0 } else { 0.0 })
+            .round()
+            .clamp(0.0, 100.0) as u8;
+        let precip_in = if precip_prob >= 70 {
+            ((precip_prob as f64 - 66.0) / 125.0).clamp(0.0, 0.8)
+        } else {
+            0.0
+        };
+        let humidity = (44.0 + cloud * 0.52).round().clamp(22.0, 98.0) as u8;
+        let snow_in = if point.temp_f <= 32.0 && precip_in > 0.0 {
+            (precip_in * 6.0).round() / 10.0
+        } else {
+            0.0
+        };
+        precip_series.push((point.hour, precip_in));
+        brightness_series.push((point.hour, uv, cloud));
+
         if point.hour < 12 {
             let gust = point.wind_mph * 1.35;
             let wind_bar = ((point.wind_mph / max_wind) * 100.0)
@@ -665,8 +775,6 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                 aqi_bar
             );
 
-            let cloud = point.cloud_cover_pct.unwrap_or(0.0);
-            let uv = point.uv_index.unwrap_or(0.0);
             let uv_bar = ((uv / 11.0) * 100.0).round().clamp(0.0, 100.0);
             let cloud_bar = cloud.round().clamp(0.0, 100.0);
             let _ = write!(
@@ -679,20 +787,6 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                 cloud_bar
             );
 
-            let precip_prob = ((cloud * 0.78) + if uv < 1.0 { 22.0 } else { 0.0 })
-                .round()
-                .clamp(0.0, 100.0) as u8;
-            let precip_in = if precip_prob >= 70 {
-                ((precip_prob as f64 - 66.0) / 125.0).clamp(0.0, 0.8)
-            } else {
-                0.0
-            };
-            let humidity = (44.0 + cloud * 0.52).round().clamp(22.0, 98.0) as u8;
-            let snow_in = if point.temp_f <= 32.0 && precip_in > 0.0 {
-                (precip_in * 6.0).round() / 10.0
-            } else {
-                0.0
-            };
             let _ = write!(
                 precip_rows,
                 "<tr><td>{:02}:00</td><td>{:.2} in</td><td>{}%</td><td>{}%</td><td>{:.1} in</td></tr>",
@@ -702,9 +796,6 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                 humidity,
                 snow_in
             );
-            precip_series.push((point.hour, precip_prob as f64));
-            brightness_series.push((point.hour, uv, cloud));
-
             if point.hour <= now_hour {
                 precip_total += precip_in;
                 if precip_in > 0.0 || snow_in > 0.0 {
@@ -815,9 +906,15 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
     };
 
     let kitty_status_txt = {
+        const KITTY_TEMP_MIN_F: f64 = 32.0;
+        const KITTY_TEMP_MAX_F: f64 = 85.0;
+        let temp_now = current.as_ref().map(selected_temp_f);
+        let wind_now = current.as_ref().map(|p| p.wind_mph);
         let temp_ok = current
             .as_ref()
-            .map(|p| selected_temp_f(p) > 32.0 && selected_temp_f(p) <= 85.0)
+            .map(|p| {
+                selected_temp_f(p) > KITTY_TEMP_MIN_F && selected_temp_f(p) <= KITTY_TEMP_MAX_F
+            })
             .unwrap_or(false);
         let wind_ok = current
             .as_ref()
@@ -825,32 +922,81 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
             .unwrap_or(true);
         let precip_ok = !rain_or_snow_recently;
         let overall = temp_ok && wind_ok && precip_ok;
+        let temp_status = match temp_now {
+            Some(temp) if temp <= KITTY_TEMP_MIN_F => format!(
+                "Brr too cold for Kitties: {temp:.1}°F -- (At or below {KITTY_TEMP_MIN_F:.0}°F, freezing)"
+            ),
+            Some(temp) if temp > KITTY_TEMP_MAX_F => format!(
+                "Too hot for Kitties: {temp:.1}°F -- (More than {KITTY_TEMP_MAX_F:.0}°F)"
+            ),
+            Some(temp) => format!(
+                "Good Temperature for Kitties: {temp:.1}°F -- ({KITTY_TEMP_MIN_F:.0}°F - {KITTY_TEMP_MAX_F:.0}°F)"
+            ),
+            None => "Temperature data unavailable for Kitties.".to_string(),
+        };
+        let wind_status = match wind_now {
+            Some(wind) if wind_ok => format!(
+                "Not too windy for Kitties: {wind:.0} mph -- ({} mph or less)",
+                settings.kitty_wind_cutoff_mph
+            ),
+            Some(wind) => format!(
+                "Too windy for Kitties: {wind:.0} mph -- (More than {} mph)",
+                settings.kitty_wind_cutoff_mph
+            ),
+            None => "Wind data unavailable for Kitties.".to_string(),
+        };
+        let precip_status = if !precip_ok {
+            Some("Kitties don't like rain or snow: Yes -- (Rain or snow detected)".to_string())
+        } else {
+            None
+        };
+        let mut details = vec![temp_status, wind_status];
+        if let Some(precip) = precip_status {
+            details.push(precip);
+        }
         format!(
-            "Kitty Comfort Threshold: {} | Temp: {} | Wind: {} | Rain/Snow: {}",
+            "Kitty Comfort Threshold: {} | {}",
             if overall { "Yes" } else { "No" },
-            if temp_ok { "OK" } else { "Not OK" },
-            if wind_ok { "OK" } else { "Not OK" },
-            if precip_ok { "No" } else { "Yes" }
+            details.join(" | ")
         )
     };
 
-    let fastest_wind_txt = bundle
+    let fastest_wind_point = bundle
         .points
         .iter()
-        .max_by(|a, b| a.wind_mph.total_cmp(&b.wind_mph))
+        .max_by(|a, b| a.wind_mph.total_cmp(&b.wind_mph));
+    let fastest_wind_txt = fastest_wind_point
         .map(|p| format!("{:.1} mph at {:02}:00", p.wind_mph, p.hour))
         .unwrap_or_else(|| "N/A".to_string());
 
-    let strongest_gust = bundle
+    let wind_banner_txt = {
+        let cutoff = settings.kitty_wind_cutoff_mph as f64;
+        match fastest_wind_point {
+            Some(p) => {
+                let base = format!(
+                    "Today's Fastest Wind Forecasted: {:.1} mph at {:02}:00.",
+                    p.wind_mph, p.hour
+                );
+                if p.wind_mph > cutoff {
+                    format!("{base} Exceeds kitty wind cutoff ({cutoff:.0} mph).")
+                } else {
+                    base
+                }
+            }
+            None => "Wind information is currently unavailable.".to_string(),
+        }
+    };
+
+    let strongest_gust_point = bundle
         .points
         .iter()
         .filter(|p| p.hour <= now_hour)
-        .map(|p| p.wind_mph * 1.35)
-        .fold(0.0_f64, f64::max);
-    let strongest_gust_txt = if strongest_gust > 0.0 {
-        format!("{strongest_gust:.1} mph")
-    } else {
-        "N/A".to_string()
+        .max_by(|a, b| a.wind_mph.total_cmp(&b.wind_mph));
+    let strongest_gust_txt = match strongest_gust_point {
+        Some(p) if p.wind_mph > 0.0 => {
+            format!("{:.1} mph at {:02}:00", p.wind_mph * 1.35, p.hour)
+        }
+        _ => "N/A".to_string(),
     };
 
     let current_aqi_value = current_aqi.or_else(|| current.as_ref().and_then(|p| p.aqi));
@@ -876,13 +1022,7 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
 
     let temp_chart_svg = build_temperature_chart_svg(&temp_series, now_hour, settings.threshold_f);
     let wind_chart_svg = build_wind_chart_svg(&wind_series, now_hour);
-    let precip_chart_svg = build_line_chart_svg(
-        &precip_series,
-        now_hour,
-        "Precip %",
-        "precip-obs",
-        "precip-fcst",
-    );
+    let precip_chart_svg = build_precip_chart_svg(&precip_series, now_hour);
     let aqi_chart_svg = build_aqi_chart_svg(&aqi_series, now_hour);
     let brightness_chart_svg = build_brightness_chart_svg(&brightness_series, now_hour);
 
@@ -929,7 +1069,7 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
             border: 1px solid #e2eaf5;
             border-radius: 10px;
             padding: 0.42rem 0.55rem;
-            margin-bottom: 0.55rem;
+            margin-top: 0.55rem;
             box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
         }
         .controls {
@@ -1031,56 +1171,32 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
             color: #48627c;
             font-size: 0.86rem;
         }
-        .chart-title {
-            font-size: 0.82rem;
-            color: #29445e;
-            font-weight: 650;
-            letter-spacing: 0.01em;
-        }
-        .chart-note {
-            margin-top: 0.2rem;
-            color: #5b6f84;
-            font-size: 0.78rem;
-        }
-        .chart-ribbon {
+        .chart-legend {
             margin-top: 0.5rem;
             display: flex;
-            flex-wrap: wrap;
-            gap: 0.35rem;
+            flex-direction: column;
+            gap: 0.3rem;
         }
-        .chip {
-            border: 1px solid #ced9e8;
-            background: #f7fbff;
+        .legend-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.78rem;
             color: #35556f;
-            border-radius: 999px;
-            padding: 0.16rem 0.45rem;
-            font-size: 0.72rem;
-            letter-spacing: 0.01em;
         }
-        .chip.obs {
-            border-color: #79a6f6;
-            background: #edf4ff;
-            color: #1f4e95;
+        .legend-swatch {
+            flex-shrink: 0;
+            width: 36px;
+            height: 12px;
+            background: #eef4fb;
+            border-radius: 3px;
+            overflow: visible;
         }
-        .chip.fcst {
-            border-color: #85b9c9;
-            background: #eef9fc;
-            color: #245a67;
-        }
-        .chip.uv-chip {
-            border-color: #f1c36d;
-            background: #fff7e8;
-            color: #8a5b08;
-        }
-        .chip.hist-chip {
-            border-color: #c4d3ea;
-            background: #f5f8ff;
-            color: #4d6280;
-        }
-        .chip.cloud-chip {
-            border-color: #8bb4ef;
-            background: #eef4ff;
-            color: #1f4e95;
+        .legend-note {
+            margin-top: 0.1rem;
+            font-size: 0.75rem;
+            color: #5b6f84;
+            font-style: italic;
         }
         .mini-bars {
             margin-top: 0.5rem;
@@ -1132,12 +1248,12 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
         }
         .trend-line.temp-obs { stroke: #00cfe8; }
         .trend-line.temp-fcst {
-            stroke: #ffffff;
+            stroke: #80d4e6;
             stroke-dasharray: 7 6;
         }
         .trend-line.wind-obs { stroke: #00cfe8; }
         .trend-line.wind-fcst {
-            stroke: #d9f4ff;
+            stroke: #7fc4d8;
             stroke-dasharray: 7 6;
         }
         .trend-line.gust {
@@ -1182,6 +1298,31 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
             stroke-width: 2.0;
             stroke-dasharray: 3 3;
         }
+        .trend-band.aqi-band {
+            fill: #9ad162;
+            fill-opacity: 0.12;
+        }
+        .trend-line.aqi-hist {
+            stroke: #78a840;
+            stroke-width: 1.8;
+            stroke-dasharray: 3 3;
+            opacity: 0.7;
+        }
+        .trend-band.precip-band {
+            fill: #4db6ff;
+            fill-opacity: 0.14;
+        }
+        .trend-line.precip-hist {
+            stroke: #2090d0;
+            stroke-width: 1.8;
+            stroke-dasharray: 3 3;
+            opacity: 0.7;
+        }
+        .trend-axis-label {
+            fill: #607286;
+            font-size: 9px;
+            font-family: "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        }
         .trend-cloud-area {
             fill: #8bb4ef;
             fill-opacity: 0.34;
@@ -1202,13 +1343,17 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
             stroke: #ffffff;
             stroke-width: 2;
         }
-        .trend-label {
-            fill: #5f7184;
-            font-size: 12px;
-            font-family: "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        .trend-grid {
+            stroke: #c8d9ec;
+            stroke-width: 0.6;
+            opacity: 0.55;
+        }
+        .trend-tick {
+            stroke: #8099b3;
+            stroke-width: 1.0;
         }
         .trend-callout {
-            fill: #f8fbff;
+            fill: #1e3a5c;
             font-size: 12px;
             font-weight: 700;
             font-family: "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
@@ -1216,21 +1361,39 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
         .trend-callout.gust { fill: #ffb0b0; }
         .trend-callout.aqi-high { fill: #ffb347; }
         .trend-callout.aqi-low { fill: #9ad162; }
-        .axis-tags {
-            margin-top: 0.42rem;
+        .chart-axes-wrap {
             display: flex;
-            justify-content: space-between;
-            gap: 0.35rem;
-            flex-wrap: wrap;
+            align-items: stretch;
+            gap: 0;
         }
-        .axis-tag {
-            font-size: 0.72rem;
-            color: #5f7184;
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
+        .y-axis-label {
+            writing-mode: vertical-lr;
+            transform: rotate(180deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.70rem;
+            color: #5b6f84;
+            padding: 0 0.2rem;
+            flex-shrink: 0;
+            min-width: 16px;
+            letter-spacing: 0.02em;
         }
-        .axis-tag.left { color: #26547f; }
-        .axis-tag.right { color: #8a5b08; }
+        .y-axis-label.right {
+            color: #4a6d8c;
+        }
+        .chart-body {
+            flex: 1;
+            min-width: 0;
+        }
+        .x-axis-label {
+            text-align: center;
+            font-size: 0.70rem;
+            color: #5b6f84;
+            margin-top: 0.1rem;
+            padding-bottom: 0.15rem;
+            letter-spacing: 0.02em;
+        }
         .mini-table {
             width: 100%;
             border-collapse: collapse;
@@ -1274,7 +1437,6 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
         .span-3 { grid-column: span 1; }
         .span-9 { grid-column: span 1; }
         .legend { font-size: 0.92rem; color: var(--muted); margin-top: 0.55rem; }
-        .legend .uv { color: var(--warn); font-weight: 600; }
         .subheading {
             margin: 0.7rem 0 0.35rem;
             font-size: 0.75rem;
@@ -1289,7 +1451,6 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
             .span-3 .metrics { grid-template-columns: 1fr; }
             .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
-        .legend .cloud { color: var(--accent); font-weight: 600; }
         @media (max-width: 900px) {
             .metrics { grid-template-columns: 1fr; }
             .span-3, .span-4, .span-6, .span-8, .span-9, .span-12 { grid-column: span 1; }
@@ -1301,31 +1462,6 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
     <main class="container">
         <section class="layout-row">
             <section class="span-12 layout">
-                <section class="control-strip">
-                    <form class="controls" method="get" action="/dashboard">
-                        <div class="control">
-                            <label for="mode">Monitoring Mode</label>
-                            <select id="mode" name="mode">
-                                <option value="winter" __MODE_WINTER_SELECTED__>Winter (Warming Focus)</option>
-                                <option value="summer" __MODE_SUMMER_SELECTED__>Summer (Cooling Focus)</option>
-                            </select>
-                        </div>
-                        <div class="control">
-                            <label for="temp">Temperature Type</label>
-                            <select id="temp" name="temp">
-                                <option value="actual" __TEMP_ACTUAL_SELECTED__>Actual</option>
-                                <option value="feels_like" __TEMP_FEELS_SELECTED__>Feels Like</option>
-                            </select>
-                        </div>
-                        <div class="control">
-                            <label for="wind_cutoff">Kitty Wind Cutoff (mph)</label>
-                            <input id="wind_cutoff" name="wind_cutoff" type="number" min="0" max="40" step="1" value="__WIND_CUTOFF__" />
-                        </div>
-                        <button type="submit">Apply</button>
-                    </form>
-                    <div class="control-meta">Runtime: rust-phase-c | Active mode: __ACTIVE_MODE__ | Temp basis: __ACTIVE_TEMP__</div>
-                </section>
-
                 <section class="hero">
                     <h1>The Farm: How's the Weather?</h1>
                     <p>Loveland, CO | __LOCAL_TIME__</p>
@@ -1338,18 +1474,27 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                 <h2>Temperature</h2>
                 <div class="metrics">
                     <div class="metric"><div class="k">__TEMP_MODE__ Now</div><div class="v">__TEMP_NOW__</div></div>
-                    <div class="metric"><div class="k">Today's High</div><div class="v">__TEMP_HIGH__</div></div>
-                    <div class="metric"><div class="k">Today's Low</div><div class="v">__TEMP_LOW__</div></div>
-                    <div class="metric"><div class="k">1-hour Delta</div><div class="v">__TEMP_DELTA__</div></div>
+                    <div class="metric"><div class="k">Hourly Change</div><div class="v">__TEMP_DELTA__</div></div>
+                    <div class="metric"><div class="k">Today's High (__TEMP_MODE__)</div><div class="v">__TEMP_HIGH__</div></div>
+                    <div class="metric"><div class="k">Today's Low (__TEMP_MODE__)</div><div class="v">__TEMP_LOW__</div></div>
                 </div>
                 <p class="settings-note">__SEASONAL_STATUS__</p>
                 <div class="chart">
-                    <div class="chart-title">Temperature trend with threshold overlay</div>
-                    <div class="chart-note">Observed and forecast temperature lines follow the selected temperature basis.</div>
-                    <div class="chart-ribbon"><span class="chip obs">Observed</span><span class="chip fcst">Forecast</span><span class="chip">Target threshold</span><span class="chip hist-chip">Context band + mean</span></div>
-                    __TEMP_CHART__
+                    <div class="chart-axes-wrap">
+                        <div class="y-axis-label">Temp °F</div>
+                        <div class="chart-body">
+                            __TEMP_CHART__
+                            <div class="x-axis-label">Hour</div>
+                        </div>
+                    </div>
+                    <div class="chart-legend">
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><polyline class="trend-line temp-obs" points="0,6 36,6"/></svg><span>Observed</span></div>
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><polyline class="trend-line temp-fcst" points="0,6 36,6"/></svg><span>Forecast</span></div>
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><line class="trend-target" x1="0" y1="6" x2="36" y2="6"/></svg><span>Target threshold</span></div>
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><rect class="trend-band temp-band" x="0" y="0" width="36" height="12"/><polyline class="trend-line temp-hist" points="0,6 36,6"/></svg><span>Historical context band + mean</span></div>
+                        <p class="legend-note">Observed and forecast temperature lines follow the selected temperature basis.</p>
+                    </div>
                 </div>
-                <p class="legend">Legend: observed segment and forecast segment reflect the selected temperature type.</p>
             </article>
             </div>
 
@@ -1358,6 +1503,7 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
             <div class="layout-row">
             <article class="card span-6">
                 <h2>Wind</h2>
+                <p class="settings-note">__WIND_BANNER__</p>
                 <div class="metrics">
                     <div class="metric"><div class="k">Wind Speed Now</div><div class="v">__WIND_NOW__</div></div>
                     <div class="metric"><div class="k">Wind Direction</div><div class="v">__WIND_DIR__</div></div>
@@ -1365,13 +1511,21 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                     <div class="metric"><div class="k">Today's Strongest Gust</div><div class="v">__STRONGEST_GUST__</div></div>
                 </div>
                 <div class="chart">
-                    <div class="chart-title">Wind speed trend with gust context</div>
-                    <div class="chart-note">Observed hours transition into forecast hours at the current-hour boundary.</div>
-                    <div class="chart-ribbon"><span class="chip obs">Observed</span><span class="chip fcst">Forecast</span><span class="chip">Gust overlay</span><span class="chip hist-chip">Context band + mean</span></div>
-                    __WIND_CHART__
-                    <div class="axis-tags"><span class="axis-tag left">Y-axis: wind speed mph</span><span class="axis-tag">X-axis: local hour</span></div>
+                    <div class="chart-axes-wrap">
+                        <div class="y-axis-label">Wind speed mph</div>
+                        <div class="chart-body">
+                            __WIND_CHART__
+                            <div class="x-axis-label">Hour</div>
+                        </div>
+                    </div>
+                    <div class="chart-legend">
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><polyline class="trend-line wind-obs" points="0,6 36,6"/></svg><span>Observed wind</span></div>
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><polyline class="trend-line wind-fcst" points="0,6 36,6"/></svg><span>Forecast wind</span></div>
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><polyline class="trend-line gust" points="0,6 36,6"/></svg><span>Gust overlay</span></div>
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><rect class="trend-band wind-band" x="0" y="0" width="36" height="12"/><polyline class="trend-line wind-hist" points="0,6 36,6"/></svg><span>Historical context band + mean</span></div>
+                        <p class="legend-note">Observed hours transition into forecast hours at the current-hour boundary.</p>
+                    </div>
                 </div>
-                <p class="legend">Caption: wind cutoff evaluation uses configured kitty wind threshold.</p>
             </article>
             <article class="card span-6">
                 <h2>Air Quality</h2>
@@ -1382,13 +1536,20 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                     <div class="metric"><div class="k">Interpretation</div><div class="v">__AQI_INTERP__</div></div>
                 </div>
                 <div class="chart">
-                    <div class="chart-title">AQI trend with observed-to-forecast split</div>
-                    <div class="chart-note">Trend readability is anchored to the same hour-boundary semantics as temperature and wind; split marker shows observed-to-forecast transition.</div>
-                    <div class="chart-ribbon"><span class="chip obs">Observed AQI</span><span class="chip fcst">Forecast AQI</span></div>
-                    __AQI_CHART__
-                    <div class="axis-tags"><span class="axis-tag left">Y-axis: AQI scale</span><span class="axis-tag">X-axis: local hour</span></div>
+                    <div class="chart-axes-wrap">
+                        <div class="y-axis-label">AQI</div>
+                        <div class="chart-body">
+                            __AQI_CHART__
+                            <div class="x-axis-label">Hour</div>
+                        </div>
+                    </div>
+                    <div class="chart-legend">
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><polyline class="trend-line aqi-obs" points="0,6 36,6"/></svg><span>Observed AQI</span></div>
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><polyline class="trend-line aqi-fcst" points="0,6 36,6"/></svg><span>Forecast AQI</span></div>
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><polygon class="trend-band aqi-band" points="0,3 36,3 36,9 0,9"/><polyline class="trend-line aqi-hist" points="0,6 36,6"/></svg><span>Historical context band</span></div>
+                        <p class="legend-note">Trend anchored to the same hour-boundary semantics as temperature and wind; split marker shows the observed-to-forecast transition. Pollutant fields use source-missing semantics when unavailable.</p>
+                    </div>
                 </div>
-                <p class="legend">Caption: pollutant fields use source-missing semantics when unavailable.</p>
                 <h3 class="subheading">Pollutant Breakdown</h3>
                 <table class="mini-table">
                     <thead><tr><th>Pollutant</th><th>Value</th><th>Units</th></tr></thead>
@@ -1414,26 +1575,47 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                     <div class="metric"><div class="k">Forecasted Precipitation Now %</div><div class="v">__PRECIP_NOW__</div></div>
                     <div class="metric"><div class="k">Relative Humidity Now %</div><div class="v">__HUMIDITY_NOW__</div></div>
                 </div>
-                <div class="chart">__PRECIP_CHART__</div>
-                <p class="legend">Caption: Recently? is based on observed-hours accumulation logic.</p>
+                <div class="chart">
+                    <div class="chart-axes-wrap">
+                        <div class="y-axis-label">Precip in</div>
+                        <div class="chart-body">
+                            __PRECIP_CHART__
+                            <div class="x-axis-label">Hour</div>
+                        </div>
+                    </div>
+                    <div class="chart-legend">
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><polyline class="trend-line precip-obs" points="0,6 36,6"/></svg><span>Observed (in)</span></div>
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><polyline class="trend-line precip-fcst" points="0,6 36,6"/></svg><span>Forecast (in)</span></div>
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><polygon class="trend-band precip-band" points="0,3 36,3 36,9 0,9"/><polyline class="trend-line precip-hist" points="0,6 36,6"/></svg><span>Historical context band</span></div>
+                        <p class="legend-note">Values in inches. Recently? is based on observed-hours accumulation logic.</p>
+                    </div>
+                </div>
             </article>
 
             <article class="card span-12">
                 <h2>Sunrise / Sunset / Brightness</h2>
                 <div class="metrics">
-                    <div class="metric"><div class="k">Sunrise</div><div class="v">06:15 (+1m vs yesterday)</div></div>
-                    <div class="metric"><div class="k">Sunset</div><div class="v">20:10 (+2m vs yesterday)</div></div>
+                    <div class="metric"><div class="k">Sunrise</div><div class="v">06:15 (+1m from yesterday)</div></div>
+                    <div class="metric"><div class="k">Sunset</div><div class="v">20:10 (+2m from yesterday)</div></div>
                     <div class="metric"><div class="k">Daylight Today</div><div class="v">13h 55m (+3m)</div></div>
                     <div class="metric"><div class="k">Peak UV Index Today</div><div class="v">__PEAK_UV__</div></div>
                 </div>
                 <div class="chart">
-                    <div class="chart-title">Brightness trend: UV and cloud dual-axis view</div>
-                    <div class="chart-note">UV and cloud traces are read independently while sharing hourly alignment; left axis tracks UV and right axis tracks cloud cover.</div>
-                    <div class="chart-ribbon"><span class="chip uv-chip">Observed UV</span><span class="chip fcst">Forecast UV</span><span class="chip cloud-chip">Cloud cover area</span></div>
-                    __BRIGHTNESS_CHART__
-                    <div class="axis-tags"><span class="axis-tag right">Left axis: UV index (0-11)</span><span class="axis-tag left">Right axis: cloud cover % (0-100)</span></div>
+                    <div class="chart-axes-wrap">
+                        <div class="y-axis-label">UV index (0–11)</div>
+                        <div class="chart-body">
+                            __BRIGHTNESS_CHART__
+                            <div class="x-axis-label">Hour</div>
+                        </div>
+                        <div class="y-axis-label right">Cloud cover % (0–100)</div>
+                    </div>
+                    <div class="chart-legend">
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><polyline class="trend-line uv obs" points="0,6 36,6"/></svg><span>Observed UV index (left axis)</span></div>
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><polyline class="trend-line uv fcst" points="0,6 36,6"/></svg><span>Forecast UV index (left axis)</span></div>
+                        <div class="legend-row"><svg class="legend-swatch" viewBox="0 0 36 12"><rect class="trend-cloud-area" x="0" y="0" width="36" height="12"/></svg><span>Cloud cover % (right axis)</span></div>
+                        <p class="legend-note">UV and cloud traces are read independently; left axis tracks UV index (0–11), right axis tracks cloud cover % (0–100).</p>
+                    </div>
                 </div>
-                <p class="legend"><span class="uv">━ UV Index</span> (left axis) and <span class="cloud">█ Cloud Cover %</span> (right axis).</p>
             </article>
 
             <article class="card span-12">
@@ -1442,6 +1624,36 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                 <p class="detail-note-strong">Blended-model caveat: values can reflect mixed model assumptions and should be interpreted as trend guidance, not instrument-grade measurements.</p>
                 <p class="detail-note">Refresh cadence context: normalized forecast bundles are generated periodically, with observed-vs-forecast boundaries anchored to the current hour.</p>
                 <p class="detail-note">Current source: <code>__SOURCE__</code> | Generated at: __GENERATED_AT__</p>
+            </article>
+
+            <article class="card span-12">
+                <h2>Controls</h2>
+                <p class="settings-note">Use these controls to update downstream metrics, status, and chart semantics across all sections.</p>
+                <section class="control-strip">
+                    <form class="controls" method="get" action="/dashboard">
+                        <div class="control">
+                            <label for="mode">Monitoring Mode</label>
+                            <select id="mode" name="mode">
+                                <option value="winter" __MODE_WINTER_SELECTED__>Winter (Warming Focus)</option>
+                                <option value="summer" __MODE_SUMMER_SELECTED__>Summer (Cooling Focus)</option>
+                            </select>
+                        </div>
+                        <div class="control">
+                            <label for="temp">Temperature Type</label>
+                            <select id="temp" name="temp">
+                                <option value="actual" __TEMP_ACTUAL_SELECTED__>Actual</option>
+                                <option value="feels_like" __TEMP_FEELS_SELECTED__>Feels Like</option>
+                            </select>
+                        </div>
+                        <div class="control">
+                            <label for="wind_cutoff">Kitty Wind Cutoff (mph)</label>
+                            <input id="wind_cutoff" name="wind_cutoff" type="number" min="0" max="40" step="1" value="__WIND_CUTOFF__" />
+                        </div>
+                        <button type="submit">Apply</button>
+                    </form>
+                    <div class="control-meta">Runtime: rust-phase-c | Active mode: __ACTIVE_MODE__ | Temp basis: __ACTIVE_TEMP__</div>
+                </section>
+                <p class="legend">Controls section is intentionally placed after Data Sources for parity with the Streamlit review baseline.</p>
             </article>
             </div>
             </section>
@@ -1507,6 +1719,7 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
         .replace("__TEMP_LOW__", &temp_low_txt)
         .replace("__TEMP_DELTA__", &temp_delta_txt)
         .replace("__WIND_DIR__", wind_direction_txt)
+        .replace("__WIND_BANNER__", &wind_banner_txt)
         .replace("__FASTEST_WIND__", &fastest_wind_txt)
         .replace("__STRONGEST_GUST__", &strongest_gust_txt)
         .replace(
@@ -1644,6 +1857,10 @@ mod tests {
         assert!(html.contains("55.1°F"));
         assert!(html.contains("Current AQI"));
         assert!(html.contains("Kitty Comfort Threshold:"));
+        assert!(html.contains("Good Temperature for Kitties:"));
+        assert!(
+            html.contains("Not too windy for Kitties:") || html.contains("Too windy for Kitties:")
+        );
         assert!(html.contains("trend-target"));
         assert!(html.contains("trend-line gust"));
         assert!(html.contains("trend-line aqi-obs"));
@@ -1652,7 +1869,15 @@ mod tests {
         assert!(html.contains("trend-band wind-band"));
         assert!(html.contains("trend-line temp-hist"));
         assert!(html.contains("trend-line wind-hist"));
-        assert!(html.contains("Obs -> Fcst split"));
+        assert!(html.contains("trend-split"));
+    }
+
+    #[test]
+    fn dashboard_places_controls_after_data_sources() {
+        let html = dashboard_html(&sample_bundle(), &default_settings());
+        let data_sources_idx = html.find("<h2>Data Sources</h2>").expect("data sources");
+        let controls_idx = html.find("<h2>Controls</h2>").expect("controls section");
+        assert!(controls_idx > data_sources_idx);
     }
 
     #[test]
