@@ -606,7 +606,8 @@ fn build_aqi_chart_svg(points: &[(u8, f64)], now_hour: u8) -> String {
         .unwrap_or_default();
 
     let (hist_low_a, hist_mean_a, hist_high_a) = build_context_band(&observed, 15.0, Some(0.0));
-    let hist_band_poly = area_polygon_points(&hist_low_a, &hist_high_a, min_v, max_v, width, height);
+    let hist_band_poly =
+        area_polygon_points(&hist_low_a, &hist_high_a, min_v, max_v, width, height);
     let hist_mean_poly = polyline_points(&hist_mean_a, min_v, max_v, width, height);
     let y_ticks = y_axis_svg(min_v, max_v, height);
     let hourly_grid = hourly_grid_svg();

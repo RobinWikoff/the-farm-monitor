@@ -6,7 +6,10 @@ use serde::Deserialize;
 use std::env;
 
 pub trait WeatherProvider {
-    fn fetch_forecast<'a>(&'a self, location: &'a LocationRequest) -> impl std::future::Future<Output = Result<ProviderForecastResponse>> + Send + 'a;
+    fn fetch_forecast<'a>(
+        &'a self,
+        location: &'a LocationRequest,
+    ) -> impl std::future::Future<Output = Result<ProviderForecastResponse>> + Send + 'a;
 }
 
 #[derive(Clone, Debug)]
