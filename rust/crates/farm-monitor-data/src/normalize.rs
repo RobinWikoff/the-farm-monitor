@@ -21,6 +21,9 @@ pub fn normalize_provider_response(response: ProviderForecastResponse) -> Foreca
             aqi: hourly.aqi.map(|v| round1(clamp(v, 0.0, 500.0))),
             uv_index: hourly.uv_index.map(|v| round1(clamp(v, 0.0, 20.0))),
             cloud_cover_pct: hourly.cloud_cover_pct.map(|v| round1(clamp(v, 0.0, 100.0))),
+            humidity_pct: hourly.humidity_pct.map(|v| round1(clamp(v, 0.0, 100.0))),
+            precip_prob_pct: hourly.precip_prob_pct.map(|v| round1(clamp(v, 0.0, 100.0))),
+            precip_hr_in: hourly.precip_hr_in.map(|v| round1(clamp(v, 0.0, 100.0))),
         })
         .collect();
 
@@ -51,6 +54,9 @@ mod tests {
                     aqi: Some(580.0),
                     uv_index: Some(24.6),
                     cloud_cover_pct: Some(125.1),
+                    humidity_pct: None,
+                    precip_prob_pct: None,
+                    precip_hr_in: None,
                 },
                 ProviderPoint {
                     hour: 30,
@@ -60,6 +66,9 @@ mod tests {
                     aqi: None,
                     uv_index: None,
                     cloud_cover_pct: None,
+                    humidity_pct: None,
+                    precip_prob_pct: None,
+                    precip_hr_in: None,
                 },
             ],
         };
