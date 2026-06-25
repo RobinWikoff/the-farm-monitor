@@ -1,3 +1,9 @@
+# ARCHIVED — 2026-06-25
+# This Python/Streamlit implementation has been superseded by the Rust service
+# (rust/crates/farm-monitor-api) running on the Pi at farm-monitor-pi.local:8080.
+# Streamlit Cloud deployment was decommissioned as part of Phase D (#95).
+# Retained for reference only. Do not redeploy.
+
 import streamlit as st
 import requests
 import pandas as pd
