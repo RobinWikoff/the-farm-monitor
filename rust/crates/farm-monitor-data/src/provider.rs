@@ -57,6 +57,9 @@ struct TimelineHour {
     aqi: Option<f64>,
     uvindex: Option<f64>,
     cloudcover: Option<f64>,
+    humidity: Option<f64>,
+    precipprob: Option<f64>,
+    precip: Option<f64>,
 }
 
 impl WeatherProvider for VisualCrossingProvider {
@@ -74,7 +77,7 @@ impl WeatherProvider for VisualCrossingProvider {
                 ("include", "hours,current"),
                 (
                     "elements",
-                    "datetime,temp,feelslike,windspeed,aqius,aqieur,aqi,uvindex,cloudcover",
+                    "datetime,temp,feelslike,windspeed,aqius,aqieur,aqi,uvindex,cloudcover,humidity,precipprob,precip",
                 ),
                 ("key", self.api_key.as_str()),
                 ("contentType", "json"),
@@ -100,6 +103,9 @@ impl WeatherProvider for VisualCrossingProvider {
                     aqi: hour.aqius.or(hour.aqieur).or(hour.aqi),
                     uv_index: hour.uvindex,
                     cloud_cover_pct: hour.cloudcover,
+                    humidity_pct: hour.humidity,
+                    precip_prob_pct: hour.precipprob,
+                    precip_hr_in: hour.precip,
                 })
             })
             .collect();
@@ -136,6 +142,9 @@ mod tests {
                     aqi: Some(56.0),
                     uv_index: Some(7.5),
                     cloud_cover_pct: Some(28.0),
+                    humidity_pct: None,
+                    precip_prob_pct: None,
+                    precip_hr_in: None,
                 }],
             })
         }

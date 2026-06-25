@@ -16,6 +16,9 @@ pub struct ProviderPoint {
     pub aqi: Option<f64>,
     pub uv_index: Option<f64>,
     pub cloud_cover_pct: Option<f64>,
+    pub humidity_pct: Option<f64>,
+    pub precip_prob_pct: Option<f64>,
+    pub precip_hr_in: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -34,6 +37,9 @@ pub struct ForecastPoint {
     pub aqi: Option<f64>,
     pub uv_index: Option<f64>,
     pub cloud_cover_pct: Option<f64>,
+    pub humidity_pct: Option<f64>,
+    pub precip_prob_pct: Option<f64>,
+    pub precip_hr_in: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

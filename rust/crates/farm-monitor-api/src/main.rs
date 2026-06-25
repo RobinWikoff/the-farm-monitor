@@ -5,6 +5,7 @@ use axum::{
     Json, Router,
 };
 use chrono::{Timelike, Utc};
+use chrono_tz::US::Mountain;
 use farm_monitor_data::models::ProviderPoint;
 use farm_monitor_data::{
     normalize_provider_response, FileForecastCache, ForecastBundle, ForecastPoint, LocationRequest,
@@ -166,6 +167,9 @@ fn mock_provider_forecast(_location: &LocationRequest) -> ProviderForecastRespon
             aqi: Some(aqi),
             uv_index: Some(uv),
             cloud_cover_pct: Some(cloud),
+            humidity_pct: None,
+            precip_prob_pct: None,
+            precip_hr_in: None,
         });
     }
 
@@ -656,7 +660,8 @@ fn build_brightness_chart_svg(points: &[(u8, f64, f64)], now_hour: u8) -> String
 }
 
 fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> String {
-    let now_hour = Utc::now().hour() as u8;
+    let now_mt = Utc::now().with_timezone(&Mountain);
+    let now_hour = now_mt.hour() as u8;
     let current = find_current_point(&bundle.points, now_hour)
         .or_else(|| bundle.points.first())
         .cloned();
@@ -731,15 +736,25 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
 
         let cloud = point.cloud_cover_pct.unwrap_or(0.0);
         let uv = point.uv_index.unwrap_or(0.0);
-        let precip_prob = ((cloud * 0.78) + if uv < 1.0 { 22.0 } else { 0.0 })
-            .round()
-            .clamp(0.0, 100.0) as u8;
-        let precip_in = if precip_prob >= 70 {
-            ((precip_prob as f64 - 66.0) / 125.0).clamp(0.0, 0.8)
-        } else {
-            0.0
-        };
-        let humidity = (44.0 + cloud * 0.52).round().clamp(22.0, 98.0) as u8;
+        let precip_prob = point
+            .precip_prob_pct
+            .map(|v| v.round().clamp(0.0, 100.0) as u8)
+            .unwrap_or_else(|| {
+                ((cloud * 0.78) + if uv < 1.0 { 22.0 } else { 0.0 })
+                    .round()
+                    .clamp(0.0, 100.0) as u8
+            });
+        let precip_in = point.precip_hr_in.unwrap_or_else(|| {
+            if precip_prob >= 70 {
+                ((precip_prob as f64 - 66.0) / 125.0).clamp(0.0, 0.8)
+            } else {
+                0.0
+            }
+        });
+        let humidity = point
+            .humidity_pct
+            .map(|v| v.round().clamp(0.0, 100.0) as u8)
+            .unwrap_or_else(|| (44.0 + cloud * 0.52).round().clamp(22.0, 98.0) as u8);
         let snow_in = if point.temp_f <= 32.0 && precip_in > 0.0 {
             (precip_in * 6.0).round() / 10.0
         } else {
@@ -796,16 +811,17 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                 humidity,
                 snow_in
             );
-            if point.hour <= now_hour {
-                precip_total += precip_in;
-                if precip_in > 0.0 || snow_in > 0.0 {
-                    rain_or_snow_recently = true;
-                }
+        }
+
+        if point.hour <= now_hour {
+            precip_total += precip_in;
+            if precip_in > 0.0 || snow_in > 0.0 {
+                rain_or_snow_recently = true;
             }
-            if point.hour == now_hour {
-                precip_now_prob = Some(precip_prob);
-                humidity_now = Some(humidity);
-            }
+        }
+        if point.hour == now_hour {
+            precip_now_prob = Some(precip_prob);
+            humidity_now = Some(humidity);
         }
 
         if point.hour <= now_hour {
@@ -836,7 +852,7 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
         None => ("-".to_string(), "-".to_string()),
     };
 
-    let local_time_txt = Utc::now().format("%H:%M:%S").to_string();
+    let local_time_txt = now_mt.format("%H:%M:%S").to_string();
     let prior_hour = now_hour.saturating_sub(1);
     let temp_high_txt = bundle
         .points
@@ -1813,6 +1829,9 @@ mod tests {
                     aqi: Some(42.0),
                     uv_index: Some(2.1),
                     cloud_cover_pct: Some(25.0),
+                    humidity_pct: None,
+                    precip_prob_pct: None,
+                    precip_hr_in: None,
                 },
                 ForecastPoint {
                     hour: 10,
@@ -1822,6 +1841,9 @@ mod tests {
                     aqi: Some(44.0),
                     uv_index: Some(3.4),
                     cloud_cover_pct: Some(22.0),
+                    humidity_pct: None,
+                    precip_prob_pct: None,
+                    precip_hr_in: None,
                 },
             ],
         }

@@ -96,6 +96,9 @@ mod tests {
                 aqi: Some(42.0),
                 uv_index: Some(3.0),
                 cloud_cover_pct: Some(25.0),
+                humidity_pct: None,
+                precip_prob_pct: None,
+                precip_hr_in: None,
             }],
         }
     }
