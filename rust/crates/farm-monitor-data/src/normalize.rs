@@ -31,6 +31,8 @@ pub fn normalize_provider_response(response: ProviderForecastResponse) -> Foreca
         source: response.source,
         generated_at: response.generated_at,
         points,
+        sunrise: response.sunrise,
+        sunset: response.sunset,
     }
 }
 
@@ -45,6 +47,8 @@ mod tests {
         let response = ProviderForecastResponse {
             source: "unit-test".to_string(),
             generated_at: Utc::now(),
+            sunrise: None,
+            sunset: None,
             hourly: vec![
                 ProviderPoint {
                     hour: 1,
