@@ -42,6 +42,8 @@ struct TimelineResponse {
 
 #[derive(Debug, Deserialize)]
 struct TimelineDay {
+    sunrise: Option<String>,
+    sunset: Option<String>,
     #[serde(default)]
     hours: Vec<TimelineHour>,
 }
@@ -77,7 +79,7 @@ impl WeatherProvider for VisualCrossingProvider {
                 ("include", "hours,current"),
                 (
                     "elements",
-                    "datetime,temp,feelslike,windspeed,aqius,aqieur,aqi,uvindex,cloudcover,humidity,precipprob,precip",
+                    "datetime,temp,feelslike,windspeed,aqius,aqieur,aqi,uvindex,cloudcover,humidity,precipprob,precip,sunrise,sunset",
                 ),
                 ("key", self.api_key.as_str()),
                 ("contentType", "json"),
@@ -88,6 +90,14 @@ impl WeatherProvider for VisualCrossingProvider {
             .error_for_status()?
             .json::<TimelineResponse>()
             .await?;
+
+        // Grab sunrise/sunset from the first day before consuming the iterator
+        let first_day_sunrise = payload.days.first().and_then(|d| d.sunrise.clone());
+        let first_day_sunset = payload.days.first().and_then(|d| d.sunset.clone());
+
+        // Truncate to HH:MM (VC returns "HH:MM:SS")
+        let trim_hhmm =
+            |s: String| -> String { s.splitn(3, ':').take(2).collect::<Vec<_>>().join(":") };
 
         let hourly = payload
             .days
@@ -114,6 +124,8 @@ impl WeatherProvider for VisualCrossingProvider {
             source: "visual-crossing".to_string(),
             generated_at: Utc::now(),
             hourly,
+            sunrise: first_day_sunrise.map(trim_hhmm),
+            sunset: first_day_sunset.map(trim_hhmm),
         })
     }
 }
@@ -134,6 +146,8 @@ mod tests {
             Ok(ProviderForecastResponse {
                 source: "mock".to_string(),
                 generated_at: Utc::now(),
+                sunrise: None,
+                sunset: None,
                 hourly: vec![ProviderPoint {
                     hour: 12,
                     temp_f: Some(71.4),
