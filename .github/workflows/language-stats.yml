@@ -40,11 +40,19 @@ jobs:
         if: ${{ inputs.backfill }}
         run: python3 scripts/backfill_language_stats.py
 
-      - name: Commit results
+      - name: Commit results to data branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Switch to (or create) the unprotected data branch
+          git fetch origin data:data 2>/dev/null || git checkout -b data
+          git checkout data
+
+          # Bring the updated metrics file from the working tree
+          git checkout ${{ github.sha }} -- metrics/language-history.json
+
           git add metrics/language-history.json
           git diff --cached --quiet \
-            || git commit -m "chore: language stats snapshot $(date +%Y-%m-%d) [skip ci]"
-          git push
+            || git commit -m "chore: language stats snapshot $(date +%Y-%m-%d)"
+          git push origin data
