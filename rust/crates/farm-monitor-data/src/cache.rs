@@ -88,6 +88,8 @@ mod tests {
         ForecastBundle {
             source: "test".to_string(),
             generated_at: Utc::now(),
+            sunrise: None,
+            sunset: None,
             points: vec![ForecastPoint {
                 hour: 9,
                 temp_f: 55.0,

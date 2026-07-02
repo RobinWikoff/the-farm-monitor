@@ -1,0 +1,50 @@
+name: Language Stats
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'   # Every Monday at 08:00 UTC
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: 'Rebuild full history from git log (slow — one commit per week)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history needed for backfill
+
+      - name: Install tokei
+        run: |
+          curl -sL "https://github.com/XAMPPRocky/tokei/releases/download/v12.1.2/tokei-x86_64-unknown-linux-musl.tar.gz" \
+            | tar xz tokei
+          sudo mv tokei /usr/local/bin/tokei
+          tokei --version
+
+      - name: Snapshot current state
+        if: ${{ !inputs.backfill }}
+        run: |
+          tokei --output json --exclude target --exclude metrics > /tmp/tokei-raw.json
+          python3 scripts/append_language_snapshot.py
+
+      - name: Backfill from git history
+        if: ${{ inputs.backfill }}
+        run: python3 scripts/backfill_language_stats.py
+
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add metrics/language-history.json
+          git diff --cached --quiet \
+            || git commit -m "chore: language stats snapshot $(date +%Y-%m-%d) [skip ci]"
+          git push

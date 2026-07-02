@@ -177,6 +177,8 @@ fn mock_provider_forecast(_location: &LocationRequest) -> ProviderForecastRespon
         source: "mock-phase-c".to_string(),
         generated_at,
         hourly,
+        sunrise: None,
+        sunset: None,
     }
 }
 
@@ -1029,6 +1031,30 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
         .map(|(v, h)| format!("{v:.0} ({}) at {h:02}:00", uv_label(v)))
         .unwrap_or_else(|| "N/A".to_string());
 
+    // Sunrise / sunset from VC day-level fields
+    let sunrise_txt = bundle.sunrise.clone().unwrap_or_else(|| "N/A".to_string());
+    let sunset_txt = bundle.sunset.clone().unwrap_or_else(|| "N/A".to_string());
+
+    // Daylight duration computed from HH:MM strings
+    let daylight_txt = match (&bundle.sunrise, &bundle.sunset) {
+        (Some(rise), Some(set)) => {
+            let parse_hhmm = |s: &str| -> Option<u32> {
+                let mut parts = s.splitn(2, ':');
+                let h: u32 = parts.next()?.parse().ok()?;
+                let m: u32 = parts.next()?.parse().ok()?;
+                Some(h * 60 + m)
+            };
+            match (parse_hhmm(rise), parse_hhmm(set)) {
+                (Some(rise_min), Some(set_min)) if set_min > rise_min => {
+                    let diff = set_min - rise_min;
+                    format!("{}h {:02}m", diff / 60, diff % 60)
+                }
+                _ => "N/A".to_string(),
+            }
+        }
+        _ => "N/A".to_string(),
+    };
+
     let current_aqi_for_pollutants = current_aqi_value.unwrap_or(42.0);
     let pm25 = (current_aqi_for_pollutants * 0.42).max(3.0);
     let pm10 = (current_aqi_for_pollutants * 0.77).max(6.0);
@@ -1611,9 +1637,9 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
             <article class="card span-12">
                 <h2>Sunrise / Sunset / Brightness</h2>
                 <div class="metrics">
-                    <div class="metric"><div class="k">Sunrise</div><div class="v">06:15 (+1m from yesterday)</div></div>
-                    <div class="metric"><div class="k">Sunset</div><div class="v">20:10 (+2m from yesterday)</div></div>
-                    <div class="metric"><div class="k">Daylight Today</div><div class="v">13h 55m (+3m)</div></div>
+                    <div class="metric"><div class="k">Sunrise</div><div class="v">__SUNRISE__</div></div>
+                    <div class="metric"><div class="k">Sunset</div><div class="v">__SUNSET__</div></div>
+                    <div class="metric"><div class="k">Daylight Today</div><div class="v">__DAYLIGHT__</div></div>
                     <div class="metric"><div class="k">Peak UV Index Today</div><div class="v">__PEAK_UV__</div></div>
                 </div>
                 <div class="chart">
@@ -1768,6 +1794,9 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
         .replace("__NO2__", &format!("{no2:.1}"))
         .replace("__CO__", &format!("{co:.2}"))
         .replace("__PEAK_UV__", &peak_uv_txt)
+        .replace("__SUNRISE__", &sunrise_txt)
+        .replace("__SUNSET__", &sunset_txt)
+        .replace("__DAYLIGHT__", &daylight_txt)
 }
 
 fn aqi_label(aqi: f64) -> &'static str {
@@ -1820,6 +1849,8 @@ mod tests {
         ForecastBundle {
             source: "test-source".to_string(),
             generated_at: Utc::now(),
+            sunrise: None,
+            sunset: None,
             points: vec![
                 ForecastPoint {
                     hour: 9,
