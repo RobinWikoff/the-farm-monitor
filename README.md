@@ -1,235 +1,164 @@
 # The Farm Monitor
 
-Streamlit weather monitor for Loveland, CO with forecast, current conditions, and historical comparison bands.
+A location-specific weather dashboard for a working farm in Loveland, CO — built to answer practical questions like "is it nice enough for the cats to be outside today?"
 
-## Feature Documentation
+**Live:** [farm.robinwikoff.com/dashboard](https://farm.robinwikoff.com/dashboard)
 
-Canonical feature requirements and logic are documented in the wiki:
+---
 
-- https://github.com/RobinWikoff/the-farm-monitor/wiki/Dashboard-Feature-Requirements-and-Logic
+## What It Does
 
-Local anchor file:
+The Farm Monitor pulls live data from the Visual Crossing Timeline API and renders an hourly dashboard covering temperature, wind, precipitation, air quality, UV index, and sunrise/sunset for a specific set of coordinates in Colorado. It applies threshold logic (configurable wind cutoff, seasonal temperature bands, kitty comfort score) to surface actionable summaries rather than raw numbers.
 
-- [docs/feature-requirements.md](docs/feature-requirements.md)
+The service runs continuously on a Raspberry Pi 4 on the home network and is publicly reachable through a Cloudflare Zero Trust named tunnel — no inbound router ports opened.
 
-Architecture diagrams and academic C4/UOR materials are archived in:
+---
 
-- [docs/archive/2026-05-academic-archive-pass](docs/archive/2026-05-academic-archive-pass)
+## Tech Stack
 
-Canonical architecture narrative for current parity work is maintained in wiki:
+| Layer | Technology |
+|---|---|
+| HTTP server | Rust · [Axum](https://github.com/tokio-rs/axum) 0.7 · Tokio async runtime |
+| Weather data | Visual Crossing Timeline API (hourly forecast + current conditions) |
+| Deployment | Raspberry Pi 4 · aarch64 · Raspberry Pi OS 64-bit |
+| Public access | Cloudflare Zero Trust named tunnel |
+| Charts | Server-side SVG rendered inline (no client-side JavaScript charting library) |
+| CI | GitHub Actions — Rust CI (fmt + clippy + test), Ruff (Python linting) |
+| Historical tooling | Python prototype (archived as `app.py`) |
 
-- https://github.com/RobinWikoff/the-farm-monitor/wiki/Academic-Archive
+---
 
-Canonical operations reference is documented in the wiki:
+## Architecture
 
-- https://github.com/RobinWikoff/the-farm-monitor/wiki/Operations-Reference
+The Rust service is organized as a [Cargo workspace](rust/) with three crates:
 
-Local anchor file:
+```
+rust/crates/
+  farm-monitor-domain/   # shared domain types (LocationRequest, health status)
+  farm-monitor-data/     # provider trait, VC client, normalization pipeline, file cache
+  farm-monitor-api/      # Axum HTTP server, dashboard HTML + SVG rendering
+```
 
-- [docs/ops.md](docs/ops.md)
+Data flow on each request:
 
-## Secrets Quickstart (Local Dev)
+```
+VisualCrossingProvider::fetch_forecast()
+  → ProviderForecastResponse  (raw API fields)
+  → normalize_provider_response()
+  → ForecastBundle  (clamped, rounded, normalized)
+  → dashboard_html()
+  → inline HTML + SVG served directly
+```
 
-Use either environment variables or Streamlit secrets for `VISUAL_CROSSING_API_KEY`.
-Environment variables take precedence when both are present.
+The `WeatherProvider` trait makes mock and live providers interchangeable, which is how the rollback test path works: clear the API key, get mock data; restore it, get live data — no code changes required.
 
-Option A: `.env` file
+---
+
+## Key Design Decisions
+
+**Native async traits (AFIT) instead of `async_trait` macro**  
+On the aarch64 release build, `async_trait` triggered dead-code elimination via `--gc-sections` in the linker, silently dropping trait impls at runtime. Switching to Rust 1.75+ native async fn in traits resolved this and removed the proc-macro dependency.
+
+**Server-side SVG charts**  
+The dashboard renders all charts as inline SVG strings on the server. This means the Pi serves a single self-contained HTML response with no CDN dependencies, no JavaScript framework, and no extra round-trips — important for reliability on home network hardware.
+
+**Mountain Time as the canonical clock**  
+Visual Crossing returns data keyed to `America/Denver`. The service uses `chrono-tz` to convert `Utc::now()` to Mountain Time before matching "current hour" against forecast data, avoiding the 6–7 hour offset that caused wrong "now" values when using UTC directly.
+
+**File-based forecast cache**  
+The provider writes a daily JSON cache to disk. This means a Pi reboot or API outage within a day still serves data from the morning's fetch rather than showing N/A across the board.
+
+---
+
+## Migration History: Python → Rust
+
+**Initial implementation** was a Streamlit/Python dashboard (`app.py`). It proved out the feature set quickly: Visual Crossing API integration, hourly charts, threshold logic, historical comparison bands, AQI and UV sections. Streamlit Cloud handled hosting and gave a public URL for free with minimal infrastructure work.
+
+**Why migrate to Rust:** As the normalization pipeline and SVG rendering logic grew, two problems emerged. First, Streamlit's execution model re-runs the entire script on every interaction, which added latency and made it harder to reason about state. Second, the Pi deployment target is resource-constrained — a persistent compiled Rust binary with a small memory footprint fits better than a Python runtime with a Streamlit framework stack. The migration was also a deliberate exercise in building the same feature set twice: once to learn what the domain actually requires, and once to implement it correctly in a systems language.
+
+**Parity approach:** Rather than a big-bang rewrite, the migration used explicit phases with defined acceptance criteria. Each phase had to pass before the next started. The Python dashboard remained in production until Phase D's formal rollback test passed.
+
+| Phase | What was built |
+|---|---|
+| A | Cargo workspace, domain types, mock data, full HTML dashboard rendering end-to-end |
+| B | File-based daily forecast cache, data normalization pipeline, rollback infrastructure |
+| C | VisualCrossing live provider via `WeatherProvider` trait, full UI parity sign-off |
+| D | Production cutover, rollback test, Streamlit decommission, Cloudflare tunnel for public URL |
+
+`app.py` is retained in the repo with an archive notice. Full migration rationale and acceptance criteria are in the [wiki](https://github.com/RobinWikoff/the-farm-monitor/wiki/Rust-Parity-and-Acceptance-Criteria).
+
+---
+
+## Running Locally
+
+**Requirements:** Rust stable toolchain, a [Visual Crossing API key](https://www.visualcrossing.com/) (free tier works).
 
 ```bash
-cat > .env <<'EOF'
-VISUAL_CROSSING_API_KEY=your_real_key_here
-ENV=dev
-DEV_ALLOW_LIVE_API=true
-DEV_USE_SAMPLE_DATA=false
+# Clone and set up environment
+git clone https://github.com/RobinWikoff/the-farm-monitor.git
+cd the-farm-monitor
+
+cat > rust/.env <<'EOF'
+VISUAL_CROSSING_API_KEY=your_key_here
+FM_BIND_ADDR=127.0.0.1:8080
 EOF
+
+# Build and run
+cd rust
+cargo build
+VISUAL_CROSSING_API_KEY=your_key_here cargo run --bin farm-monitor-api
+
+# Open http://127.0.0.1:8080/dashboard
 ```
 
-Option B: `.streamlit/secrets.toml`
+Without an API key the service falls back to a deterministic mock dataset automatically.
+
+**Cross-compiling for Raspberry Pi (aarch64):**
 
 ```bash
-mkdir -p .streamlit
-cat > .streamlit/secrets.toml <<'EOF'
-VISUAL_CROSSING_API_KEY = "your_real_key_here"
-ENV = "dev"
-DEV_ALLOW_LIVE_API = true
-DEV_USE_SAMPLE_DATA = false
-EOF
+sudo apt-get install -y gcc-aarch64-linux-gnu
+rustup target add aarch64-unknown-linux-gnu
+CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc \
+  CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
+  cargo build --release --target aarch64-unknown-linux-gnu
 ```
 
-Run app:
+---
 
-```bash
-python -m streamlit run app.py
+## Repository Structure
+
+```
+app.py                    # archived Python/Streamlit prototype
+rust/                     # active Rust service (Cargo workspace)
+  crates/
+    farm-monitor-api/     # HTTP server + HTML/SVG rendering
+    farm-monitor-data/    # provider, normalize, cache, models
+    farm-monitor-domain/  # shared types
+metrics/                  # language composition history (tracked weekly via CI)
+scripts/                  # language stats tooling, C4 diagram helpers
+docs/                     # feature requirements, ops reference, ADRs
+the-farm-monitor.wiki/    # wiki mirror (separate git repo)
+.github/workflows/        # Rust CI, formatting, language stats
 ```
 
-Security note:
-- `.env` and `.streamlit/secrets.toml` are gitignored and should never be committed.
+---
 
-### Documentation Maintenance Policy
+## Documentation
 
-- Update the wiki feature page in the same PR whenever behavior changes in weather or memo features.
-- C4/UOR materials are archived for academic reference; promote from archive only when explicitly needed for implementation decisions.
-- Update architecture narrative in wiki pages only when archived academic material is promoted back into active use.
-- For UI-impacting PRs, include a linked UI review gate issue and complete the UI Review Handoff in the PR template before merge.
-- For UI-impacting PRs, include the explicit final gate statement: `OK everything is good for UI review.`
-- If no feature behavior changed, include: `No feature-doc changes required` in the PR description.
-- If no architecture changed, include: `No C4 changes required` in the PR description.
-- If UI behavior did not change, include: `No UI review gate required` in the PR description.
-- Keep changelog and tests aligned with any feature logic changes.
+The [project wiki](https://github.com/RobinWikoff/the-farm-monitor/wiki) contains the full documentation set:
 
-## Code Formatting (Ruff)
+- [Model Purpose and Problem](https://github.com/RobinWikoff/the-farm-monitor/wiki/Model-Purpose-and-Problem) — why this exists and what decisions it supports
+- [Rust Parity and Acceptance Criteria](https://github.com/RobinWikoff/the-farm-monitor/wiki/Rust-Parity-and-Acceptance-Criteria) — the phase-by-phase migration baseline
+- [Operations Reference](https://github.com/RobinWikoff/the-farm-monitor/wiki/Operations-Reference) — Pi deployment, service management, Cloudflare tunnel
+- [Model Architecture and Behavior](https://github.com/RobinWikoff/the-farm-monitor/wiki/Model-Architecture-and-Behavior) — C4 diagrams and system design narrative
 
-This repository uses Ruff as the canonical Python formatter.
+---
 
-### Local commands
+## Development Notes
 
-Format all Python files:
+- All behavior-changing PRs update the wiki feature page in the same change window.
+- `cargo fmt` and `cargo clippy -- -D warnings` are enforced in CI.
+- Python files use [Ruff](https://docs.astral.sh/ruff/) for formatting and linting.
+- The `[skip ci]` tag is used on automated commits (e.g. weekly language stats snapshots) to avoid triggering the full CI pipeline unnecessarily.
 
-python -m ruff format .
 
-Check formatting only (no file changes):
-
-python -m ruff format --check .
-
-### CI behavior
-
-Formatting checks run automatically on push and pull request workflows.
-If formatting is not compliant, CI fails and the PR cannot be merged until formatting is fixed.
-
-## Linting (Ruff)
-
-This repository uses Ruff for linting (pycodestyle errors, Pyflakes, and warnings).
-
-### Local commands
-
-Run the linter:
-
-python -m ruff check .
-
-Auto-fix safe issues:
-
-python -m ruff check --fix .
-
-### CI behavior
-
-Lint checks run automatically on push and pull request workflows alongside formatting checks.
-If any lint errors are reported, CI fails and the PR cannot be merged until they are resolved.
-
-## Test Command
-
-Run the test suite locally:
-
-python -m pytest -q
-
-## Memo PDF Template Generation (Issue #62)
-
-Generate a branded memo PDF from structured YAML/JSON input.
-
-### Interactive UI (Streamlit)
-
-Open a form-based UI where you can type memo content and download the PDF:
-
-python -m streamlit run memo/ui.py
-
-In the UI:
-
-- Fill in all required fields.
-- Click **Generate PDF**.
-- Click **Download Memo PDF**.
-
-Date format is required as: `DD-Mon-YYYY` (example: `21-Mar-2026`).
-
-### Example command
-
-python -m memo.cli --input memo/examples/memo_input_example.yaml --output memo_output.pdf
-
-### Required input fields
-
-- `date`
-- `subject`
-- `recipient`
-- `background`
-- `problem_statement`
-- `updates_information`
-- `additional_section_1`
-- `additional_section_2`
-- `additional_section_3`
-
-Optional fields:
-
-- `memo_title` (defaults to `subject`)
-- `organization_name` (defaults to `The Farm`)
-- `logo_path` (defaults to `memo/assets/the_farm_logo.png`)
-
-### Logo File Recommendations
-
-- Preferred format: `PNG` with transparent background
-- Aspect ratio: `4:1` (width to height)
-- Suggested size: `1600 x 400 px`
-- High-res option: `2400 x 600 px`
-
-Design layout suggestion:
-
-- Left half (`2:1`): image mark/icon
-- Right half (`2:1`): text mark `The Farm`
-
-Generated output includes:
-
-- Header with organization branding (`The Farm`) and optional logo
-- Footer with memo title, organization name, and `Page X of Y`
-
-## Dev API Guardrails
-
-Issue #50 introduced development-time API guardrails to reduce accidental quota burn while still allowing live verification when explicitly enabled.
-
-### Runtime Profiles
-
-- `prod`: Always live API mode.
-- `dev-safe`: Forces sample mode unless live access is explicitly allowed.
-- `dev-live`: Dev mode with live API enabled by explicit opt-in.
-
-### Required Dev Flags
-
-- `ENV=dev`
-- `DEV_ALLOW_LIVE_API=true` to permit live calls in dev.
-- `DEV_USE_SAMPLE_DATA=true|false` to choose sample/live within dev-live.
-
-### Guardrail Budget Variables
-
-- `DEV_BUDGET_VC_FORECAST` (default: `12`)
-- `DEV_BUDGET_VC_HISTORICAL` (default: `3`)
-- `DEV_BUDGET_OPEN_METEO_WIND` (default: `24`)
-- `DEV_API_COOLDOWN_MINUTES` (default: `30`)
-
-Invalid values fall back to defaults. Negative budget values clamp to `0`.
-
-### Persisted State
-
-Guardrail state is stored at:
-
-`.streamlit/guardrails/dev_api_state.json`
-
-State keys:
-
-- `date`
-- `usage`
-- `blocked`
-- `cooldowns`
-
-State is effectively day-scoped: when the saved `date` does not match today, the app starts from a fresh state for the new day.
-
-### Operator Controls (Dev UI)
-
-In the sidebar under **Dev API Guardrails**:
-
-- `Reset usage + blocked`: clears daily usage and blocked counters.
-- `Clear cooldowns`: removes active cooldown entries.
-- `Show raw guardrail state`: displays persisted JSON state for debugging.
-
-### Fallback Message Semantics
-
-Guardrail-aware fallback copy distinguishes:
-
-- Budget exhausted for a provider
-- Cooldown active after a 429
-- General transient API/request failure

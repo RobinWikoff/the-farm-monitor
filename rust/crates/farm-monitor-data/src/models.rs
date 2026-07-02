@@ -26,6 +26,9 @@ pub struct ProviderForecastResponse {
     pub source: String,
     pub generated_at: DateTime<Utc>,
     pub hourly: Vec<ProviderPoint>,
+    /// "HH:MM:SS" from Visual Crossing day-level field
+    pub sunrise: Option<String>,
+    pub sunset: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -47,4 +50,7 @@ pub struct ForecastBundle {
     pub source: String,
     pub generated_at: DateTime<Utc>,
     pub points: Vec<ForecastPoint>,
+    /// "HH:MM" display strings derived from VC sunrise/sunset
+    pub sunrise: Option<String>,
+    pub sunset: Option<String>,
 }
