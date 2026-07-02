@@ -45,12 +45,15 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Save updated file before switching branches
+          cp metrics/language-history.json /tmp/language-history-updated.json
+
           # Switch to (or create) the unprotected data branch
           git fetch origin data:data 2>/dev/null || git checkout -b data
           git checkout data
 
-          # Bring the updated metrics file from the working tree
-          git checkout ${{ github.sha }} -- metrics/language-history.json
+          # Restore the file that the snapshot/backfill script wrote
+          cp /tmp/language-history-updated.json metrics/language-history.json
 
           git add metrics/language-history.json
           git diff --cached --quiet \
