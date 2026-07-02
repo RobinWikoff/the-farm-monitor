@@ -4,6 +4,7 @@ Reads /tmp/tokei-raw.json produced by `tokei --output json`
 and appends a dated snapshot to metrics/language-history.json.
 Deduplicates by date (last write wins for the same day).
 """
+
 import json
 from datetime import date
 from pathlib import Path

@@ -8,6 +8,7 @@ Run via:
   workflow_dispatch with backfill=true   (CI)
   python3 scripts/backfill_language_stats.py   (locally, needs tokei on PATH)
 """
+
 import json
 import subprocess
 import tarfile
@@ -111,8 +112,7 @@ def main() -> None:
         python_code = snapshot["languages"].get("Python", {}).get("code", 0)
         total = snapshot["totals"]["code"]
         print(
-            f"  {commit_date} ({sha[:8]}) — "
-            f"{total} lines | Rust {rust_code} | Python {python_code}"
+            f"  {commit_date} ({sha[:8]}) — {total} lines | Rust {rust_code} | Python {python_code}"
         )
         history.append(snapshot)
 
