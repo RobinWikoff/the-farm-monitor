@@ -72,16 +72,20 @@ The provider writes a daily JSON cache to disk. This means a Pi reboot or API ou
 
 ## Migration History: Python → Rust
 
-The project started as a Streamlit/Python dashboard. As the scope expanded and the complexity of the normalization and rendering logic grew, Python's startup overhead and runtime footprint on the Pi became friction points. The migration was structured as four explicit phases:
+**Initial implementation** was a Streamlit/Python dashboard (`app.py`). It proved out the feature set quickly: Visual Crossing API integration, hourly charts, threshold logic, historical comparison bands, AQI and UV sections. Streamlit Cloud handled hosting and gave a public URL for free with minimal infrastructure work.
 
-| Phase | Scope |
+**Why migrate to Rust:** As the normalization pipeline and SVG rendering logic grew, two problems emerged. First, Streamlit's execution model re-runs the entire script on every interaction, which added latency and made it harder to reason about state. Second, the Pi deployment target is resource-constrained — a persistent compiled Rust binary with a small memory footprint fits better than a Python runtime with a Streamlit framework stack. The migration was also a deliberate exercise in building the same feature set twice: once to learn what the domain actually requires, and once to implement it correctly in a systems language.
+
+**Parity approach:** Rather than a big-bang rewrite, the migration used explicit phases with defined acceptance criteria. Each phase had to pass before the next started. The Python dashboard remained in production until Phase D's formal rollback test passed.
+
+| Phase | What was built |
 |---|---|
-| A | Cargo workspace, domain types, local mock data serving the full UI |
-| B | File cache, data normalization pipeline, guardrail/rollback infrastructure |
-| C | Visual Crossing live provider, full UI parity with the Python dashboard |
-| D | Cutover, rollback test, Python decommission, public URL via Cloudflare tunnel |
+| A | Cargo workspace, domain types, mock data, full HTML dashboard rendering end-to-end |
+| B | File-based daily forecast cache, data normalization pipeline, rollback infrastructure |
+| C | VisualCrossing live provider via `WeatherProvider` trait, full UI parity sign-off |
+| D | Production cutover, rollback test, Streamlit decommission, Cloudflare tunnel for public URL |
 
-`app.py` is retained in the repo with an archive notice; the full migration rationale and parity acceptance criteria are documented in the [wiki](https://github.com/RobinWikoff/the-farm-monitor/wiki).
+`app.py` is retained in the repo with an archive notice. Full migration rationale and acceptance criteria are in the [wiki](https://github.com/RobinWikoff/the-farm-monitor/wiki/Rust-Parity-and-Acceptance-Criteria).
 
 ---
 
