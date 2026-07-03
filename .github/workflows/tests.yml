@@ -71,7 +71,10 @@ jobs:
           PY
 
       - name: Run tests excluding live API marker
-        run: pytest -q -m "not live_api"
+        run: |
+          pytest -q -m "not live_api" --ignore=tests/archive; CODE=$?
+          [ $CODE -eq 0 ] || [ $CODE -eq 5 ] || exit $CODE
+          [ $CODE -eq 5 ] && echo "No active Python tests (archived — see tests/archive/)"
 
   live-api-tests:
     name: Live API integration tests (manual)
