@@ -1,6 +1,75 @@
 # The Farm: Comfort Temperature Monitor — Changelog
 
-## [Unreleased] - 2026-03-16
+---
+
+## Post-Decommission Fixes — 2026-07-02
+
+### Added
+- Sunrise/sunset times now sourced from Visual Crossing API day-level fields (issue [#142](https://github.com/RobinWikoff/the-farm-monitor/issues/142), PR [#143](https://github.com/RobinWikoff/the-farm-monitor/pull/143)).
+  HTML placeholders `__SUNRISE__` / `__SUNSET__` were hardcoded and never wired to any data source until this fix.
+- Weekly language composition tracking: LOC snapshots committed to `data` branch on a schedule,
+  backfilled from 2026-03-06 through 2026-07-02 (11 entries; Rust 0% → 16.3%) (issue [#140](https://github.com/RobinWikoff/the-farm-monitor/issues/140), PRs [#141](https://github.com/RobinWikoff/the-farm-monitor/pull/141)/[#144](https://github.com/RobinWikoff/the-farm-monitor/pull/144)/[#145](https://github.com/RobinWikoff/the-farm-monitor/pull/145)).
+- CI path filtering: Python workflows (`format.yml`, `tests.yml`) now only trigger on Python file changes;
+  Rust CI already scoped to `rust/**` (PR [#146](https://github.com/RobinWikoff/the-farm-monitor/pull/146)).
+- Python test suite moved to `tests/archive/` (tests were written for the decommissioned Python app).
+
+### Changed
+- README rewritten as a portfolio-facing document: live URL, Rust tech stack table, architecture overview,
+  migration history, local dev quickstart, cross-compile instructions. Old SOP content removed.
+- devcontainer updated: port 8080 (was 8501), removed Streamlit auto-start, opens README and `main.rs` on attach.
+
+---
+
+## Phase D — Pi Deployment and Public Access — 2026-06-25
+
+### Added
+- Rust binary cross-compiled for aarch64 and deployed to Raspberry Pi 4 via `scp` + systemd.
+  Service: `farm-monitor.service`, bind `0.0.0.0:8080`, live Visual Crossing data confirmed.
+- Cloudflare Named Tunnel (`farm-monitor`, UUID `4a10ccef`) routes `farm.robinwikoff.com` → Pi:8080.
+  Public dashboard live at **https://farm.robinwikoff.com/dashboard** (permanent, survives reboots).
+- Closes issue [#139](https://github.com/RobinWikoff/the-farm-monitor/issues/139).
+
+### Changed
+- Python/Streamlit app (`app.py`) formally decommissioned. Streamlit Cloud deployment removed.
+  `app.py` retained in-repo as historical reference with `# ARCHIVED — 2026-06-25` header.
+- `.streamlit/secrets.toml` and Streamlit secrets handling decommissioned.
+
+---
+
+## Phase C — Rust UI Parity — 2026-04 to 2026-05
+
+### Added
+- Rust dashboard reaches full UI parity with the Python/Streamlit implementation.
+  All weather sections implemented: Temperature (Actual/Feels Like toggle), Wind, Precipitation,
+  UV Index, Fire Danger / Smoke Days, AQI, Humidity, Sunrise/Sunset display, Controls.
+- Server-side SVG chart rendering — no JavaScript dependency, no Altair/Vega.
+- Mountain Time (`America/Denver`) timezone handling via `chrono-tz`.
+- File-based 10-minute forecast cache (avoids Visual Crossing API quota burn on refresh).
+- Mock data fallback path for offline and CI use.
+- Parity issues: [#94](https://github.com/RobinWikoff/the-farm-monitor/issues/94), [#102](https://github.com/RobinWikoff/the-farm-monitor/issues/102)–[#107](https://github.com/RobinWikoff/the-farm-monitor/issues/107), [#120](https://github.com/RobinWikoff/the-farm-monitor/issues/120), [#122](https://github.com/RobinWikoff/the-farm-monitor/issues/122).
+  PRs: [#99](https://github.com/RobinWikoff/the-farm-monitor/pull/99)–[#101](https://github.com/RobinWikoff/the-farm-monitor/pull/101), [#112](https://github.com/RobinWikoff/the-farm-monitor/pull/112), [#116](https://github.com/RobinWikoff/the-farm-monitor/pull/116)–[#119](https://github.com/RobinWikoff/the-farm-monitor/pull/119), [#121](https://github.com/RobinWikoff/the-farm-monitor/pull/121).
+
+---
+
+## Phase B — Rust Workspace Scaffolding — 2026-04
+
+### Added
+- 3-crate Cargo workspace:
+  - `farm-monitor-api`: Axum 0.7 HTTP server, HTML template with inline SVG, `/dashboard`, `/healthz` routes.
+  - `farm-monitor-data`: `WeatherProvider` trait (AFIT), `VisualCrossingProvider` (reqwest + rustls-tls),
+    file cache, data normalizer, guardrail config.
+  - `farm-monitor-domain`: shared domain types.
+- Native async trait (AFIT) pattern — no `async_trait` crate dependency; avoids linker DCE issues on aarch64 release builds.
+- Visual Crossing Timeline API elements: `temp`, `feelslike`, `windspeed`, `aqius`, `uvindex`, `cloudcover`,
+  `humidity`, `precipprob`, `precip`, `sunrise`, `sunset`.
+- `rust-ci.yml` GitHub Actions workflow: `cargo fmt`, `clippy -D warnings`, `cargo test`, `cargo build`.
+  Path-filtered to `rust/**` — Rust CI only runs when Rust files change.
+
+---
+
+## Python/Streamlit Era — 2026-03-16 and earlier
+
+## [Archived] - 2026-03-16
 ### Added
 - Feature documentation local anchor: `docs/feature-requirements.md` (canonical behavior requirements maintained in wiki).
 - Documentation maintenance policy: README links wiki-canonical requirements/process pages plus local anchor docs.
