@@ -25,6 +25,15 @@ impl VisualCrossingProvider {
         Ok(Self::new(api_key))
     }
 
+    pub fn from_env_with_timezone(tz_name: &str) -> Result<Self> {
+        let api_key = env::var("VISUAL_CROSSING_API_KEY")?;
+        Ok(Self {
+            client: Client::new(),
+            api_key,
+            timezone: tz_name.to_string(),
+        })
+    }
+
     pub fn new(api_key: String) -> Self {
         Self {
             client: Client::new(),
@@ -96,8 +105,9 @@ impl WeatherProvider for VisualCrossingProvider {
         let first_day_sunset = payload.days.first().and_then(|d| d.sunset.clone());
 
         // Truncate to HH:MM (VC returns "HH:MM:SS")
-        let trim_hhmm =
-            |s: String| -> String { s.splitn(3, ':').take(2).collect::<Vec<_>>().join(":") };
+        let trim_hhmm = |s: String| -> String {
+            s.splitn(3, ':').take(2).collect::<Vec<_>>().join(":")
+        };
 
         let hourly = payload
             .days

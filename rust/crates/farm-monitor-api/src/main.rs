@@ -5,8 +5,10 @@ use axum::{
     Json, Router,
 };
 use chrono::{Timelike, Utc};
-use chrono_tz::US::Mountain;
 use farm_monitor_data::models::ProviderPoint;
+use reqwest::Client as ReqwestClient;
+use serde::Deserialize;
+use std::sync::OnceLock;
 use farm_monitor_data::{
     normalize_provider_response, FileForecastCache, ForecastBundle, ForecastPoint, LocationRequest,
     ProviderForecastResponse, VisualCrossingProvider, WeatherProvider,
@@ -17,6 +19,72 @@ use std::env;
 use std::net::SocketAddr;
 use std::{f64::consts::PI, fmt::Write};
 use tracing::{info, warn};
+
+static TZ_FINDER: OnceLock<tzf_rs::DefaultFinder> = OnceLock::new();
+
+#[derive(Deserialize)]
+struct NominatimResponse {
+    address: NominatimAddress,
+}
+
+#[derive(Deserialize)]
+struct NominatimAddress {
+    city: Option<String>,
+    town: Option<String>,
+    village: Option<String>,
+    #[serde(rename = "ISO3166-2-lvl4")]
+    iso_3166_2: Option<String>,
+}
+
+fn derive_timezone(lat: f64, lon: f64) -> chrono_tz::Tz {
+    let finder = TZ_FINDER.get_or_init(tzf_rs::DefaultFinder::new);
+    let tz_name = finder.get_tz_name(lon, lat);
+    tz_name.parse::<chrono_tz::Tz>().unwrap_or(chrono_tz::US::Mountain)
+}
+
+async fn reverse_geocode(lat: f64, lon: f64) -> String {
+    let client = ReqwestClient::new();
+    let url = format!(
+        "https://nominatim.openstreetmap.org/reverse?lat={}&lon={}&format=json",
+        lat, lon
+    );
+    let result = client
+        .get(&url)
+        .header("User-Agent", "farm-monitor/1.0")
+        .send()
+        .await
+        .ok();
+    if let Some(resp) = result {
+        if let Ok(geo) = resp.json::<NominatimResponse>().await {
+            let city = geo
+                .address
+                .city
+                .or(geo.address.town)
+                .or(geo.address.village)
+                .unwrap_or_else(|| format!("{lat:.3}, {lon:.3}"));
+            let state = geo
+                .address
+                .iso_3166_2
+                .as_deref()
+                .and_then(|s| s.split('-').nth(1))
+                .unwrap_or("")
+                .to_string();
+            return if state.is_empty() {
+                city
+            } else {
+                format!("{city}, {state}")
+            };
+        }
+    }
+    format!("{lat:.3}, {lon:.3}")
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
 
 #[tokio::main]
 async fn main() {
@@ -52,8 +120,8 @@ async fn index() -> Redirect {
 }
 
 async fn dashboard(Query(query): Query<HashMap<String, String>>) -> Html<String> {
-    let settings = dashboard_settings_from_query(&query);
-    match load_dashboard_bundle().await {
+    let settings = build_dashboard_settings(&query).await;
+    match load_dashboard_bundle(&settings).await {
         Ok(bundle) => Html(dashboard_html(&bundle, &settings)),
         Err(err) => Html(error_dashboard_html(&format!(
             "failed to load dashboard data: {err}"
@@ -69,9 +137,15 @@ struct DashboardSettings {
     temp_label: &'static str,
     use_feels_like: bool,
     kitty_wind_cutoff_mph: u8,
+    lat: f64,
+    lon: f64,
+    location_name: String,
+    tz: chrono_tz::Tz,
+    kitty_temp_min_f: f64,
+    kitty_temp_max_f: f64,
 }
 
-fn dashboard_settings_from_query(query: &HashMap<String, String>) -> DashboardSettings {
+async fn build_dashboard_settings(query: &HashMap<String, String>) -> DashboardSettings {
     let mode_raw = query
         .get("mode")
         .map(|s| s.trim().to_ascii_lowercase())
@@ -98,6 +172,40 @@ fn dashboard_settings_from_query(query: &HashMap<String, String>) -> DashboardSe
         .map(|v| v.clamp(0, 40))
         .unwrap_or(5);
 
+    let has_custom_location = query.contains_key("lat") || query.contains_key("lon");
+    let lat = query
+        .get("lat")
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(40.39);
+    let lon = query
+        .get("lon")
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(-105.07);
+
+    let tz = if has_custom_location {
+        derive_timezone(lat, lon)
+    } else {
+        chrono_tz::US::Mountain
+    };
+
+    let location_name =
+        if let Some(name) = query.get("location_name").filter(|s| !s.trim().is_empty()) {
+            name.clone()
+        } else if has_custom_location {
+            reverse_geocode(lat, lon).await
+        } else {
+            "Loveland, CO".to_string()
+        };
+
+    let kitty_temp_min_f = query
+        .get("kitty_min")
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(32.0);
+    let kitty_temp_max_f = query
+        .get("kitty_max")
+        .and_then(|s| s.parse::<f64>().ok())
+        .unwrap_or(85.0);
+
     DashboardSettings {
         mode_label,
         is_winter_mode,
@@ -105,23 +213,29 @@ fn dashboard_settings_from_query(query: &HashMap<String, String>) -> DashboardSe
         temp_label,
         use_feels_like,
         kitty_wind_cutoff_mph,
+        lat,
+        lon,
+        location_name,
+        tz,
+        kitty_temp_min_f,
+        kitty_temp_max_f,
     }
 }
 
-async fn load_dashboard_bundle() -> anyhow::Result<ForecastBundle> {
+async fn load_dashboard_bundle(settings: &DashboardSettings) -> anyhow::Result<ForecastBundle> {
     let now = Utc::now();
     let today = now.date_naive();
-    let cache = FileForecastCache::new(".streamlit/rust_cache");
+    let cache = FileForecastCache::new("data/cache");
 
     if let Some(bundle) = cache.read(today)? {
         return Ok(bundle);
     }
 
     let location = LocationRequest {
-        lat: 40.39,
-        lon: -105.07,
+        lat: settings.lat,
+        lon: settings.lon,
     };
-    let provider_response = match VisualCrossingProvider::from_env() {
+    let provider_response = match VisualCrossingProvider::from_env_with_timezone(&format!("{}", settings.tz)) {
         Ok(provider) => match provider.fetch_forecast(&location).await {
             Ok(response) => response,
             Err(err) => {
@@ -662,7 +776,7 @@ fn build_brightness_chart_svg(points: &[(u8, f64, f64)], now_hour: u8) -> String
 }
 
 fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> String {
-    let now_mt = Utc::now().with_timezone(&Mountain);
+    let now_mt = Utc::now().with_timezone(&settings.tz);
     let now_hour = now_mt.hour() as u8;
     let current = find_current_point(&bundle.points, now_hour)
         .or_else(|| bundle.points.first())
@@ -924,14 +1038,14 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
     };
 
     let kitty_status_txt = {
-        const KITTY_TEMP_MIN_F: f64 = 32.0;
-        const KITTY_TEMP_MAX_F: f64 = 85.0;
+        let kitty_temp_min_f = settings.kitty_temp_min_f;
+        let kitty_temp_max_f = settings.kitty_temp_max_f;
         let temp_now = current.as_ref().map(selected_temp_f);
         let wind_now = current.as_ref().map(|p| p.wind_mph);
         let temp_ok = current
             .as_ref()
             .map(|p| {
-                selected_temp_f(p) > KITTY_TEMP_MIN_F && selected_temp_f(p) <= KITTY_TEMP_MAX_F
+                selected_temp_f(p) > kitty_temp_min_f && selected_temp_f(p) <= kitty_temp_max_f
             })
             .unwrap_or(false);
         let wind_ok = current
@@ -941,14 +1055,14 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
         let precip_ok = !rain_or_snow_recently;
         let overall = temp_ok && wind_ok && precip_ok;
         let temp_status = match temp_now {
-            Some(temp) if temp <= KITTY_TEMP_MIN_F => format!(
-                "Brr too cold for Kitties: {temp:.1}°F -- (At or below {KITTY_TEMP_MIN_F:.0}°F, freezing)"
+            Some(temp) if temp <= kitty_temp_min_f => format!(
+                "Brr too cold for Kitties: {temp:.1}°F -- (At or below {kitty_temp_min_f:.0}°F, freezing)"
             ),
-            Some(temp) if temp > KITTY_TEMP_MAX_F => format!(
-                "Too hot for Kitties: {temp:.1}°F -- (More than {KITTY_TEMP_MAX_F:.0}°F)"
+            Some(temp) if temp > kitty_temp_max_f => format!(
+                "Too hot for Kitties: {temp:.1}°F -- (More than {kitty_temp_max_f:.0}°F)"
             ),
             Some(temp) => format!(
-                "Good Temperature for Kitties: {temp:.1}°F -- ({KITTY_TEMP_MIN_F:.0}°F - {KITTY_TEMP_MAX_F:.0}°F)"
+                "Good Temperature for Kitties: {temp:.1}°F -- ({kitty_temp_min_f:.0}°F - {kitty_temp_max_f:.0}°F)"
             ),
             None => "Temperature data unavailable for Kitties.".to_string(),
         };
@@ -1506,7 +1620,7 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
             <section class="span-12 layout">
                 <section class="hero">
                     <h1>The Farm: How's the Weather?</h1>
-                    <p>Loveland, CO | __LOCAL_TIME__</p>
+                    <p>__LOCATION_NAME__ | __LOCAL_TIME__</p>
                 </section>
 
                 <section class="status">__KITTY_STATUS__</section>
@@ -1672,28 +1786,52 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                 <h2>Controls</h2>
                 <p class="settings-note">Use these controls to update downstream metrics, status, and chart semantics across all sections.</p>
                 <section class="control-strip">
-                    <form class="controls" method="get" action="/dashboard">
-                        <div class="control">
-                            <label for="mode">Monitoring Mode</label>
-                            <select id="mode" name="mode">
-                                <option value="winter" __MODE_WINTER_SELECTED__>Winter (Warming Focus)</option>
-                                <option value="summer" __MODE_SUMMER_SELECTED__>Summer (Cooling Focus)</option>
-                            </select>
+                    <form method="get" action="/dashboard">
+                        <div class="controls" style="grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 0.4rem;">
+                            <div class="control">
+                                <label for="lat">Latitude</label>
+                                <input id="lat" name="lat" type="number" min="-90" max="90" step="0.001" value="__LAT__" />
+                            </div>
+                            <div class="control">
+                                <label for="lon">Longitude</label>
+                                <input id="lon" name="lon" type="number" min="-180" max="180" step="0.001" value="__LON__" />
+                            </div>
+                            <div class="control">
+                                <label for="location_name">Location Name</label>
+                                <input id="location_name" name="location_name" type="text" value="__LOCATION_NAME__" />
+                            </div>
                         </div>
-                        <div class="control">
-                            <label for="temp">Temperature Type</label>
-                            <select id="temp" name="temp">
-                                <option value="actual" __TEMP_ACTUAL_SELECTED__>Actual</option>
-                                <option value="feels_like" __TEMP_FEELS_SELECTED__>Feels Like</option>
-                            </select>
+                        <div class="controls" style="grid-template-columns: repeat(5, minmax(0, 1fr)) auto;">
+                            <div class="control">
+                                <label for="mode">Monitoring Mode</label>
+                                <select id="mode" name="mode">
+                                    <option value="winter" __MODE_WINTER_SELECTED__>Winter (Warming Focus)</option>
+                                    <option value="summer" __MODE_SUMMER_SELECTED__>Summer (Cooling Focus)</option>
+                                </select>
+                            </div>
+                            <div class="control">
+                                <label for="temp">Temperature Type</label>
+                                <select id="temp" name="temp">
+                                    <option value="actual" __TEMP_ACTUAL_SELECTED__>Actual</option>
+                                    <option value="feels_like" __TEMP_FEELS_SELECTED__>Feels Like</option>
+                                </select>
+                            </div>
+                            <div class="control">
+                                <label for="wind_cutoff">Kitty Wind Cutoff (mph)</label>
+                                <input id="wind_cutoff" name="wind_cutoff" type="number" min="0" max="40" step="1" value="__WIND_CUTOFF__" />
+                            </div>
+                            <div class="control">
+                                <label for="kitty_min">Kitty Temp Min (°F)</label>
+                                <input id="kitty_min" name="kitty_min" type="number" min="-50" max="120" step="1" value="__KITTY_MIN__" />
+                            </div>
+                            <div class="control">
+                                <label for="kitty_max">Kitty Temp Max (°F)</label>
+                                <input id="kitty_max" name="kitty_max" type="number" min="-50" max="120" step="1" value="__KITTY_MAX__" />
+                            </div>
+                            <button type="submit">Apply</button>
                         </div>
-                        <div class="control">
-                            <label for="wind_cutoff">Kitty Wind Cutoff (mph)</label>
-                            <input id="wind_cutoff" name="wind_cutoff" type="number" min="0" max="40" step="1" value="__WIND_CUTOFF__" />
-                        </div>
-                        <button type="submit">Apply</button>
                     </form>
-                    <div class="control-meta">Runtime: rust-phase-c | Active mode: __ACTIVE_MODE__ | Temp basis: __ACTIVE_TEMP__</div>
+                    <div class="control-meta">Runtime: rust-phase-c | Active mode: __ACTIVE_MODE__ | Temp basis: __ACTIVE_TEMP__ | Timezone: __TIMEZONE__</div>
                 </section>
                 <p class="legend">Controls section is intentionally placed after Data Sources for parity with the Streamlit review baseline.</p>
             </article>
@@ -1797,6 +1935,12 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
         .replace("__SUNRISE__", &sunrise_txt)
         .replace("__SUNSET__", &sunset_txt)
         .replace("__DAYLIGHT__", &daylight_txt)
+        .replace("__LOCATION_NAME__", &html_escape(&settings.location_name))
+        .replace("__LAT__", &format!("{}", settings.lat))
+        .replace("__LON__", &format!("{}", settings.lon))
+        .replace("__KITTY_MIN__", &format!("{}", settings.kitty_temp_min_f))
+        .replace("__KITTY_MAX__", &format!("{}", settings.kitty_temp_max_f))
+        .replace("__TIMEZONE__", &format!("{}", settings.tz))
 }
 
 fn aqi_label(aqi: f64) -> &'static str {
@@ -1888,6 +2032,12 @@ mod tests {
             temp_label: "Actual",
             use_feels_like: false,
             kitty_wind_cutoff_mph: 5,
+            lat: 40.39,
+            lon: -105.07,
+            location_name: "Loveland, CO".to_string(),
+            tz: chrono_tz::US::Mountain,
+            kitty_temp_min_f: 32.0,
+            kitty_temp_max_f: 85.0,
         }
     }
 
