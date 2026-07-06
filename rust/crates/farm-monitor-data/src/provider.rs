@@ -25,6 +25,15 @@ impl VisualCrossingProvider {
         Ok(Self::new(api_key))
     }
 
+    pub fn from_env_with_timezone(tz_name: &str) -> Result<Self> {
+        let api_key = env::var("VISUAL_CROSSING_API_KEY")?;
+        Ok(Self {
+            client: Client::new(),
+            api_key,
+            timezone: tz_name.to_string(),
+        })
+    }
+
     pub fn new(api_key: String) -> Self {
         Self {
             client: Client::new(),

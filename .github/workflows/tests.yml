@@ -18,13 +18,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - "**/*.py"
-      - "requirements.txt"
-      - "pyproject.toml"
-      - "pytest.ini"
-      - "tests/**"
-      - ".github/workflows/tests.yml"
   workflow_dispatch:
     inputs:
       run_live_api_tests:
