@@ -105,9 +105,8 @@ impl WeatherProvider for VisualCrossingProvider {
         let first_day_sunset = payload.days.first().and_then(|d| d.sunset.clone());
 
         // Truncate to HH:MM (VC returns "HH:MM:SS")
-        let trim_hhmm = |s: String| -> String {
-            s.splitn(3, ':').take(2).collect::<Vec<_>>().join(":")
-        };
+        let trim_hhmm =
+            |s: String| -> String { s.splitn(3, ':').take(2).collect::<Vec<_>>().join(":") };
 
         let hourly = payload
             .days

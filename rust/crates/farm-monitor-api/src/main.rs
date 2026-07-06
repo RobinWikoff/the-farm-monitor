@@ -6,17 +6,17 @@ use axum::{
 };
 use chrono::{Timelike, Utc};
 use farm_monitor_data::models::ProviderPoint;
-use reqwest::Client as ReqwestClient;
-use serde::Deserialize;
-use std::sync::OnceLock;
 use farm_monitor_data::{
     normalize_provider_response, FileForecastCache, ForecastBundle, ForecastPoint, LocationRequest,
     ProviderForecastResponse, VisualCrossingProvider, WeatherProvider,
 };
 use farm_monitor_domain::HealthStatus;
+use reqwest::Client as ReqwestClient;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
+use std::sync::OnceLock;
 use std::{f64::consts::PI, fmt::Write};
 use tracing::{info, warn};
 
@@ -39,7 +39,9 @@ struct NominatimAddress {
 fn derive_timezone(lat: f64, lon: f64) -> chrono_tz::Tz {
     let finder = TZ_FINDER.get_or_init(tzf_rs::DefaultFinder::new);
     let tz_name = finder.get_tz_name(lon, lat);
-    tz_name.parse::<chrono_tz::Tz>().unwrap_or(chrono_tz::US::Mountain)
+    tz_name
+        .parse::<chrono_tz::Tz>()
+        .unwrap_or(chrono_tz::US::Mountain)
 }
 
 async fn reverse_geocode(lat: f64, lon: f64) -> String {
@@ -235,19 +237,20 @@ async fn load_dashboard_bundle(settings: &DashboardSettings) -> anyhow::Result<F
         lat: settings.lat,
         lon: settings.lon,
     };
-    let provider_response = match VisualCrossingProvider::from_env_with_timezone(&format!("{}", settings.tz)) {
-        Ok(provider) => match provider.fetch_forecast(&location).await {
-            Ok(response) => response,
+    let provider_response =
+        match VisualCrossingProvider::from_env_with_timezone(&format!("{}", settings.tz)) {
+            Ok(provider) => match provider.fetch_forecast(&location).await {
+                Ok(response) => response,
+                Err(err) => {
+                    warn!(error = %err, "visual crossing fetch failed, falling back to mock data");
+                    mock_provider_forecast(&location)
+                }
+            },
             Err(err) => {
-                warn!(error = %err, "visual crossing fetch failed, falling back to mock data");
+                warn!(error = %err, "VISUAL_CROSSING_API_KEY missing, falling back to mock data");
                 mock_provider_forecast(&location)
             }
-        },
-        Err(err) => {
-            warn!(error = %err, "VISUAL_CROSSING_API_KEY missing, falling back to mock data");
-            mock_provider_forecast(&location)
-        }
-    };
+        };
     let normalized = normalize_provider_response(provider_response);
 
     cache.write(today, &normalized)?;
