@@ -13,11 +13,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - "**/*.py"
-      - "requirements.txt"
-      - "pyproject.toml"
-      - ".github/workflows/format.yml"
 
 jobs:
   ruff-format-check:
