@@ -41,7 +41,7 @@ fn derive_timezone(lat: f64, lon: f64) -> chrono_tz::Tz {
     let tz_name = finder.get_tz_name(lon, lat);
     tz_name
         .parse::<chrono_tz::Tz>()
-        .unwrap_or(chrono_tz::US::Mountain)
+        .unwrap_or(chrono_tz::America::Denver)
 }
 
 async fn reverse_geocode(lat: f64, lon: f64) -> String {
@@ -187,7 +187,7 @@ async fn build_dashboard_settings(query: &HashMap<String, String>) -> DashboardS
     let tz = if has_custom_location {
         derive_timezone(lat, lon)
     } else {
-        chrono_tz::US::Mountain
+        chrono_tz::America::Denver
     };
 
     let location_name =
@@ -1874,7 +1874,6 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                     </form>
                     <div class="control-meta">Runtime: rust-phase-c | Active mode: __ACTIVE_MODE__ | Temp basis: __ACTIVE_TEMP__ | Timezone: __TIMEZONE__</div>
                 </section>
-                <p class="legend">Controls section is intentionally placed after Data Sources for parity with the Streamlit review baseline.</p>
             </article>
             </div>
             </section>
@@ -1978,8 +1977,8 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
         .replace("__SUNSET__", &sunset_txt)
         .replace("__DAYLIGHT__", &daylight_txt)
         .replace("__LOCATION_NAME__", &html_escape(&settings.location_name))
-        .replace("__LAT__", &format!("{}", settings.lat))
-        .replace("__LON__", &format!("{}", settings.lon))
+        .replace("__LAT__", &format!("{:.3}", settings.lat))
+        .replace("__LON__", &format!("{:.3}", settings.lon))
         .replace("__KITTY_MIN__", &format!("{}", settings.kitty_temp_min_f))
         .replace("__KITTY_MAX__", &format!("{}", settings.kitty_temp_max_f))
         .replace("__TIMEZONE__", &format!("{}", settings.tz))
@@ -2077,7 +2076,7 @@ mod tests {
             lat: 40.39,
             lon: -105.07,
             location_name: "Loveland, CO".to_string(),
-            tz: chrono_tz::US::Mountain,
+            tz: chrono_tz::America::Denver,
             kitty_temp_min_f: 32.0,
             kitty_temp_max_f: 85.0,
         }
