@@ -1036,7 +1036,44 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                     format!("Summer status: above threshold now ({temp:.1}°F) and not forecast to cool to {threshold:.1}°F today.")
                 }
             }
-            None => "Winter status unavailable (missing temperature data).".to_string(),
+            None => {
+                if settings.is_winter_mode {
+                    "Winter status unavailable (missing temperature data).".to_string()
+                } else {
+                    "Summer status unavailable (missing temperature data).".to_string()
+                }
+            }
+        }
+    };
+
+    let window_status_html = if settings.is_winter_mode {
+        String::new()
+    } else {
+        let threshold = settings.threshold_f;
+        match current.as_ref().map(selected_temp_f) {
+            Some(temp) if now_hour < 12 => {
+                if temp > threshold {
+                    format!(
+                        "<p class=\"settings-note\">Window guidance (AM): {temp:.1}°F — above {threshold:.0}°F threshold. Too warm to keep windows open.</p>"
+                    )
+                } else {
+                    format!(
+                        "<p class=\"settings-note\">Window guidance (AM): {temp:.1}°F — at or below {threshold:.0}°F threshold. Windows can stay open.</p>"
+                    )
+                }
+            }
+            Some(temp) => {
+                if temp <= threshold {
+                    format!(
+                        "<p class=\"settings-note\">Window guidance (PM): {temp:.1}°F — at or below {threshold:.0}°F threshold. Cool enough to open windows.</p>"
+                    )
+                } else {
+                    format!(
+                        "<p class=\"settings-note\">Window guidance (PM): {temp:.1}°F — above {threshold:.0}°F threshold. Keep windows closed.</p>"
+                    )
+                }
+            }
+            None => String::new(),
         }
     };
 
@@ -1638,6 +1675,7 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
                     <div class="metric"><div class="k">Today's Low (__TEMP_MODE__)</div><div class="v">__TEMP_LOW__</div></div>
                 </div>
                 <p class="settings-note">__SEASONAL_STATUS__</p>
+                __WINDOW_STATUS__
                 <div class="chart">
                     <div class="chart-axes-wrap">
                         <div class="y-axis-label">Temp °F</div>
@@ -1855,6 +1893,7 @@ fn dashboard_html(bundle: &ForecastBundle, settings: &DashboardSettings) -> Stri
         .replace("__LOCAL_TIME__", &local_time_txt)
         .replace("__KITTY_STATUS__", &kitty_status_txt)
         .replace("__SEASONAL_STATUS__", &seasonal_status_txt)
+        .replace("__WINDOW_STATUS__", &window_status_html)
         .replace("__ACTIVE_MODE__", settings.mode_label)
         .replace("__ACTIVE_TEMP__", settings.temp_label)
         .replace(
