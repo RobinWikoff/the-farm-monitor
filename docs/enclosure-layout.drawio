@@ -1,0 +1,98 @@
+<mxGraphModel dx="1200" dy="900" grid="1" gridSize="5" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+  <root>
+    <mxCell id="0" />
+    <mxCell id="1" parent="0" />
+
+    <!-- Title -->
+    <mxCell id="title" value="&lt;b&gt;Enclosure Interior Layout — Adrinfly SA04-427H004&lt;/b&gt;&lt;br&gt;5.9 × 3.9 × 2.8 in exterior · Scale: 5 px = 1 mm · All cables exit through bottom" style="text;html=1;align=left;verticalAlign=middle;resizable=0;strokeColor=none;fillColor=none;fontSize=11;" vertex="1" parent="1">
+      <mxGeometry x="20" y="10" width="650" height="40" as="geometry" />
+    </mxCell>
+
+    <!-- Top label -->
+    <mxCell id="lbl_top" value="↑  TOP  (lid hinge side)" style="text;html=1;align=center;verticalAlign=middle;resizable=0;strokeColor=none;fillColor=none;fontSize=9;fontColor=#888888;" vertex="1" parent="1">
+      <mxGeometry x="20" y="42" width="430" height="16" as="geometry" />
+    </mxCell>
+
+    <!-- Mounting Plate outline — update dims after measuring -->
+    <mxCell id="plate" value="Mounting Plate&lt;br&gt;&lt;font color=&quot;#888888&quot;&gt;placeholder ~86 × 137 mm — update after measuring&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#555555;strokeWidth=2;dashed=1;verticalAlign=top;fontSize=9;" vertex="1" parent="1">
+      <mxGeometry x="20" y="58" width="430" height="686" as="geometry" />
+    </mxCell>
+
+    <!-- PowerFeather + ProtoWing stack (65 × 23 mm = 325 × 115 px) -->
+    <mxCell id="pf_stack" value="&lt;b&gt;PowerFeather + ProtoWing (stacked)&lt;/b&gt;&lt;br&gt;65 × 23 mm  ·  E1 + E2&lt;br&gt;4× corner mounting holes&lt;br&gt;USB-C on right end" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+      <mxGeometry x="40" y="80" width="325" height="115" as="geometry" />
+    </mxCell>
+
+    <!-- LiPo Battery (~17 × 12 mm = 85 × 60 px) -->
+    <mxCell id="lipo" value="&lt;b&gt;LiPo 40mAh&lt;/b&gt;&lt;br&gt;~17 × 12 mm · E4" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+      <mxGeometry x="378" y="80" width="57" height="75" as="geometry" />
+    </mxCell>
+
+    <!-- Internal wiring zone annotation -->
+    <mxCell id="wire_zone" value="internal wiring zone&lt;br&gt;(solar → ProtoWing barrel jack · I2C + RJ11 runs down to boards)" style="text;html=1;align=center;verticalAlign=middle;resizable=0;strokeColor=#bbbbbb;fillColor=none;fontSize=9;fontColor=#999999;dashed=1;" vertex="1" parent="1">
+      <mxGeometry x="40" y="215" width="395" height="70" as="geometry" />
+    </mxCell>
+
+    <!-- SparkFun RJ11 Breakout (~25 × 20 mm = 125 × 100 px) -->
+    <mxCell id="rj11_breakout" value="&lt;b&gt;SparkFun RJ11 Breakout&lt;/b&gt;&lt;br&gt;~25 × 20 mm · E6" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+      <mxGeometry x="40" y="470" width="130" height="100" as="geometry" />
+    </mxCell>
+
+    <!-- 2× uxcell RJ11 jacks on protoboard (~50 × 25 mm = 250 × 125 px) -->
+    <mxCell id="rj11_jacks" value="&lt;b&gt;2× RJ11 jacks on protoboard&lt;/b&gt;&lt;br&gt;~50 × 25 mm · E7&lt;br&gt;[ wind jack ]   ·   [ rain jack ]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" vertex="1" parent="1">
+      <mxGeometry x="188" y="470" width="230" height="100" as="geometry" />
+    </mxCell>
+
+    <!-- Separator line above glands -->
+    <mxCell id="sep" value="" style="line;strokeColor=#9673a6;strokeWidth=1;" vertex="1" parent="1">
+      <mxGeometry x="40" y="622" width="395" height="10" as="geometry" />
+    </mxCell>
+
+    <!-- Cable gland label -->
+    <mxCell id="gland_lbl" value="CABLE GLANDS — bottom of box" style="text;html=1;align=center;fontStyle=1;fontSize=9;fontColor=#9673a6;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+      <mxGeometry x="40" y="626" width="395" height="16" as="geometry" />
+    </mxCell>
+
+    <!-- Gland 1: Solar cable in -->
+    <mxCell id="g_solar" value="Solar in&lt;br&gt;DC5521" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="1">
+      <mxGeometry x="50" y="645" width="80" height="60" as="geometry" />
+    </mxCell>
+
+    <!-- Gland 2: I2C to BME280 -->
+    <mxCell id="g_i2c" value="I2C out&lt;br&gt;→ BME280" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="1">
+      <mxGeometry x="148" y="645" width="80" height="60" as="geometry" />
+    </mxCell>
+
+    <!-- Gland 3: RJ11 wind -->
+    <mxCell id="g_wind" value="RJ11 out&lt;br&gt;→ wind" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="1">
+      <mxGeometry x="246" y="645" width="80" height="60" as="geometry" />
+    </mxCell>
+
+    <!-- Gland 4: RJ11 rain -->
+    <mxCell id="g_rain" value="RJ11 out&lt;br&gt;→ rain" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="1">
+      <mxGeometry x="344" y="645" width="80" height="60" as="geometry" />
+    </mxCell>
+
+    <!-- Bottom label -->
+    <mxCell id="lbl_bottom" value="↓  BOTTOM  — all cable glands exit here" style="text;html=1;align=center;fontStyle=1;fontSize=9;fontColor=#b85450;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+      <mxGeometry x="20" y="748" width="430" height="16" as="geometry" />
+    </mxCell>
+
+    <!-- Update reminder -->
+    <mxCell id="update_note" value="⚠  Measure actual plate dimensions after pickup and resize the dashed plate outline" style="text;html=1;align=left;verticalAlign=middle;fontSize=9;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+      <mxGeometry x="20" y="770" width="430" height="28" as="geometry" />
+    </mxCell>
+
+    <!-- Scale bar (125 px = 1 inch = 25.4 mm) -->
+    <mxCell id="scale_bar" value="" style="endArrow=block;startArrow=block;endFill=1;startFill=1;html=1;strokeColor=#555555;" edge="1" parent="1">
+      <mxGeometry relative="1" as="geometry">
+        <mxPoint x="500" y="720" as="sourcePoint" />
+        <mxPoint x="627" y="720" as="targetPoint" />
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="scale_lbl" value="1 inch (25.4 mm)" style="text;html=1;align=center;fontSize=9;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+      <mxGeometry x="494" y="726" width="140" height="18" as="geometry" />
+    </mxCell>
+
+  </root>
+</mxGraphModel>
