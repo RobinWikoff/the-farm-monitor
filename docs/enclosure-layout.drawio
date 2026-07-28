@@ -2,151 +2,154 @@
   <root>
     <mxCell id="0" />
     <mxCell id="1" parent="0" />
-
-    <mxCell id="title" value="&lt;b&gt;Enclosure Interior Layout — Adrinfly SA04-427H004&lt;/b&gt;&lt;br&gt;Scale: 5 px = 1 mm · All cables exit through bottom · Update plate outline after measuring" style="text;html=1;align=left;verticalAlign=middle;resizable=0;strokeColor=none;fillColor=none;fontSize=11;" vertex="1" parent="1">
-      <mxGeometry x="20" y="10" width="700" height="40" as="geometry" />
-    </mxCell>
-
-    <mxCell id="lbl_top" value="↑  TOP  (lid hinge side)" style="text;html=1;align=center;verticalAlign=middle;resizable=0;strokeColor=none;fillColor=none;fontSize=9;fontColor=#888888;" vertex="1" parent="1">
-      <mxGeometry x="20" y="44" width="430" height="16" as="geometry" />
-    </mxCell>
-
-    <mxCell id="plate" value="Mounting plate — measure &amp; update dimensions" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#555555;strokeWidth=2;dashed=1;verticalAlign=top;fontSize=8;fontColor=#aaaaaa;" vertex="1" parent="1">
-      <mxGeometry x="20" y="60" width="430" height="686" as="geometry" />
-    </mxCell>
-
-    <!-- PowerFeather + ProtoWing: portrait, USB-C/barrel jack end DOWN, right side of plate -->
-    <!-- 23 mm wide x 65 mm tall = 115 px x 325 px -->
-    <mxCell id="pf_stack" value="&lt;b&gt;PowerFeather + ProtoWing&lt;/b&gt;&lt;br&gt;stacked · 23 × 65 mm · E1+E2&lt;br&gt;&lt;br&gt;GPIO header pins&lt;br&gt;on both long sides" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;verticalAlign=top;" vertex="1" parent="1">
-      <mxGeometry x="315" y="95" width="115" height="325" as="geometry" />
-    </mxCell>
-
-    <!-- USB-C port — bottom short end, left half -->
-    <mxCell id="pf_usbc" value="USB-C" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#333333;fontColor=#ffffff;strokeColor=#111111;fontSize=8;" vertex="1" parent="1">
-      <mxGeometry x="322" y="413" width="43" height="13" as="geometry" />
-    </mxCell>
-
-    <!-- Barrel jack — directly above USB-C (ProtoWing stacked on PF, same end) -->
-    <mxCell id="pf_barrel" value="barrel jack (solar)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#333333;fontColor=#ffffff;strokeColor=#111111;fontSize=8;" vertex="1" parent="1">
-      <mxGeometry x="322" y="396" width="43" height="17" as="geometry" />
-    </mxCell>
-
-    <!-- JST-SH battery connector — left long side, near bottom -->
-    <mxCell id="pf_jst" value="JST-SH" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#555555;fontColor=#ffffff;strokeColor=#111111;fontSize=7;" vertex="1" parent="1">
-      <mxGeometry x="294" y="365" width="22" height="45" as="geometry" />
-    </mxCell>
-
-    <!-- I2C / STEMMA QT — left long side, middle — SDA=GPIO21 SCL=GPIO22 -->
-    <mxCell id="pf_i2c_conn" value="I2C&lt;br&gt;21/22" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#555555;fontColor=#ffffff;strokeColor=#111111;fontSize=7;" vertex="1" parent="1">
-      <mxGeometry x="283" y="200" width="32" height="30" as="geometry" />
-    </mxCell>
-
-    <!-- LiPo Battery — left of PF, aligned with JST exit -->
-    <mxCell id="lipo" value="&lt;b&gt;LiPo 40mAh&lt;/b&gt;&lt;br&gt;~17 × 12 mm · E4" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
-      <mxGeometry x="185" y="365" width="95" height="65" as="geometry" />
-    </mxCell>
-
-    <mxCell id="wire_jst" value="" style="endArrow=none;startArrow=none;html=1;strokeColor=#d6b656;strokeWidth=3;" edge="1" parent="1">
-      <mxGeometry relative="1" as="geometry">
-        <mxPoint x="294" y="390" as="sourcePoint" />
-        <mxPoint x="280" y="390" as="targetPoint" />
-      </mxGeometry>
-    </mxCell>
-
-    <!-- RJ11 Assembly: 2x SparkFun RJ11 Breakout boards side-by-side (one per sensor, E6 x2) -->
-    <!-- GPIO breakout through-holes on BACK/TOP (sockets face down toward glands). -->
-    <mxCell id="rj11_assy" value="&lt;b&gt;2× SparkFun RJ11 Breakout · E6&lt;/b&gt;&lt;br&gt;side-by-side · sockets ↓ · GPIO ↑ back&lt;br&gt;Wind: GPIO17(speed) / GPIO18(dir)&lt;br&gt;Rain: GPIO19 / GPIO20" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;verticalAlign=top;" vertex="1" parent="1">
-      <mxGeometry x="40" y="480" width="235" height="110" as="geometry" />
-    </mxCell>
-
-    <!-- GPIO breakout indicator — top/back of RJ11 assembly -->
-    <mxCell id="rj11_gpio_hdr" value="GPIO breakout ↑" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#555555;fontColor=#ffffff;strokeColor=#111111;fontSize=7;" vertex="1" parent="1">
-      <mxGeometry x="55" y="462" width="165" height="18" as="geometry" />
-    </mxCell>
-
-    <!-- RJ11 socket wind — bottom of assembly, left board -->
-    <mxCell id="rj11_sock_wind" value="RJ11 wind" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#4472c4;fontColor=#ffffff;strokeColor=#2f5496;fontSize=8;" vertex="1" parent="1">
-      <mxGeometry x="50" y="588" width="100" height="16" as="geometry" />
-    </mxCell>
-
-    <!-- RJ11 socket rain — bottom of assembly, right board -->
-    <mxCell id="rj11_sock_rain" value="RJ11 rain" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#4472c4;fontColor=#ffffff;strokeColor=#2f5496;fontSize=8;" vertex="1" parent="1">
-      <mxGeometry x="165" y="588" width="100" height="16" as="geometry" />
-    </mxCell>
-
-    <!-- GPIO wire: from top of RJ11 assembly up then right to PF mid-left -->
-    <mxCell id="wire_gpio" value="GPIO: Wind GPIO17/18 · Rain GPIO19/20" style="endArrow=open;startArrow=open;endFill=0;startFill=0;html=1;strokeColor=#6c8ebf;strokeWidth=2;fontSize=8;align=center;verticalAlign=bottom;" edge="1" parent="1">
-      <mxGeometry relative="1" as="geometry">
-        <mxPoint x="137" y="462" as="sourcePoint" />
-        <mxPoint x="315" y="235" as="targetPoint" />
-        <Array as="points">
-          <mxPoint x="137" y="235" />
-        </Array>
-      </mxGeometry>
-    </mxCell>
-
-    <mxCell id="i2c_lbl" value="I2C to gland below" style="text;html=1;align=left;verticalAlign=middle;resizable=0;strokeColor=none;fillColor=none;fontSize=8;fontColor=#9673a6;" vertex="1" parent="1">
-      <mxGeometry x="172" y="207" width="120" height="16" as="geometry" />
-    </mxCell>
-
-    <mxCell id="solar_lbl" value="solar cable ↓ → far right gland" style="text;html=1;align=left;verticalAlign=middle;resizable=0;strokeColor=none;fillColor=none;fontSize=8;fontColor=#b85450;" vertex="1" parent="1">
-      <mxGeometry x="148" y="430" width="170" height="16" as="geometry" />
-    </mxCell>
-
-    <mxCell id="sep" value="" style="line;strokeColor=#9673a6;strokeWidth=1;" vertex="1" parent="1">
-      <mxGeometry x="40" y="646" width="395" height="10" as="geometry" />
-    </mxCell>
-
-    <mxCell id="gland_hdr" value="BOTTOM — CABLE GLANDS" style="text;html=1;align=center;fontStyle=1;fontSize=9;fontColor=#9673a6;strokeColor=none;fillColor=none;" vertex="1" parent="1">
-      <mxGeometry x="40" y="649" width="395" height="14" as="geometry" />
-    </mxCell>
-
-    <mxCell id="g_wind" value="RJ11 out&lt;br&gt;wind" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" vertex="1" parent="1">
-      <mxGeometry x="48" y="665" width="78" height="55" as="geometry" />
-    </mxCell>
-
-    <mxCell id="g_rain" value="RJ11 out&lt;br&gt;rain" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" vertex="1" parent="1">
-      <mxGeometry x="148" y="665" width="78" height="55" as="geometry" />
-    </mxCell>
-
-    <mxCell id="g_i2c" value="I2C out&lt;br&gt;BME280" style="ellipse;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;" vertex="1" parent="1">
-      <mxGeometry x="248" y="665" width="78" height="55" as="geometry" />
-    </mxCell>
-
-    <mxCell id="g_solar" value="Solar in&lt;br&gt;DC5521" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="1">
-      <mxGeometry x="352" y="665" width="78" height="55" as="geometry" />
-    </mxCell>
-
-    <mxCell id="lbl_bottom" value="↓  BOTTOM  ↓" style="text;html=1;align=center;fontStyle=1;fontSize=9;fontColor=#b85450;strokeColor=none;fillColor=none;" vertex="1" parent="1">
-      <mxGeometry x="20" y="748" width="430" height="14" as="geometry" />
-    </mxCell>
-
-    <mxCell id="update_note" value="⚠  Measure plate after pickup · resize dashed outline · adjust component positions" style="text;html=1;align=left;verticalAlign=middle;fontSize=9;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
-      <mxGeometry x="20" y="766" width="430" height="26" as="geometry" />
-    </mxCell>
-
-    <mxCell id="scale_bar" value="" style="endArrow=block;startArrow=block;endFill=1;startFill=1;html=1;strokeColor=#555555;" edge="1" parent="1">
-      <mxGeometry relative="1" as="geometry">
-        <mxPoint x="500" y="710" as="sourcePoint" />
-        <mxPoint x="627" y="710" as="targetPoint" />
-      </mxGeometry>
-    </mxCell>
-
-    <mxCell id="scale_lbl" value="1 inch = 25.4 mm = 127 px" style="text;html=1;align=center;fontSize=9;strokeColor=none;fillColor=none;" vertex="1" parent="1">
-      <mxGeometry x="490" y="718" width="160" height="18" as="geometry" />
-    </mxCell>
-
-    <mxCell id="notes" value="&lt;b&gt;Connector orientation key&lt;/b&gt;&lt;br&gt;Dark grey tabs = physical connectors&lt;br&gt;PF bottom end: USB-C + barrel jack (stacked, same x)&lt;br&gt;PF left side near bottom: JST-SH battery&lt;br&gt;PF left side mid: I2C SDA=GPIO21 / SCL=GPIO22&lt;br&gt;RJ11 boards: GPIO breakout on top/back&lt;br&gt;RJ11 boards bottom: sockets face down&lt;br&gt;&lt;br&gt;GPIO: Wind GPIO17(spd)/GPIO18(dir)&lt;br&gt;Rain GPIO19 / GPIO20&lt;br&gt;BME280 I2C: SDA=GPIO21 / SCL=GPIO22&lt;br&gt;&lt;br&gt;Dims approximate · verify before wiring" style="text;html=1;align=left;verticalAlign=top;resizable=0;strokeColor=#82b366;fillColor=#f0fff0;fontSize=9;" vertex="1" parent="1">
-      <mxGeometry x="470" y="60" width="250" height="195" as="geometry" />
-    </mxCell>
-
-    <!-- Solar cable: from bottom of barrel jack/USB-C area down to far-right solar gland -->
-    <mxCell id="wire_solar" value="solar cable" style="endArrow=open;startArrow=none;endFill=0;html=1;strokeColor=#b85450;strokeWidth=2;fontSize=8;verticalAlign=bottom;" edge="1" parent="1">
-      <mxGeometry relative="1" as="geometry">
-        <mxPoint x="344" y="426" as="sourcePoint" />
-        <mxPoint x="391" y="665" as="targetPoint" />
-      </mxGeometry>
-    </mxCell>
-
+    <mxCell id="title" value="&lt;b&gt;Enclosure Interior Layout — Adrinfly SA04-427H004&lt;/b&gt;&lt;br&gt;Scale: 5 px = 1 mm · All cables exit through bottom · Update plate outline after measuring" style="text;html=1;align=left;verticalAlign=middle;resizable=0;strokeColor=none;fillColor=none;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="10" width="700" height="40" as="geometry" /></mxCell>
+    <mxCell id="lbl_top" value="↑  TOP  (lid hinge side)" style="text;html=1;align=center;verticalAlign=middle;resizable=0;strokeColor=none;fillColor=none;fontSize=9;fontColor=#888888;" vertex="1" parent="1"><mxGeometry x="20" y="44" width="430" height="16" as="geometry" /></mxCell>
+    <mxCell id="plate" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#555555;strokeWidth=2;dashed=1;" vertex="1" parent="1"><mxGeometry x="20" y="60" width="430" height="686" as="geometry" /></mxCell>
+    <mxCell id="plate_lbl" value="Mounting plate — est. 86 × 137 mm · measure &amp; update" style="text;html=1;align=left;verticalAlign=top;resizable=0;strokeColor=none;fillColor=none;fontSize=8;fontColor=#aaaaaa;" vertex="1" parent="1"><mxGeometry x="25" y="62" width="280" height="16" as="geometry" /></mxCell>
+    <mxCell id="gh_0_0" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="43" y="83" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_0_1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="93" y="83" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_0_2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="143" y="83" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_0_3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="193" y="83" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_0_4" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="243" y="83" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_0_5" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="293" y="83" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_0_6" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="343" y="83" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_0_7" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="393" y="83" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_1_0" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="43" y="133" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_1_1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="93" y="133" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_1_2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="143" y="133" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_1_3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="193" y="133" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_1_4" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="243" y="133" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_1_5" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="293" y="133" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_1_6" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="343" y="133" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_1_7" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="393" y="133" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_2_0" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="43" y="183" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_2_1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="93" y="183" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_2_2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="143" y="183" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_2_3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="193" y="183" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_2_4" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="243" y="183" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_2_5" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="293" y="183" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_2_6" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="343" y="183" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_2_7" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="393" y="183" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_3_0" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="43" y="233" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_3_1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="93" y="233" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_3_2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="143" y="233" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_3_3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="193" y="233" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_3_4" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="243" y="233" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_3_5" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="293" y="233" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_3_6" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="343" y="233" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_3_7" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="393" y="233" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_4_0" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="43" y="283" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_4_1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="93" y="283" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_4_2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="143" y="283" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_4_3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="193" y="283" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_4_4" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="243" y="283" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_4_5" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="293" y="283" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_4_6" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="343" y="283" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_4_7" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="393" y="283" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_5_0" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="43" y="333" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_5_1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="93" y="333" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_5_2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="143" y="333" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_5_3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="193" y="333" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_5_4" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="243" y="333" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_5_5" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="293" y="333" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_5_6" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="343" y="333" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_5_7" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="393" y="333" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_6_0" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="43" y="383" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_6_1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="93" y="383" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_6_2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="143" y="383" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_6_3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="193" y="383" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_6_4" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="243" y="383" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_6_5" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="293" y="383" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_6_6" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="343" y="383" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_6_7" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="393" y="383" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_7_0" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="43" y="433" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_7_1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="93" y="433" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_7_2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="143" y="433" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_7_3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="193" y="433" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_7_4" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="243" y="433" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_7_5" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="293" y="433" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_7_6" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="343" y="433" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_7_7" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="393" y="433" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_8_0" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="43" y="483" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_8_1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="93" y="483" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_8_2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="143" y="483" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_8_3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="193" y="483" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_8_4" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="243" y="483" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_8_5" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="293" y="483" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_8_6" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="343" y="483" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_8_7" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="393" y="483" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_9_0" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="43" y="533" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_9_1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="93" y="533" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_9_2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="143" y="533" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_9_3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="193" y="533" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_9_4" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="243" y="533" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_9_5" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="293" y="533" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_9_6" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="343" y="533" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_9_7" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="393" y="533" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_10_0" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="43" y="583" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_10_1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="93" y="583" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_10_2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="143" y="583" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_10_3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="193" y="583" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_10_4" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="243" y="583" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_10_5" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="293" y="583" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_10_6" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="343" y="583" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_10_7" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="393" y="583" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_11_0" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="43" y="633" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_11_1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="93" y="633" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_11_2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="143" y="633" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_11_3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="193" y="633" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_11_4" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="243" y="633" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_11_5" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="293" y="633" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_11_6" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="343" y="633" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_11_7" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="393" y="633" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_12_0" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="43" y="683" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_12_1" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="93" y="683" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_12_2" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="143" y="683" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_12_3" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="193" y="683" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_12_4" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="243" y="683" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_12_5" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="293" y="683" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_12_6" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="343" y="683" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="gh_12_7" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#c0c0c0;strokeColor=#999999;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="393" y="683" width="5" height="5" as="geometry" /></mxCell>
+    <mxCell id="pf_stack" value="&lt;b&gt;PowerFeather + ProtoWing&lt;/b&gt;&lt;br&gt;stacked · 23 × 65 mm · E1+E2&lt;br&gt;&lt;br&gt;GPIO header&lt;br&gt;both long sides" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="315" y="95" width="115" height="325" as="geometry" /></mxCell>
+    <mxCell id="pf_usbc" value="USB-C" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#333333;fontColor=#ffffff;strokeColor=#111111;fontSize=8;" vertex="1" parent="1"><mxGeometry x="322" y="413" width="43" height="13" as="geometry" /></mxCell>
+    <mxCell id="pf_barrel" value="barrel jack (solar)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#333333;fontColor=#ffffff;strokeColor=#111111;fontSize=8;" vertex="1" parent="1"><mxGeometry x="322" y="396" width="43" height="17" as="geometry" /></mxCell>
+    <mxCell id="pf_jst" value="JST-SH" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#555555;fontColor=#ffffff;strokeColor=#111111;fontSize=7;" vertex="1" parent="1"><mxGeometry x="294" y="365" width="22" height="45" as="geometry" /></mxCell>
+    <mxCell id="pf_i2c_conn" value="I2C&lt;br&gt;21/22" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#555555;fontColor=#ffffff;strokeColor=#111111;fontSize=7;" vertex="1" parent="1"><mxGeometry x="283" y="200" width="32" height="30" as="geometry" /></mxCell>
+    <mxCell id="screw_pf_tl" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#444444;strokeColor=#222222;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="318" y="98" width="8" height="8" as="geometry" /></mxCell>
+    <mxCell id="screw_pf_tr" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#444444;strokeColor=#222222;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="419" y="98" width="8" height="8" as="geometry" /></mxCell>
+    <mxCell id="screw_pf_bl" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#444444;strokeColor=#222222;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="318" y="408" width="8" height="8" as="geometry" /></mxCell>
+    <mxCell id="screw_pf_br" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#444444;strokeColor=#222222;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="419" y="408" width="8" height="8" as="geometry" /></mxCell>
+    <mxCell id="lipo" value="&lt;b&gt;LiPo 40mAh&lt;/b&gt;&lt;br&gt;~17 × 12 mm · E4" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1"><mxGeometry x="185" y="365" width="95" height="65" as="geometry" /></mxCell>
+    <mxCell id="wire_jst" value="" style="endArrow=none;startArrow=none;html=1;strokeColor=#d6b656;strokeWidth=3;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="294" y="390" as="sourcePoint" /><mxPoint x="280" y="390" as="targetPoint" /></mxGeometry></mxCell>
+    <mxCell id="rj11_wind_gpio" value="GPIO17(spd) · GPIO18(dir)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#555555;fontColor=#ffffff;strokeColor=#111111;fontSize=7;" vertex="1" parent="1"><mxGeometry x="36" y="468" width="113" height="18" as="geometry" /></mxCell>
+    <mxCell id="rj11_wind_board" value="&lt;b&gt;SparkFun RJ11 Breakout&lt;/b&gt;&lt;br&gt;Wind sensor · E6&lt;br&gt;socket ↓ · GPIO ↑" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="35" y="486" width="115" height="100" as="geometry" /></mxCell>
+    <mxCell id="rj11_wind_sock" value="RJ11 ↓ wind" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#4472c4;fontColor=#ffffff;strokeColor=#2f5496;fontSize=8;" vertex="1" parent="1"><mxGeometry x="42" y="582" width="101" height="14" as="geometry" /></mxCell>
+    <mxCell id="screw_rjw_tl" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#444444;strokeColor=#222222;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="38" y="489" width="8" height="8" as="geometry" /></mxCell>
+    <mxCell id="screw_rjw_tr" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#444444;strokeColor=#222222;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="139" y="489" width="8" height="8" as="geometry" /></mxCell>
+    <mxCell id="screw_rjw_bl" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#444444;strokeColor=#222222;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="38" y="574" width="8" height="8" as="geometry" /></mxCell>
+    <mxCell id="screw_rjw_br" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#444444;strokeColor=#222222;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="139" y="574" width="8" height="8" as="geometry" /></mxCell>
+    <mxCell id="rj11_rain_gpio" value="GPIO19 · GPIO20" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#555555;fontColor=#ffffff;strokeColor=#111111;fontSize=7;" vertex="1" parent="1"><mxGeometry x="161" y="468" width="113" height="18" as="geometry" /></mxCell>
+    <mxCell id="rj11_rain_board" value="&lt;b&gt;SparkFun RJ11 Breakout&lt;/b&gt;&lt;br&gt;Rain sensor · E6&lt;br&gt;socket ↓ · GPIO ↑" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;verticalAlign=top;" vertex="1" parent="1"><mxGeometry x="160" y="486" width="115" height="100" as="geometry" /></mxCell>
+    <mxCell id="rj11_rain_sock" value="RJ11 ↓ rain" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#4472c4;fontColor=#ffffff;strokeColor=#2f5496;fontSize=8;" vertex="1" parent="1"><mxGeometry x="167" y="582" width="101" height="14" as="geometry" /></mxCell>
+    <mxCell id="screw_rjr_tl" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#444444;strokeColor=#222222;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="163" y="489" width="8" height="8" as="geometry" /></mxCell>
+    <mxCell id="screw_rjr_tr" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#444444;strokeColor=#222222;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="264" y="489" width="8" height="8" as="geometry" /></mxCell>
+    <mxCell id="screw_rjr_bl" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#444444;strokeColor=#222222;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="163" y="574" width="8" height="8" as="geometry" /></mxCell>
+    <mxCell id="screw_rjr_br" value="" style="ellipse;whiteSpace=wrap;html=1;fillColor=#444444;strokeColor=#222222;aspect=fixed;" vertex="1" parent="1"><mxGeometry x="264" y="574" width="8" height="8" as="geometry" /></mxCell>
+    <mxCell id="wire_gpio_wind" value="GPIO17/18 (wind)" style="endArrow=open;startArrow=open;endFill=0;startFill=0;html=1;strokeColor=#6c8ebf;strokeWidth=2;fontSize=8;align=center;verticalAlign=bottom;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="87" y="468" as="sourcePoint" /><mxPoint x="315" y="253" as="targetPoint" /><Array as="points"><mxPoint x="87" y="253" /></Array></mxGeometry></mxCell>
+    <mxCell id="wire_gpio_rain" value="GPIO19/20 (rain)" style="endArrow=open;startArrow=open;endFill=0;startFill=0;html=1;strokeColor=#6c8ebf;strokeWidth=2;fontSize=8;align=center;verticalAlign=bottom;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="217" y="468" as="sourcePoint" /><mxPoint x="315" y="237" as="targetPoint" /><Array as="points"><mxPoint x="217" y="237" /></Array></mxGeometry></mxCell>
+    <mxCell id="wire_rj11_wind" value="wind cable" style="endArrow=open;startArrow=none;endFill=0;html=1;strokeColor=#2f5496;strokeWidth=2;fontSize=8;verticalAlign=bottom;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="93" y="596" as="sourcePoint" /><mxPoint x="87" y="665" as="targetPoint" /></mxGeometry></mxCell>
+    <mxCell id="wire_rj11_rain" value="rain cable" style="endArrow=open;startArrow=none;endFill=0;html=1;strokeColor=#2f5496;strokeWidth=2;fontSize=8;verticalAlign=bottom;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="218" y="596" as="sourcePoint" /><mxPoint x="187" y="665" as="targetPoint" /></mxGeometry></mxCell>
+    <mxCell id="wire_i2c_bme" value="I2C (BME280)" style="endArrow=open;startArrow=none;endFill=0;html=1;strokeColor=#9673a6;strokeWidth=2;fontSize=8;verticalAlign=bottom;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="283" y="230" as="sourcePoint" /><mxPoint x="287" y="665" as="targetPoint" /><Array as="points"><mxPoint x="283" y="455" /><mxPoint x="287" y="455" /></Array></mxGeometry></mxCell>
+    <mxCell id="sep" value="" style="line;strokeColor=#9673a6;strokeWidth=1;" vertex="1" parent="1"><mxGeometry x="40" y="646" width="395" height="10" as="geometry" /></mxCell>
+    <mxCell id="gland_hdr" value="BOTTOM — CABLE GLANDS" style="text;html=1;align=center;fontStyle=1;fontSize=9;fontColor=#9673a6;strokeColor=none;fillColor=none;" vertex="1" parent="1"><mxGeometry x="40" y="649" width="395" height="14" as="geometry" /></mxCell>
+    <mxCell id="g_wind" value="RJ11 out&lt;br&gt;wind" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" vertex="1" parent="1"><mxGeometry x="48" y="665" width="78" height="55" as="geometry" /></mxCell>
+    <mxCell id="g_rain" value="RJ11 out&lt;br&gt;rain" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" vertex="1" parent="1"><mxGeometry x="148" y="665" width="78" height="55" as="geometry" /></mxCell>
+    <mxCell id="g_i2c" value="I2C out&lt;br&gt;BME280" style="ellipse;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=9;" vertex="1" parent="1"><mxGeometry x="248" y="665" width="78" height="55" as="geometry" /></mxCell>
+    <mxCell id="g_solar" value="Solar in&lt;br&gt;DC5521" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=9;" vertex="1" parent="1"><mxGeometry x="352" y="665" width="78" height="55" as="geometry" /></mxCell>
+    <mxCell id="lbl_bottom" value="↓  BOTTOM  ↓" style="text;html=1;align=center;fontStyle=1;fontSize=9;fontColor=#b85450;strokeColor=none;fillColor=none;" vertex="1" parent="1"><mxGeometry x="20" y="748" width="430" height="14" as="geometry" /></mxCell>
+    <mxCell id="update_note" value="⚠  Measure plate · resize outline · 10mm hole grid is estimated" style="text;html=1;align=left;verticalAlign=middle;fontSize=9;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="20" y="766" width="430" height="26" as="geometry" /></mxCell>
+    <mxCell id="scale_bar" value="" style="endArrow=block;startArrow=block;endFill=1;startFill=1;html=1;strokeColor=#555555;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="500" y="710" as="sourcePoint" /><mxPoint x="627" y="710" as="targetPoint" /></mxGeometry></mxCell>
+    <mxCell id="scale_lbl" value="1 inch = 25.4 mm = 127 px" style="text;html=1;align=center;fontSize=9;strokeColor=none;fillColor=none;" vertex="1" parent="1"><mxGeometry x="490" y="718" width="160" height="18" as="geometry" /></mxCell>
+    <mxCell id="notes" value="&lt;b&gt;Layout key&lt;/b&gt;&lt;br&gt;Dark grey tabs = connectors/ports&lt;br&gt;Dark circles = M3 standoff (mounting)&lt;br&gt;Grey dots = plate grid holes (est. 10mm)&lt;br&gt;Blue = RJ11 boards &amp;amp; cables&lt;br&gt;Purple = I2C cable (BME280)&lt;br&gt;&lt;br&gt;&lt;b&gt;GPIO&lt;/b&gt;&lt;br&gt;Wind: GPIO17(spd) / GPIO18(dir)&lt;br&gt;Rain: GPIO19 / GPIO20&lt;br&gt;BME280: SDA=GPIO21 / SCL=GPIO22&lt;br&gt;&lt;br&gt;Dims approx · verify before drilling" style="text;html=1;align=left;verticalAlign=top;resizable=0;strokeColor=#82b366;fillColor=#f0fff0;fontSize=9;" vertex="1" parent="1"><mxGeometry x="470" y="60" width="250" height="220" as="geometry" /></mxCell>
   </root>
 </mxGraphModel>
